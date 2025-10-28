@@ -13,7 +13,7 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '../ui/pagination';
-import { Search, Download, Filter, Users, UserCheck, Award, Mic, Eye, FileDown, User, Mail, Phone, Globe, Building, Calendar, FileText, X, QrCode, Package, Receipt, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Download, Filter, Users, UserCheck, Award, Mic, Eye, FileDown, User, Mail, Phone, Globe, Building, Calendar, FileText, X, QrCode, Package, Receipt, CheckCircle2, Clock, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { getOrganisationById, type Participant } from '../data/mockData';
 import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { AnimatedStat } from '../AnimatedStat';
@@ -46,6 +46,10 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
     
     const [showFilters, setShowFilters] = useState(false);
     const [isDownloadingBadges, setIsDownloadingBadges] = useState(false);
+    
+    // États pour le tri
+    const [sortColumn, setSortColumn] = useState<string | null>(null);
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     
     const statutColors: Record<string, string> = {
         'membre': 'bg-purple-100 text-purple-800',
@@ -113,8 +117,80 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
         return matchesSearch && matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays;
     });
     
-    const totalPages = Math.ceil(filteredParticipants.length / itemsPerPage);
-    const paginatedParticipants = filteredParticipants.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    // Fonction de tri
+    const handleSort = (column: string) => {
+        if (sortColumn === column) {
+            // Inverser la direction si la colonne est déjà triée
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            // Nouvelle colonne, tri croissant par défaut
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
+    
+    // Tableau trié
+    const sortedParticipants = [...filteredParticipants].sort((a, b) => {
+        if (!sortColumn) return 0;
+        
+        let aValue: any;
+        let bValue: any;
+        
+        switch (sortColumn) {
+            case 'reference':
+                aValue = a.reference;
+                bValue = b.reference;
+                break;
+            case 'nom':
+                aValue = `${a.prenom} ${a.nom}`;
+                bValue = `${b.prenom} ${b.nom}`;
+                break;
+            case 'email':
+                aValue = a.email;
+                bValue = b.email;
+                break;
+            case 'telephone':
+                aValue = a.telephone;
+                bValue = b.telephone;
+                break;
+            case 'organisation':
+                aValue = getOrganisationById(a.organisationId)?.nom || '';
+                bValue = getOrganisationById(b.organisationId)?.nom || '';
+                break;
+            case 'pays':
+                aValue = a.pays;
+                bValue = b.pays;
+                break;
+            case 'statut':
+                aValue = a.statut;
+                bValue = b.statut;
+                break;
+            case 'statutInscription':
+                aValue = getStatutPaiementLabel(a);
+                bValue = getStatutPaiementLabel(b);
+                break;
+            case 'dateInscription':
+                aValue = new Date(a.dateInscription).getTime();
+                bValue = new Date(b.dateInscription).getTime();
+                break;
+            default:
+                return 0;
+        }
+        
+        // Tri croissant ou décroissant
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+            return sortDirection === 'asc' 
+                ? aValue.localeCompare(bValue)
+                : bValue.localeCompare(aValue);
+        } else {
+            return sortDirection === 'asc' 
+                ? aValue - bValue
+                : bValue - aValue;
+        }
+    });
+    
+    const totalPages = Math.ceil(sortedParticipants.length / itemsPerPage);
+    const paginatedParticipants = sortedParticipants.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     
     
     const uniquePays = [...new Set(participants.map(p => p.pays))].sort();
@@ -484,7 +560,7 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
 </Card>
 
 {filteredParticipants.length > badgesGenerables && (
-  <Card className="border-orange-200 bg-orange-50">
+  <Card className="border-orange-200 bg-orange-50 pt-5">
     <CardContent className="p-3">
       <div className="flex items-start gap-2">
         <QrCode className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
@@ -501,26 +577,103 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
   </Card>
 )}
 
-<Card>
+<Card className="mt-6">
   <CardContent className="p-0">
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="h-8">
-            <TableHead className="text-xs py-1.5">Référence</TableHead>
-            <TableHead className="text-xs py-1.5">Participant</TableHead>
+            <TableHead 
+              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
+              onClick={() => handleSort('reference')}
+            >
+              <div className="flex items-center gap-1">
+                Référence
+                {sortColumn === 'reference' && (
+                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                )}
+                {sortColumn !== 'reference' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
+              onClick={() => handleSort('nom')}
+            >
+              <div className="flex items-center gap-1">
+                Participant
+                {sortColumn === 'nom' && (
+                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                )}
+                {sortColumn !== 'nom' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
+              </div>
+            </TableHead>
             <TableHead className="text-xs py-1.5">Contact</TableHead>
-            <TableHead className="text-xs py-1.5">Organisation</TableHead>
-            <TableHead className="text-xs py-1.5">Pays</TableHead>
-            <TableHead className="text-xs py-1.5">Statut Participant</TableHead>
-            <TableHead className="text-xs py-1.5">Statut Inscription</TableHead>
+            <TableHead 
+              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
+              onClick={() => handleSort('organisation')}
+            >
+              <div className="flex items-center gap-1">
+                Organisation
+                {sortColumn === 'organisation' && (
+                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                )}
+                {sortColumn !== 'organisation' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
+              onClick={() => handleSort('pays')}
+            >
+              <div className="flex items-center gap-1">
+                Pays
+                {sortColumn === 'pays' && (
+                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                )}
+                {sortColumn !== 'pays' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
+              onClick={() => handleSort('statut')}
+            >
+              <div className="flex items-center gap-1">
+                Statut Participant
+                {sortColumn === 'statut' && (
+                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                )}
+                {sortColumn !== 'statut' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
+              onClick={() => handleSort('statutInscription')}
+            >
+              <div className="flex items-center gap-1">
+                Statut Inscription
+                {sortColumn === 'statutInscription' && (
+                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                )}
+                {sortColumn !== 'statutInscription' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
+              </div>
+            </TableHead>
             <TableHead className="text-xs py-1.5">Mode de paiement</TableHead>
-            <TableHead className="text-xs py-1.5">Date d'inscription</TableHead>
+            <TableHead 
+              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
+              onClick={() => handleSort('dateInscription')}
+            >
+              <div className="flex items-center gap-1">
+                Date d'inscription
+                {sortColumn === 'dateInscription' && (
+                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                )}
+                {sortColumn !== 'dateInscription' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
+              </div>
+            </TableHead>
             <TableHead className="text-xs py-1.5">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredParticipants.length === 0 ? (
+          {sortedParticipants.length === 0 ? (
             <TableRow>
               <TableCell colSpan={10} className="text-center text-gray-500 py-4 text-xs">
                 Aucun participant trouvé
@@ -587,7 +740,7 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
 </Card>
 
 {/* Pagination */}
-{filteredParticipants.length > 0 && totalPages > 1 && (
+{sortedParticipants.length > 0 && totalPages > 1 && (
   <div className="mt-4 flex items-center justify-center">
     <Pagination>
       <PaginationContent>
