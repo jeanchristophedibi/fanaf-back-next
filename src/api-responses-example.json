@@ -1,0 +1,193 @@
+{
+  "exemple_de_reponses_api_supabase": {
+    "description": "Format des réponses attendues de l'API Supabase Edge Functions",
+    
+    "GET_participants": {
+      "endpoint": "GET /make-server-c3e5f95c/participants",
+      "response": {
+        "participants": [
+          {
+            "id": "uuid-1",
+            "nom": "Kouassi",
+            "prenom": "Jean",
+            "reference": "REF001",
+            "email": "jean.kouassi@example.com",
+            "telephone": "+225 07 12 34 56 78",
+            "pays": "Côte d'Ivoire",
+            "fonction": "Directeur Commercial",
+            "organisation_id": "uuid-org-1",
+            "statut": "membre",
+            "statut_inscription": "finalisée",
+            "date_inscription": "2024-10-15T10:00:00Z",
+            "date_paiement": "2024-10-15T14:30:00Z",
+            "mode_paiement": "virement",
+            "canal_encaissement": "asapay",
+            "caissier": "Marie Diallo",
+            "badge_genere": true,
+            "check_in": false,
+            "groupe_id": null,
+            "nom_groupe": null,
+            "created_at": "2024-10-15T10:00:00Z",
+            "updated_at": "2024-10-15T14:30:00Z"
+          }
+        ]
+      },
+      "note": "Les noms de colonnes peuvent être en snake_case (created_at) ou camelCase selon votre table Supabase"
+    },
+
+    "GET_organisations": {
+      "endpoint": "GET /make-server-c3e5f95c/organisations",
+      "response": {
+        "organisations": [
+          {
+            "id": "uuid-org-1",
+            "nom": "Assurance CI",
+            "contact": "+225 27 20 30 40 50",
+            "email": "contact@assurance-ci.com",
+            "pays": "Côte d'Ivoire",
+            "date_creation": "2024-01-10T00:00:00Z",
+            "statut": "membre",
+            "secteur_activite": "Assurance",
+            "referent": null,
+            "created_at": "2024-01-10T00:00:00Z",
+            "updated_at": "2024-01-10T00:00:00Z"
+          }
+        ]
+      }
+    },
+
+    "GET_rendez_vous": {
+      "endpoint": "GET /make-server-c3e5f95c/rendez-vous",
+      "response": {
+        "rendezVous": [
+          {
+            "id": "uuid-rdv-1",
+            "demandeur_id": "uuid-1",
+            "recepteur_id": "uuid-2",
+            "type": "participant",
+            "date": "2024-11-09",
+            "heure": "10:00",
+            "statut": "acceptée",
+            "commentaire": "Discussion sur les opportunités partenariats",
+            "created_at": "2024-10-20T10:00:00Z",
+            "updated_at": "2024-10-25T14:00:00Z"
+          }
+        ]
+      }
+    },
+
+    "GET_stats_dashboard": {
+      "endpoint": "GET /make-server-c3e5f95c/stats/dashboard",
+      "response": {
+        "stats": {
+          "participants": {
+            "total": 150,
+            "membres": 85,
+            "non_membres": 50,
+            "vip": 10,
+            "speakers": 5,
+            "en_attente": 12
+          },
+          "organisations": {
+            "total": 25,
+            "membres": 15,
+            "non_membres": 8,
+            "sponsors": 2
+          },
+          "rendez_vous": {
+            "total": 45,
+            "rdv_sponsors": 20,
+            "rdv_participants": 25
+          },
+          "paiements": {
+            "total_attendu": 50000000,
+            "total_encaisse": 42000000,
+            "total_restant": 8000000,
+            "paiements_complets": 138,
+            "paiements_partiels": 5,
+            "paiements_en_attente": 12
+          }
+        }
+      }
+    },
+
+    "schema_supabase_attendues": {
+      "table_participants": {
+        "columns": [
+          "id (uuid, primary key)",
+          "nom (varchar)",
+          "prenom (varchar)",
+          "reference (varchar, unique)",
+          "email (varchar)",
+          "telephone (varchar)",
+          "pays (varchar)",
+          "fonction (varchar, nullable)",
+          "organisation_id (uuid, foreign key)",
+          "statut (varchar: membre|non-membre|vip|speaker|referent)",
+          "statut_inscription (varchar: finalisée|non-finalisée)",
+          "date_inscription (timestamp)",
+          "date_paiement (timestamp, nullable)",
+          "mode_paiement (varchar, nullable)",
+          "canal_encaissement (varchar, nullable)",
+          "caissier (varchar, nullable)",
+          "badge_genere (boolean, default false)",
+          "check_in (boolean, default false)",
+          "check_in_date (timestamp, nullable)",
+          "groupe_id (uuid, nullable)",
+          "nom_groupe (varchar, nullable)",
+          "created_at (timestamp)",
+          "updated_at (timestamp)"
+        ]
+      },
+      "table_organisations": {
+        "columns": [
+          "id (uuid, primary key)",
+          "nom (varchar)",
+          "contact (varchar)",
+          "email (varchar大型)",
+          "pays (varchar)",
+          "date_creation (date)",
+          "statut (varchar: membre|non-membre|sponsor)",
+          "secteur_activite (varchar, nullable)",
+          "referent_nom (varchar, nullable)",
+          "referent_prenom (varchar, nullable)",
+          "referent_email (varchar, nullable)",
+          "referent_telephone (varchar, nullable)",
+          "referent_fonction (varchar, nullable)",
+          "created_at (timestamp)",
+          "updated_at (timestamp)"
+        ]
+      },
+      "table_rendez_vous": {
+        "columns": [
+          "id (uuid, primary key)",
+          "demandeur_id (uuid, foreign key)",
+          "recepteur_id (uuid)",
+          "type (varchar: participant|sponsor)",
+          "date (date)",
+          "heure (time)",
+          "statut (varchar: acceptée|occupée|en-attente|annulée)",
+          "commentaire (text, nullable)",
+          "created_at (timestamp)",
+          "updated_at (timestamp)"
+        ]
+      }
+    },
+
+    "mapping_noms_colonnes": {
+      "note": "Si vos tables Supabase utilisent snake_case, ajoutez un mapping dans useApi.ts",
+      "exemple": {
+        "statut_inscription": "statutInscription",
+        "date_inscription": "dateInscription",
+        "date_paiement": "datePaiement",
+        "mode_paiement": "modePaiement",
+        "canal_encaissement": "canalEncaissement",
+        "badge_genere": "badgeGenere",
+        "check_in": "checkIn",
+        "check_in_date": "checkInDate",
+        "groupe_id": "groupeId",
+        "nom_groupe": "nomGroupe"
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+'use client';
+
+import { OperateurCaisseMain } from '../../dashboard/operateur-caisse/Main';
+
+export default function OperateurCaissePage() {
+  return <OperateurCaisseMain />;
+}
+
