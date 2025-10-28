@@ -122,7 +122,108 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
     const badgesGenerables = filteredParticipants.filter(p => p.statutInscription === 'finalisée').length;
     
     const ParticipantDetailsDialog = ({ participant }: { participant: Participant }) => {
-        return null;
+        const [isOpen, setIsOpen] = useState(false);
+        const organisation = getOrganisationById(participant.organisationId);
+        
+        return (
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <Eye className="w-4 h-4" />
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg flex items-center gap-2">
+                            <User className="w-5 h-5" />
+                            Détails du Participant
+                        </DialogTitle>
+                        <DialogDescription>
+                            Informations complètes de {participant.prenom} {participant.nom}
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                        {/* Informations personnelles */}
+                        <div className="space-y-3">
+                            <div>
+                                <Label className="text-xs text-gray-500">Référence</Label>
+                                <p className="text-sm font-medium mt-1">{participant.reference}</p>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Nom complet</Label>
+                                <p className="text-sm font-medium mt-1">{participant.prenom} {participant.nom}</p>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Email</Label>
+                                <p className="text-sm mt-1 flex items-center gap-1">
+                                    <Mail className="w-3 h-3" />
+                                    {participant.email}
+                                </p>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Téléphone</Label>
+                                <p className="text-sm mt-1 flex items-center gap-1">
+                                    <Phone className="w-3 h-3" />
+                                    {participant.telephone}
+                                </p>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Pays</Label>
+                                <p className="text-sm mt-1 flex items-center gap-1">
+                                    <Globe className="w-3 h-3" />
+                                    {participant.pays}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        {/* Statuts et organisation */}
+                        <div className="space-y-3">
+                            <div>
+                                <Label className="text-xs text-gray-500">Statut Participant</Label>
+                                <div className="mt-1">
+                                    <Badge className={`${statutColors[participant.statut]} text-xs`}>
+                                        {participant.statut}
+                                    </Badge>
+                                </div>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Statut Inscription</Label>
+                                <div className="mt-1">
+                                    <Badge className={`${statutInscriptionColors[getStatutPaiementLabel(participant)]} text-xs`}>
+                                        {getStatutPaiementLabel(participant)}
+                                    </Badge>
+                                </div>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Organisation</Label>
+                                <p className="text-sm mt-1 flex items-center gap-1">
+                                    <Building className="w-3 h-3" />
+                                    {organisation?.nom || 'N/A'}
+                                </p>
+                            </div>
+                            {participant.modePaiement && (
+                                <div>
+                                    <Label className="text-xs text-gray-500">Mode de paiement</Label>
+                                    <p className="text-sm mt-1 capitalize">{participant.modePaiement}</p>
+                                </div>
+                            )}
+                            <div>
+                                <Label className="text-xs text-gray-500">Date d'inscription</Label>
+                                <p className="text-sm mt-1 flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    {new Date(participant.dateInscription).toLocaleDateString('fr-FR', {
+                                        day: '2-digit',
+                                        month: 'long',
+                                        year: 'numeric'
+                                    })}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        );
     };
     
     return (
