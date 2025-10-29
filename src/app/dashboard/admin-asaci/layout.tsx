@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
+import { AuthGuard } from '../../../components/auth/AuthGuard';
 import { usePathname, useRouter } from 'next/navigation';
 
 export type NavItem =
@@ -42,14 +43,16 @@ export default function AdminAsaciLayout({ children }: { children: React.ReactNo
   };
 
   return (
-    <UnifiedLayout
-      activeNav={activeNav}
-      onNavChange={handleNavChange}
-      userProfile="admin-asaci"
-      onSwitchProfile={() => {}}
-    >
-      {children}
-    </UnifiedLayout>
+    <AuthGuard>
+      <UnifiedLayout
+        activeNav={activeNav}
+        onNavChange={handleNavChange}
+        userProfile="admin-asaci"
+        onSwitchProfile={() => {}}
+      >
+        {children}
+      </UnifiedLayout>
+    </AuthGuard>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
+import { AuthGuard } from '../../../components/auth/AuthGuard';
 import { usePathname, useRouter } from 'next/navigation';
 
 export type NavItem =
@@ -120,14 +121,16 @@ export default function AgenceLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <UnifiedLayout
-      activeNav={activeNav}
-      onNavChange={handleNavChange}
-      userProfile="agence"
-      onSwitchProfile={() => {}}
-    >
-      {children}
-    </UnifiedLayout>
+    <AuthGuard>
+      <UnifiedLayout
+        activeNav={activeNav}
+        onNavChange={handleNavChange}
+        userProfile="agence"
+        onSwitchProfile={() => {}}
+      >
+        {children}
+      </UnifiedLayout>
+    </AuthGuard>
   );
 }
 

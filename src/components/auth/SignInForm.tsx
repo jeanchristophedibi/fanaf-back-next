@@ -1,16 +1,36 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Eye, EyeOff, Lock } from 'lucide-react';
+import { Eye, EyeOff, Lock, AlertCircle } from 'lucide-react';
+import { fanafApi } from '../../services/fanafApi';
+import { toast } from 'sonner';
 import loginImage from '../../assets/images/img-1.jpg';
 
-export default function SignInForm() {
+function SignInFormContent() {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Vérifier si l'utilisateur est déjà connecté
+  useEffect(() => {
+    if (fanafApi.isAuthenticated()) {
+      // Rediriger vers la page demandée (qui contient le bon chemin de dashboard)
+      // ou le dashboard admin-fanaf par défaut
+      const redirect = searchParams?.get('redirect') || '/dashboard/admin-fanaf';
+      console.log('[SignInForm] Redirection après authentification vers:', redirect);
+      router.push(redirect);
+    }
+  }, [router, searchParams]);
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
@@ -44,31 +64,50 @@ export default function SignInForm() {
             <p className="text-gray-500 dark:text-gray-400 mt-1">Accédez à votre compte</p>
           </div>
 
-          {/* --- Boutons externes --- */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
-            <Button variant="outline" className="w-full">
-              Se connecter avec Google
-            </Button>
-            <Button variant="outline" className="w-full">
-              Se connecter avec X
-            </Button>
-          </div>
-
-          {/* --- Séparateur --- */}
-          <div className="relative py-3">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200 dark:border-gray-700" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="bg-gray-50 dark:bg-gray-900 px-4 text-gray-500">Ou</span>
-            </div>
-          </div>
-
           {/* --- Formulaire --- */}
-          <form className="space-y-5">
+          <form 
+            className="space-y-5" 
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setError(null);
+              setLoading(true);
+
+              try {
+                const response = await fanafApi.passwordLogin(email, password);
+                toast.success('Connexion réussie !');
+                // Rediriger vers la page demandée (qui contient le bon chemin de dashboard)
+                // ou le dashboard admin-fanaf par défaut
+                const redirect = searchParams?.get('redirect') || '/dashboard/admin-fanaf';
+                console.log('[SignInForm] Redirection après connexion vers:', redirect);
+                router.push(redirect);
+              } catch (err: any) {
+                console.error('Erreur de connexion détaillée:', err);
+                const errorMessage = err.message || 'Erreur de connexion. Vérifiez vos identifiants.';
+                setError(errorMessage);
+                toast.error(errorMessage);
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                <span>{error}</span>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="Entrez votre email" />
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="Entrez votre email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+              />
             </div>
 
             <div>
@@ -78,11 +117,16 @@ export default function SignInForm() {
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Entrez votre mot de passe"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -93,8 +137,12 @@ export default function SignInForm() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700">
-              Se connecter
+            <Button 
+              type="submit" 
+              className="w-full bg-orange-600 hover:bg-orange-700"
+              disabled={loading}
+            >
+              {loading ? 'Connexion...' : 'Se connecter'}
             </Button>
           </form>
 
@@ -110,5 +158,20 @@ export default function SignInForm() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignInForm() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    }>
+      <SignInFormContent />
+    </Suspense>
   );
 }

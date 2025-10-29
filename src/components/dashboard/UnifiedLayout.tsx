@@ -13,6 +13,7 @@ interface UnifiedLayoutProps {
 }
 
 export function UnifiedLayout({ activeNav, onNavChange, userProfile, onSwitchProfile, children }: UnifiedLayoutProps) {
+  console.log('[UnifiedLayout] Rendering with userProfile:', userProfile, 'activeNav:', activeNav);
   return (
     <div className="flex h-screen bg-gray-50">
       <UnifiedSidebar

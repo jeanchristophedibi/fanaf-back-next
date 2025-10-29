@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AdminFanafSidebar } from './Sidebar';
 import { DashboardHome } from '../../../components/dashboard/DashboardHome';
 import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
@@ -107,32 +106,12 @@ export default function AdminFanafDashboard({ onSwitchProfile }: AdminFanafDashb
     }
   };
 
+  // Note: Ce composant n'est plus utilisé directement.
+  // Le dashboard admin-fanaf utilise maintenant UnifiedLayout via layout.tsx
+  // Ce fichier est conservé pour compatibilité avec AppRouter si nécessaire
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <AdminFanafSidebar 
-        activeNav={activeNav} 
-        onNavChange={setActiveNav}
-        onSwitchProfile={onSwitchProfile}
-      />
-      
-      <main className="flex-1 overflow-auto">
-        {/* Header */}
-        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-6 py-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-gray-900">
-                {getPageTitle()}
-              </h1>
-              <p className="text-sm text-gray-500">FANAF 2026 - Administrateur FANAF</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Contenu principal */}
-        <div>
-          {renderContent()}
-        </div>
-      </main>
+    <div className="p-6">
+      {renderContent()}
     </div>
   );
 }

@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../../../components/ui/dropdown-menu';
 import { Button } from '../../../components/ui/button';
+import { fanafApi } from '../../../services/fanafApi';
+import { toast } from 'sonner';
 
 interface TopBarProps {
   userName?: string;
@@ -11,6 +14,7 @@ interface TopBarProps {
 
 export function TopBar({ userName = 'Admin ASACI' }: TopBarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
 
   const handleProfile = () => {
     console.log('Profile clicked');
@@ -23,8 +27,19 @@ export function TopBar({ userName = 'Admin ASACI' }: TopBarProps) {
   };
 
   const handleLogout = () => {
-    console.log('Logout clicked');
-    // TODO: Implement logout logic
+    try {
+      // Déconnecter via l'API
+      fanafApi.logout();
+      
+      // Afficher un message de confirmation
+      toast.success('Déconnexion réussie');
+      
+      // Rediriger vers la page de login
+      router.push('/login');
+    } catch (error) {
+      console.error('Erreur lors de la déconnexion:', error);
+      toast.error('Erreur lors de la déconnexion');
+    }
   };
 
   return (
