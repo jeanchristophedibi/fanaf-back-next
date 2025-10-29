@@ -1,10 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Input } from '../ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '../ui/dialog';
@@ -12,15 +9,11 @@ import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '../ui/pagination';
-import { Search, Download, Filter, Users, UserCheck, Award, Mic, Eye, FileDown, User, Mail, Phone, Globe, Building, Calendar, FileText, X, QrCode, Package, Receipt, CheckCircle2, Clock, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Eye, User, Mail, Phone, Globe, Building, Calendar, QrCode, Package, Download } from 'lucide-react';
 import { getOrganisationById, type Participant } from '../data/mockData';
 import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
-import { AnimatedStat } from '../AnimatedStat';
 import { toast } from 'sonner';
-import { BadgeGenerator } from '../BadgeGenerator';
-import { ReceiptGenerator } from '../ReceiptGenerator';
-import JSZip from 'jszip';
+import { List, type Column, type ListAction } from '../list/List';
 
 interface ListeInscriptionsProps {
     readOnly?: boolean;
@@ -28,6 +21,7 @@ interface ListeInscriptionsProps {
     defaultStatuts?: Array<'membre' | 'non-membre' | 'vip' | 'speaker'>;
     restrictStatutOptions?: Array<'membre' | 'non-membre' | 'vip' | 'speaker'>;
 }
+
 export function ListeInscriptions({ 
     readOnly = false, 
     userProfile = 'agence', 
@@ -35,9 +29,6 @@ export function ListeInscriptions({
     restrictStatutOptions,
 }: ListeInscriptionsProps = {}) {
     const { participants, organisations } = useDynamicInscriptions({ includeOrganisations: true });
-    const [searchTerm, setSearchTerm] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
     
     // États pour les filtres multi-sélection (avant validation)
     const [tempStatutFilters, setTempStatutFilters] = useState<string[]>([]);
@@ -54,15 +45,17 @@ export function ListeInscriptions({
     const [showFilters, setShowFilters] = useState(false);
     const [isDownloadingBadges, setIsDownloadingBadges] = useState(false);
     
-    // États pour le tri
-    const [sortColumn, setSortColumn] = useState<string | null>(null);
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-    
     const statutColors: Record<string, string> = {
         'membre': 'bg-purple-100 text-purple-800',
         'non-membre': 'bg-amber-100 text-amber-800',
         'vip': 'bg-cyan-100 text-cyan-800',
         'speaker': 'bg-yellow-100 text-yellow-800',
+    };
+
+    const statutInscriptionColors: Record<string, string> = {
+        'finalisée': 'bg-emerald-100 text-emerald-800',
+        'non-finalisée': 'bg-red-100 text-red-800',
+        'exonéré': 'bg-purple-100 text-purple-800',
     };
 
     // Options de statuts disponibles (peuvent être restreintes via props)
@@ -83,11 +76,6 @@ export function ListeInscriptions({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    
-    const statutInscriptionColors: Record<string, string> = {
-        'finalisée': 'bg-emerald-100 text-emerald-800',
-        'non-finalisée': 'bg-red-100 text-red-800',
-    };
     
     const getStatutPaiementLabel = (p: Participant) => {
         if (p.statut === 'vip' || p.statut === 'speaker') return 'exonéré';
@@ -128,113 +116,26 @@ export function ListeInscriptions({
         setShowFilters(false);
         toast.success('Filtres appliqués');
     };
-    
-    const downloadAllBadges = async () => {
-        toast.info('Fonction de téléchargement non implémentée');
-    };
-    
-    const exportToCSV = () => {
-        toast.info('Fonction d\'export non implémentée');
-    };
-    
-    const filteredParticipants = participants.filter(participant => {
-        const org = getOrganisationById(participant.organisationId);
-        const matchesSearch = participant.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            participant.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            participant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            participant.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            participant.telephone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            participant.pays.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (org?.nom || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Filtrer les participants selon les filtres appliqués
+    const filteredParticipants = useMemo(() => {
+        return participants.filter(participant => {
+            const org = getOrganisationById(participant.organisationId);
+            const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
+            const matchesStatutInscription = appliedStatutInscriptionFilters.length === 0 || 
+                appliedStatutInscriptionFilters.includes(participant.statutInscription) ||
+                (appliedStatutInscriptionFilters.includes('exonéré') && (participant.statut === 'vip' || participant.statut === 'speaker'));
+            const matchesOrganisation = appliedOrganisationFilters.length === 0 || appliedOrganisationFilters.includes(participant.organisationId);
+            const matchesPays = appliedPaysFilters.length === 0 || appliedPaysFilters.includes(participant.pays);
             
-        const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
-        const matchesStatutInscription = appliedStatutInscriptionFilters.length === 0 || appliedStatutInscriptionFilters.includes(participant.statutInscription);
-        const matchesOrganisation = appliedOrganisationFilters.length === 0 || appliedOrganisationFilters.includes(participant.organisationId);
-        const matchesPays = appliedPaysFilters.length === 0 || appliedPaysFilters.includes(participant.pays);
-        
-        return matchesSearch && matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays;
-    });
-    
-    // Fonction de tri
-    const handleSort = (column: string) => {
-        if (sortColumn === column) {
-            // Inverser la direction si la colonne est déjà triée
-            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-        } else {
-            // Nouvelle colonne, tri croissant par défaut
-            setSortColumn(column);
-            setSortDirection('asc');
-        }
-    };
-    
-    // Tableau trié
-    const sortedParticipants = [...filteredParticipants].sort((a, b) => {
-        if (!sortColumn) return 0;
-        
-        let aValue: any;
-        let bValue: any;
-        
-        switch (sortColumn) {
-            case 'reference':
-                aValue = a.reference;
-                bValue = b.reference;
-                break;
-            case 'nom':
-                aValue = `${a.prenom} ${a.nom}`;
-                bValue = `${b.prenom} ${b.nom}`;
-                break;
-            case 'email':
-                aValue = a.email;
-                bValue = b.email;
-                break;
-            case 'telephone':
-                aValue = a.telephone;
-                bValue = b.telephone;
-                break;
-            case 'organisation':
-                aValue = getOrganisationById(a.organisationId)?.nom || '';
-                bValue = getOrganisationById(b.organisationId)?.nom || '';
-                break;
-            case 'pays':
-                aValue = a.pays;
-                bValue = b.pays;
-                break;
-            case 'statut':
-                aValue = a.statut;
-                bValue = b.statut;
-                break;
-            case 'statutInscription':
-                aValue = getStatutPaiementLabel(a);
-                bValue = getStatutPaiementLabel(b);
-                break;
-            case 'dateInscription':
-                aValue = new Date(a.dateInscription).getTime();
-                bValue = new Date(b.dateInscription).getTime();
-                break;
-            default:
-                return 0;
-        }
-        
-        // Tri croissant ou décroissant
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-            return sortDirection === 'asc' 
-                ? aValue.localeCompare(bValue)
-                : bValue.localeCompare(aValue);
-        } else {
-            return sortDirection === 'asc' 
-                ? aValue - bValue
-                : bValue - aValue;
-        }
-    });
-    
-    const totalPages = Math.ceil(sortedParticipants.length / itemsPerPage);
-    const paginatedParticipants = sortedParticipants.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    
-    
+            return matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays;
+        });
+    }, [participants, appliedStatutFilters, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
+
     const uniquePays = [...new Set(participants.map(p => p.pays))].sort();
-    
     const badgesGenerables = filteredParticipants.filter(p => p.statutInscription === 'finalisée').length;
     
+    // Composant Dialog pour les détails du participant
     const ParticipantDetailsDialog = ({ participant }: { participant: Participant }) => {
         const [isOpen, setIsOpen] = useState(false);
         const organisation = getOrganisationById(participant.organisationId);
@@ -258,7 +159,6 @@ export function ListeInscriptions({
                     </DialogHeader>
                     
                     <div className="grid grid-cols-2 gap-4 mt-4">
-                        {/* Informations personnelles */}
                         <div className="space-y-3">
                             <div>
                                 <Label className="text-xs text-gray-500">Référence</Label>
@@ -291,7 +191,6 @@ export function ListeInscriptions({
                             </div>
                         </div>
                         
-                        {/* Statuts et organisation */}
                         <div className="space-y-3">
                             <div>
                                 <Label className="text-xs text-gray-500">Statut Participant</Label>
@@ -339,495 +238,346 @@ export function ListeInscriptions({
             </Dialog>
         );
     };
-    
-    return (
-<div>
-  {filteredParticipants.length > badgesGenerables && (
-    <Card className="border-orange-200 bg-orange-50 pt-5 mb-3">
-      <CardContent className="p-3">
-        <div className="flex items-start gap-2">
-          <QrCode className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-xs text-orange-900">
-              <span className="font-medium">{filteredParticipants.length - badgesGenerables} participant(s)</span> ne peuvent pas encore générer leur badge car leur inscription n'est pas finalisée (paiement en attente).
-            </p>
-            <p className="text-xs text-orange-700 mt-1">
-              Les badges seront disponibles uniquement après validation du paiement.
-            </p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )}
-<Card className="mb-3">
-  <CardContent className="p-3">
-    <div className="flex items-center justify-between mb-2">
-      <div className="flex items-center gap-2">
-        <Search className="w-4 h-4" />
-        <span className="text-sm">Recherche et Filtres</span>
-      </div>
-      <Button 
-        variant={showFilters ? "default" : "outline"}
-        size="sm"
-        onClick={() => setShowFilters(!showFilters)}
-        className="gap-2 h-7 text-xs"
-      >
-        <Filter className="w-3 h-3" />
-        Filtres
-        {activeFiltersCount > 0 && (
-          <Badge variant="secondary" className="ml-1 bg-orange-600 text-white text-xs h-4 px-1">
-            {activeFiltersCount}
-          </Badge>
-        )}
-      </Button>
-    </div>
-    {/* Champ de recherche */}
-    <div className="relative mb-2">
-      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-      <Input
-        placeholder="Rechercher par nom, prénom, email, référence, téléphone, pays, organisation..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="pl-8 h-8 text-sm"
-      />
-    </div>
 
-    {/* Panneau de filtres multi-sélection */}
-    {showFilters && (
-      <div className="border border-gray-200 rounded-lg p-2 mb-2 bg-gray-50 animate-slide-down">
-        <div className="grid grid-cols-4 gap-3">
-          {/* Filtre Statut Participant */}
-          <div>
-            <Label className="text-xs mb-1.5 block text-gray-900">Statut Participant</Label>
-            <div className="space-y-1">
-              {statutOptions.map((statut) => (
-                <div key={statut} className="flex items-center space-x-1.5">
-                  <Checkbox
-                    id={`statut-${statut}`}
-                    checked={tempStatutFilters.includes(statut)}
-                    disabled={isStatutLocked}
-                    onCheckedChange={(checked) => {
-                      if (isStatutLocked) return;
-                      if (checked) {
-                        setTempStatutFilters([...tempStatutFilters, statut]);
-                      } else {
-                        setTempStatutFilters(tempStatutFilters.filter(s => s !== statut));
-                      }
-                    }}
-                    className="h-3 w-3"
-                  />
-                  <label
-                    htmlFor={`statut-${statut}`}
-                    className="text-xs cursor-pointer capitalize"
-                  >
-                    {statut}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Filtre Statut Inscription */}
-          <div>
-            <Label className="text-xs mb-1.5 block text-gray-900">Statut Inscription</Label>
-            <div className="space-y-1">
-              {['finalisée', 'non-finalisée', 'exonéré'].map((statut) => (
-                <div key={statut} className="flex items-center space-x-1.5">
-                  <Checkbox
-                    id={`statut-inscription-${statut}`}
-                    checked={tempStatutInscriptionFilters.includes(statut)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setTempStatutInscriptionFilters([...tempStatutInscriptionFilters, statut]);
-                      } else {
-                        setTempStatutInscriptionFilters(tempStatutInscriptionFilters.filter(s => s !== statut));
-                      }
-                    }}
-                    className="h-3 w-3"
-                  />
-                  <label
-                    htmlFor={`statut-inscription-${statut}`}
-                    className="text-xs cursor-pointer capitalize"
-                  >
-                    {statut}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Filtre Organisation */}
-          <div>
-            <Label className="text-xs mb-1.5 block text-gray-900">Organisation</Label>
-            <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
-              {organisations.slice(0, 6).map((org) => (
-                <div key={org.id} className="flex items-center space-x-1.5">
-                  <Checkbox
-                    id={`org-${org.id}`}
-                    checked={tempOrganisationFilters.includes(org.id)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setTempOrganisationFilters([...tempOrganisationFilters, org.id]);
-                      } else {
-                        setTempOrganisationFilters(tempOrganisationFilters.filter(o => o !== org.id));
-                      }
-                    }}
-                    className="h-3 w-3"
-                  />
-                  <label
-                    htmlFor={`org-${org.id}`}
-                    className="text-xs cursor-pointer truncate"
-                  >
-                    {org.nom}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Filtre Pays */}
-          <div>
-            <Label className="text-xs mb-1.5 block text-gray-900">Pays</Label>
-            <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
-              {uniquePays.slice(0, 6).map((pays) => (
-                <div key={pays} className="flex items-center space-x-1.5">
-                  <Checkbox
-                    id={`pays-${pays}`}
-                    checked={tempPaysFilters.includes(pays)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setTempPaysFilters([...tempPaysFilters, pays]);
-                      } else {
-                        setTempPaysFilters(tempPaysFilters.filter(p => p !== pays));
-                      }
-                    }}
-                    className="h-3 w-3"
-                  />
-                  <label
-                    htmlFor={`pays-${pays}`}
-                    className="text-xs cursor-pointer"
-                  >
-                    {pays}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <Separator className="my-2" />
-
-        {/* Boutons d'action */}
-        <div className="flex justify-end gap-1.5">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleResetFilters}
-            className="h-7 text-xs"
-          >
-            <X className="w-3 h-3 mr-1" />
-            Réinitialiser
-          </Button>
-          <Button 
-            size="sm"
-            onClick={handleApplyFilters}
-            className="bg-orange-600 hover:bg-orange-700 h-7 text-xs"
-          >
-            Appliquer les filtres
-          </Button>
-        </div>
-      </div>
-    )}
-
-    <div className="flex justify-between items-center">
-      <div className="text-xs text-gray-600">
-        <p>
-          {filteredParticipants.length} participant(s) sur {participants.length}
-          {activeFiltersCount > 0 && (
-            <span className="ml-1 text-orange-600">
-              ({activeFiltersCount} filtre{activeFiltersCount > 1 ? 's' : ''} actif{activeFiltersCount > 1 ? 's' : ''})
-            </span>
-          )}
-        </p>
-      </div>
-      <div className="flex gap-1.5">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                onClick={downloadAllBadges} 
-                variant="default"
-                className="bg-orange-600 hover:bg-orange-700 text-white h-7 text-xs"
-                disabled={badgesGenerables === 0 || isDownloadingBadges || readOnly}
-              >
-                {isDownloadingBadges ? (
-                  <>
-                    <Package className="w-3 h-3 mr-1 animate-pulse" />
-                    Génération...
-                  </>
-                ) : (
-                  <>
-                    <Package className="w-3 h-3 mr-1" />
-                    Télécharger badges ({badgesGenerables})
-                  </>
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-xs">
-                {badgesGenerables > 0 
-                  ? `Téléchargera ${badgesGenerables} badge(s) - inscriptions finalisées uniquement` 
-                  : `Aucun badge générable - aucune inscription finalisée`
-                }
-              </p>
-              {filteredParticipants.length > badgesGenerables && (
-                <p className="text-xs text-orange-400 mt-1">
-                  {filteredParticipants.length - badgesGenerables} participant(s) exclu(s) - paiement en attente
-                </p>
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                onClick={exportToCSV} 
-                variant="outline" 
-                disabled={filteredParticipants.length === 0}
-                className="h-7 text-xs"
-              >
-                <Download className="w-3 h-3 mr-1" />
-                CSV
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-xs">
-                {activeFiltersCount > 0 
-                  ? `Exportera ${filteredParticipants.length} participant(s) filtrés` 
-                  : `Exportera tous les ${filteredParticipants.length} participants`
-                }
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-    </div>
-  </CardContent>
-
-  <CardContent className="p-0">
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow className="h-8">
-            <TableHead 
-              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('reference')}
-            >
-              <div className="flex items-center gap-1">
-                Référence
-                {sortColumn === 'reference' && (
-                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                )}
-                {sortColumn !== 'reference' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('nom')}
-            >
-              <div className="flex items-center gap-1">
-                Participant
-                {sortColumn === 'nom' && (
-                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                )}
-                {sortColumn !== 'nom' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
-              </div>
-            </TableHead>
-            <TableHead className="text-xs py-1.5">Contact</TableHead>
-            <TableHead 
-              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('organisation')}
-            >
-              <div className="flex items-center gap-1">
-                Organisation
-                {sortColumn === 'organisation' && (
-                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                )}
-                {sortColumn !== 'organisation' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('pays')}
-            >
-              <div className="flex items-center gap-1">
-                Pays
-                {sortColumn === 'pays' && (
-                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                )}
-                {sortColumn !== 'pays' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('statut')}
-            >
-              <div className="flex items-center gap-1">
-                Statut Participant
-                {sortColumn === 'statut' && (
-                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                )}
-                {sortColumn !== 'statut' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('statutInscription')}
-            >
-              <div className="flex items-center gap-1">
-                Statut Inscription
-                {sortColumn === 'statutInscription' && (
-                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                )}
-                {sortColumn !== 'statutInscription' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
-              </div>
-            </TableHead>
-            <TableHead className="text-xs py-1.5">Mode de paiement</TableHead>
-            <TableHead 
-              className="text-xs py-1.5 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('dateInscription')}
-            >
-              <div className="flex items-center gap-1">
-                Date d'inscription
-                {sortColumn === 'dateInscription' && (
-                  sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                )}
-                {sortColumn !== 'dateInscription' && <ArrowUpDown className="w-3 h-3 opacity-50" />}
-              </div>
-            </TableHead>
-            <TableHead className="text-xs py-1.5">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedParticipants.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={10} className="text-center text-gray-500 py-4 text-xs">
-                Aucun participant trouvé
-              </TableCell>
-            </TableRow>
-          ) : (
-            paginatedParticipants.map((participant) => {
-              const organisation = getOrganisationById(participant.organisationId);
-              return (
-                <TableRow key={participant.id} className="h-9">
-                  <TableCell className="text-gray-900 py-1.5 text-xs">{participant.reference}</TableCell>
-                  <TableCell className="py-1.5">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-xs font-medium text-gray-900">{participant.prenom} {participant.nom}</span>
-                      <div className="flex items-center gap-1">
+    // Colonnes pour le composant List
+    const columns: Column<Participant>[] = [
+        { 
+            key: 'reference', 
+            header: 'Référence', 
+            sortable: true 
+        },
+        {
+            key: 'nom',
+            header: 'Participant',
+            sortable: true,
+            render: (p) => (
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-medium text-gray-900">{p.prenom} {p.nom}</span>
+                    <div className="flex items-center gap-1">
                         <Mail className="w-2.5 h-2.5 text-gray-400" />
-                        <span className="text-xs text-gray-500 truncate max-w-[200px]">{participant.email}</span>
-                      </div>
+                        <span className="text-xs text-gray-500 truncate max-w-[200px]">{p.email}</span>
                     </div>
-                  </TableCell>
-                  <TableCell className="text-gray-600 py-1.5 text-xs">{participant.telephone}</TableCell>
-                  <TableCell className="text-gray-600 py-1.5 text-xs">{organisation?.nom || 'N/A'}</TableCell>
-                  <TableCell className="py-1.5 text-xs">{participant.pays}</TableCell>
-                  <TableCell className="py-1.5">
-                    <Badge className={`${statutColors[participant.statut]} text-xs h-5 px-1.5`}>
-                      {participant.statut}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-1.5">
-                    <Badge className={`${statutInscriptionColors[getStatutPaiementLabel(participant)]} text-xs h-5 px-1.5`}>
-                      {getStatutPaiementLabel(participant)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-1.5 text-xs">
-                    {getStatutPaiementLabel(participant) === 'finalisée' && participant.modePaiement ? (
-                      <div className="flex items-center gap-1">
+                </div>
+            )
+        },
+        { key: 'telephone', header: 'Contact', sortable: true },
+        {
+            key: 'organisation',
+            header: 'Organisation',
+            sortable: true,
+            render: (p) => {
+                const org = getOrganisationById(p.organisationId);
+                return <span className="text-gray-600 text-xs">{org?.nom || 'N/A'}</span>;
+            },
+            sortKey: 'organisationId'
+        },
+        { key: 'pays', header: 'Pays', sortable: true },
+        {
+            key: 'statut',
+            header: 'Statut Participant',
+            sortable: true,
+            render: (p) => (
+                <Badge className={`${statutColors[p.statut]} text-xs h-5 px-1.5`}>
+                    {p.statut}
+                </Badge>
+            )
+        },
+        {
+            key: 'statutInscription',
+            header: 'Statut Inscription',
+            sortable: true,
+            render: (p) => (
+                <Badge className={`${statutInscriptionColors[getStatutPaiementLabel(p)]} text-xs h-5 px-1.5`}>
+                    {getStatutPaiementLabel(p)}
+                </Badge>
+            )
+        },
+        {
+            key: 'modePaiement',
+            header: 'Mode de paiement',
+            render: (p) => {
+                const label = getStatutPaiementLabel(p);
+                return label === 'finalisée' && p.modePaiement ? (
+                    <div className="flex items-center gap-1">
                         <span>
-                          {participant.modePaiement === 'espèce' && '💵'}
-                          {participant.modePaiement === 'carte bancaire' && '💳'}
-                          {participant.modePaiement === 'orange money' && '🟠'}
-                          {participant.modePaiement === 'wave' && '🌊'}
-                          {participant.modePaiement === 'virement' && '🏦'}
+                            {p.modePaiement === 'espèce' && '💵'}
+                            {p.modePaiement === 'carte bancaire' && '💳'}
+                            {p.modePaiement === 'orange money' && '🟠'}
+                            {p.modePaiement === 'wave' && '🌊'}
+                            {p.modePaiement === 'virement' && '🏦'}
                         </span>
-                        <span className="text-gray-700 capitalize">{participant.modePaiement}</span>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-gray-600 py-1.5 text-xs">
-                    {new Date(participant.dateInscription).toLocaleDateString('fr-FR')}
-                  </TableCell>
-                  <TableCell className="py-1.5">
-                    <ParticipantDetailsDialog participant={participant} />
-                  </TableCell>
-                </TableRow>
-              );
-            })
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  </CardContent>
-</Card>
+                        <span className="text-gray-700 capitalize text-xs">{p.modePaiement}</span>
+                    </div>
+                ) : (
+                    <span className="text-gray-400 text-xs">-</span>
+                );
+            }
+        },
+        {
+            key: 'dateInscription',
+            header: "Date d'inscription",
+            sortable: true,
+            render: (p) => (
+                <span className="text-gray-600 text-xs">
+                    {new Date(p.dateInscription).toLocaleDateString('fr-FR')}
+                </span>
+            )
+        },
+        {
+            key: 'actions',
+            header: 'Actions',
+            render: (p) => <ParticipantDetailsDialog participant={p} />
+        }
+    ];
 
-{/* Pagination */}
-{sortedParticipants.length > 0 && totalPages > 1 && (
-  <div className="mt-4 flex items-center justify-center">
-    <Pagination>
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious 
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-          />
-        </PaginationItem>
-        
-        {/* Pages */}
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-          // N'afficher que certaines pages pour éviter trop de boutons
-          if (
-            page === 1 ||
-            page === totalPages ||
-            (page >= currentPage - 1 && page <= currentPage + 1)
-          ) {
-            return (
-              <PaginationItem key={page}>
-                <PaginationLink
-                  onClick={() => setCurrentPage(page)}
-                  isActive={currentPage === page}
-                  className="cursor-pointer"
-                >
-                  {page}
-                </PaginationLink>
-              </PaginationItem>
-            );
-          } else if (page === currentPage - 2 || page === currentPage + 2) {
-            return (
-              <PaginationItem key={page}>
-                <PaginationEllipsis />
-              </PaginationItem>
-            );
-          }
-          return null;
-        })}
+    // Composant de filtres personnalisé
+    const filterComponent = (
+        <div className="w-full">
+            {showFilters && (
+                <div className="border border-gray-200 rounded-lg p-2 mt-2 bg-gray-50">
+                    <div className="grid grid-cols-4 gap-3">
+                        <div>
+                            <Label className="text-xs mb-1.5 block text-gray-900">Statut Participant</Label>
+                            <div className="space-y-1">
+                                {statutOptions.map((statut) => (
+                                    <div key={statut} className="flex items-center space-x-1.5">
+                                        <Checkbox
+                                            id={`statut-${statut}`}
+                                            checked={tempStatutFilters.includes(statut)}
+                                            disabled={isStatutLocked}
+                                            onCheckedChange={(checked) => {
+                                                if (isStatutLocked) return;
+                                                if (checked) {
+                                                    setTempStatutFilters([...tempStatutFilters, statut]);
+                                                } else {
+                                                    setTempStatutFilters(tempStatutFilters.filter(s => s !== statut));
+                                                }
+                                            }}
+                                            className="h-3 w-3"
+                                        />
+                                        <label
+                                            htmlFor={`statut-${statut}`}
+                                            className="text-xs cursor-pointer capitalize"
+                                        >
+                                            {statut}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
 
-        <PaginationItem>
-          <PaginationNext 
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-          />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
-  </div>
-)}
-</div>
+                        <div>
+                            <Label className="text-xs mb-1.5 block text-gray-900">Statut Inscription</Label>
+                            <div className="space-y-1">
+                                {['finalisée', 'non-finalisée', 'exonéré'].map((statut) => (
+                                    <div key={statut} className="flex items-center space-x-1.5">
+                                        <Checkbox
+                                            id={`statut-inscription-${statut}`}
+                                            checked={tempStatutInscriptionFilters.includes(statut)}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                    setTempStatutInscriptionFilters([...tempStatutInscriptionFilters, statut]);
+                                                } else {
+                                                    setTempStatutInscriptionFilters(tempStatutInscriptionFilters.filter(s => s !== statut));
+                                                }
+                                            }}
+                                            className="h-3 w-3"
+                                        />
+                                        <label
+                                            htmlFor={`statut-inscription-${statut}`}
+                                            className="text-xs cursor-pointer capitalize"
+                                        >
+                                            {statut}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
 
-);
+                        <div>
+                            <Label className="text-xs mb-1.5 block text-gray-900">Organisation</Label>
+                            <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                                {organisations.slice(0, 6).map((org) => (
+                                    <div key={org.id} className="flex items-center space-x-1.5">
+                                        <Checkbox
+                                            id={`org-${org.id}`}
+                                            checked={tempOrganisationFilters.includes(org.id)}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                    setTempOrganisationFilters([...tempOrganisationFilters, org.id]);
+                                                } else {
+                                                    setTempOrganisationFilters(tempOrganisationFilters.filter(o => o !== org.id));
+                                                }
+                                            }}
+                                            className="h-3 w-3"
+                                        />
+                                        <label
+                                            htmlFor={`org-${org.id}`}
+                                            className="text-xs cursor-pointer truncate"
+                                        >
+                                            {org.nom}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <Label className="text-xs mb-1.5 block text-gray-900">Pays</Label>
+                            <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                                {uniquePays.slice(0, 6).map((pays) => (
+                                    <div key={pays} className="flex items-center space-x-1.5">
+                                        <Checkbox
+                                            id={`pays-${pays}`}
+                                            checked={tempPaysFilters.includes(pays)}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                    setTempPaysFilters([...tempPaysFilters, pays]);
+                                                } else {
+                                                    setTempPaysFilters(tempPaysFilters.filter(p => p !== pays));
+                                                }
+                                            }}
+                                            className="h-3 w-3"
+                                        />
+                                        <label
+                                            htmlFor={`pays-${pays}`}
+                                            className="text-xs cursor-pointer"
+                                        >
+                                            {pays}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <Separator className="my-2" />
+
+                    <div className="flex justify-end gap-1.5">
+                        <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={handleResetFilters}
+                            className="h-7 text-xs"
+                        >
+                            Réinitialiser
+                        </Button>
+                        <Button 
+                            size="sm"
+                            onClick={handleApplyFilters}
+                            className="bg-orange-600 hover:bg-orange-700 h-7 text-xs"
+                        >
+                            Appliquer les filtres
+                        </Button>
+                    </div>
+                </div>
+            )}
+            <Button
+                variant={showFilters ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="mt-2 h-7 text-xs"
+            >
+                {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="mr-1 bg-orange-600 text-white text-xs h-4 px-1">
+                        {activeFiltersCount}
+                    </Badge>
+                )}
+                Filtres
+            </Button>
+        </div>
+    );
+
+    const exportHeaders = [
+        'Référence',
+        'Nom',
+        'Prénom',
+        'Email',
+        'Téléphone',
+        'Organisation',
+        'Pays',
+        'Statut',
+        'Statut Inscription',
+        'Mode de paiement',
+        'Date inscription'
+    ];
+
+    const exportData = (p: Participant) => {
+        const org = getOrganisationById(p.organisationId);
+        return [
+            p.reference,
+            p.nom,
+            p.prenom,
+            p.email,
+            p.telephone,
+            org?.nom || 'N/A',
+            p.pays,
+            p.statut,
+            getStatutPaiementLabel(p),
+            p.modePaiement || '-',
+            new Date(p.dateInscription).toLocaleDateString('fr-FR')
+        ];
+    };
+
+    const buildActions: ListAction<Participant>[] = [
+        {
+            label: `Télécharger badges (${badgesGenerables})`,
+            icon: <Package className="w-4 h-4" />,
+            onClick: async (items) => {
+                const finalisees = items.filter(p => p.statutInscription === 'finalisée');
+                if (finalisees.length === 0) {
+                    toast.error('Aucun participant finalisé sélectionné');
+                    return;
+                }
+                setIsDownloadingBadges(true);
+                toast.info(`Génération de ${finalisees.length} badge(s)...`);
+                // TODO: Implémenter la génération
+                setTimeout(() => {
+                    setIsDownloadingBadges(false);
+                    toast.success(`${finalisees.length} badge(s) généré(s)`);
+                }, 2000);
+            },
+            disabled: (items) => items.filter(p => p.statutInscription === 'finalisée').length === 0 || readOnly,
+        }
+    ];
+
+    return (
+        <>
+            {filteredParticipants.length > badgesGenerables && (
+                <Card className="border-orange-200 bg-orange-50 pt-5 mb-3">
+                    <CardContent className="p-3">
+                        <div className="flex items-start gap-2">
+                            <QrCode className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                                <p className="text-xs text-orange-900">
+                                    <span className="font-medium">{filteredParticipants.length - badgesGenerables} participant(s)</span> ne peuvent pas encore générer leur badge car leur inscription n'est pas finalisée (paiement en attente).
+                                </p>
+                                <p className="text-xs text-orange-700 mt-1">
+                                    Les badges seront disponibles uniquement après validation du paiement.
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            <List
+                data={filteredParticipants}
+                columns={columns}
+                getRowId={(p) => p.id}
+                searchPlaceholder="Rechercher par nom, prénom, email, référence, téléphone, pays, organisation..."
+                searchKeys={["nom", "prenom", "email", "reference", "telephone", "pays"]}
+                filterComponent={filterComponent}
+                filterTitle="Inscriptions"
+                exportFilename="inscriptions-fanaf"
+                exportHeaders={exportHeaders}
+                exportData={exportData}
+                itemsPerPage={10}
+                readOnly={readOnly}
+                enableSelection={true}
+                buildActions={buildActions}
+                emptyMessage="Aucun participant trouvé"
+            />
+        </>
+    );
 }
