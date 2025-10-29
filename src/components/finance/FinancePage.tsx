@@ -1,14 +1,14 @@
 "use client";
 
 import React from 'react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Coins, TrendingUp, Users, Download, Building2, Eye, Receipt, Wallet, CreditCard, Banknote, Smartphone, Target, TrendingDown, Activity, ArrowUpRight, ArrowDownRight, Percent, FileText } from 'lucide-react';
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { Progress } from './ui/progress';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { Progress } from '../ui/progress';
 import {
   BarChart,
   Bar,
@@ -31,15 +31,44 @@ import {
   PolarRadiusAxis,
   Radar,
 } from 'recharts';
-import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
+import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
+import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import type { CanalEncaissement } from './data/mockData';
+import type { CanalEncaissement, ModePaiement } from '../data/mockData';
+
+// Mapper le mode de paiement de l'API vers le format local
+const mapPaymentMethod = (apiMethod: string): ModePaiement => {
+  const mapping: Record<string, ModePaiement> = {
+    'cash': 'espèce',
+    'card': 'carte bancaire',
+    'orange_money': 'orange money',
+    'wave': 'wave',
+    'bank_transfer': 'virement',
+    'cheque': 'chèque',
+  };
+  return mapping[apiMethod] || 'espèce';
+};
+
+// Mapper le canal de paiement
+const mapPaymentProvider = (provider: string): 'externe' | 'asapay' => {
+  return provider === 'asapay' ? 'asapay' : 'externe';
+};
+
+// Déterminer si le paiement est complété
+const isPaymentCompleted = (state: string): boolean => {
+  return state?.includes('Completed') || false;
+};
 
 export function FinancePage() {
   const { participants: mockParticipants } = useDynamicInscriptions();
   const [showEnAttenteDialog, setShowEnAttenteDialog] = useState(false);
   const [selectedCanal, setSelectedCanal] = useState<'general' | CanalEncaissement>('general');
+  
+  // États pour les données API
+  const [apiPayments, setApiPayments] = useState<any[]>([]);
+  const [isLoadingPayments, setIsLoadingPayments] = useState(true);
+  const [paymentsError, setPaymentsError] = useState<string | null>(null);
 
   // Prix des inscriptions
   const PRIX = {
@@ -49,6 +78,91 @@ export function FinancePage() {
 
   // Objectif de revenus (exemple)
   const OBJECTIF_REVENUS = 50000000; // 50 millions FCFA
+
+  // Charger les paiements depuis l'API
+  useEffect(() => {
+    const loadAllPayments = async () => {
+      setIsLoadingPayments(true);
+      setPaymentsError(null);
+      
+      try {
+        let allPayments: any[] = [];
+        let currentPage = 1;
+        let hasMore = true;
+        const perPage = 100;
+
+        // Charger toutes les pages
+        while (hasMore) {
+          const response = await fanafApi.getPayments({
+            page: currentPage,
+            per_page: perPage,
+          });
+          
+          const paymentsData = response?.data?.data || response?.data || [];
+          const pagination = response?.data || response?.meta || {};
+          
+          allPayments = [...allPayments, ...paymentsData];
+          
+          // Vérifier s'il y a plus de pages
+          const lastPage = pagination.last_page || pagination.meta?.last_page || currentPage;
+          hasMore = currentPage < lastPage && paymentsData.length === perPage;
+          currentPage++;
+        }
+        
+        setApiPayments(allPayments);
+      } catch (err: any) {
+        console.error('Erreur lors du chargement des paiements:', err);
+        setPaymentsError(err.message || 'Erreur lors du chargement des paiements');
+        // Ne pas afficher d'erreur toast, on utilisera le fallback
+      } finally {
+        setIsLoadingPayments(false);
+      }
+    };
+    
+    loadAllPayments();
+  }, []);
+
+  // Créer un mapping participant_id -> statut depuis les participants
+  const participantStatutMap = useMemo(() => {
+    const map = new Map<string, 'membre' | 'non-membre' | 'vip' | 'speaker'>();
+    mockParticipants.forEach(p => {
+      // Essayer de trouver le participant par email ou référence
+      // Filtrer les statuts valides (exclure 'referent' par exemple)
+      if (p.statut === 'membre' || p.statut === 'non-membre' || p.statut === 'vip' || p.statut === 'speaker') {
+        if (p.email) map.set(p.email.toLowerCase(), p.statut);
+        if (p.reference) map.set(p.reference, p.statut);
+      }
+    });
+    return map;
+  }, [mockParticipants]);
+
+  // Mapper les paiements API avec le statut du participant
+  const enrichedPayments = useMemo(() => {
+    if (apiPayments.length === 0) return [];
+    
+    return apiPayments.map(payment => {
+      // Déterminer le statut du participant
+      let statut: 'membre' | 'non-membre' | 'vip' | 'speaker' = 'membre';
+      const userEmail = payment.user?.email?.toLowerCase();
+      if (userEmail && participantStatutMap.has(userEmail)) {
+        statut = participantStatutMap.get(userEmail)!;
+      } else if (payment.user?.category) {
+        // Utiliser la catégorie de l'API si disponible
+        const category = payment.user.category;
+        if (category === 'vip') statut = 'vip';
+        else if (category === 'not_member') statut = 'non-membre';
+        else if (category === 'member') statut = 'membre';
+      }
+      
+      return {
+        ...payment,
+        statut,
+        modePaiement: mapPaymentMethod(payment.payment_method || 'cash'),
+        canalEncaissement: mapPaymentProvider(payment.payment_provider || 'asapay'),
+        isCompleted: isPaymentCompleted(payment.state || ''),
+      };
+    });
+  }, [apiPayments, participantStatutMap]);
 
   // Calculer les statistiques financières par canal
   const calculateStatsByCanal = (canal?: CanalEncaissement) => {
@@ -75,41 +189,89 @@ export function FinancePage() {
       },
     };
 
-    mockParticipants.forEach((participant) => {
-      // Filtrer par canal si spécifié
-      if (canal && participant.canalEncaissement !== canal) {
-        return;
-      }
+    // Utiliser les paiements API si disponibles, sinon fallback vers mockParticipants
+    const useApiData = enrichedPayments.length > 0;
 
-      // Comptabiliser selon le statut
-      if (participant.statut === 'vip') {
-        stats.totalVIP++;
-      } else if (participant.statut === 'speaker') {
-        stats.totalSpeakers++;
-      } else if (participant.statut === 'membre') {
-        if (participant.statutInscription === 'finalisée') {
-          stats.totalMembres++;
-          stats.revenuMembres += PRIX.membre;
-          if (participant.modePaiement) {
-            stats.paiementsParMode[participant.modePaiement] += PRIX.membre;
-          }
-        } else {
-          stats.enAttenteMembres++;
-          stats.aEncaisserMembres += PRIX.membre;
+    if (useApiData) {
+      // Calcul basé sur les paiements API
+      enrichedPayments.forEach((payment) => {
+        // Filtrer par canal si spécifié
+        if (canal && payment.canalEncaissement !== canal) {
+          return;
         }
-      } else if (participant.statut === 'non-membre') {
-        if (participant.statutInscription === 'finalisée') {
-          stats.totalNonMembres++;
-          stats.revenuNonMembres += PRIX.nonMembre;
-          if (participant.modePaiement) {
-            stats.paiementsParMode[participant.modePaiement] += PRIX.nonMembre;
+
+        const montant = payment.amount || 0;
+        const isCompleted = payment.isCompleted;
+
+        // Comptabiliser selon le statut
+        if (payment.statut === 'vip') {
+          stats.totalVIP++;
+        } else if (payment.statut === 'speaker') {
+          stats.totalSpeakers++;
+        } else if (payment.statut === 'membre') {
+          if (isCompleted && montant > 0) {
+            stats.totalMembres++;
+            stats.revenuMembres += montant;
+            if (payment.modePaiement && payment.modePaiement in stats.paiementsParMode) {
+              const mode = payment.modePaiement as keyof typeof stats.paiementsParMode;
+              stats.paiementsParMode[mode] = (stats.paiementsParMode[mode] || 0) + montant;
+            }
+          } else {
+            stats.enAttenteMembres++;
+            stats.aEncaisserMembres += PRIX.membre;
           }
-        } else {
-          stats.enAttenteNonMembres++;
-          stats.aEncaisserNonMembres += PRIX.nonMembre;
+        } else if (payment.statut === 'non-membre') {
+          if (isCompleted && montant > 0) {
+            stats.totalNonMembres++;
+            stats.revenuNonMembres += montant;
+            if (payment.modePaiement && payment.modePaiement in stats.paiementsParMode) {
+              const mode = payment.modePaiement as keyof typeof stats.paiementsParMode;
+              stats.paiementsParMode[mode] = (stats.paiementsParMode[mode] || 0) + montant;
+            }
+          } else {
+            stats.enAttenteNonMembres++;
+            stats.aEncaisserNonMembres += PRIX.nonMembre;
+          }
         }
-      }
-    });
+      });
+    } else {
+      // Fallback: Calcul basé sur les participants mock
+      mockParticipants.forEach((participant) => {
+        // Filtrer par canal si spécifié
+        if (canal && participant.canalEncaissement !== canal) {
+          return;
+        }
+
+        // Comptabiliser selon le statut
+        if (participant.statut === 'vip') {
+          stats.totalVIP++;
+        } else if (participant.statut === 'speaker') {
+          stats.totalSpeakers++;
+        } else if (participant.statut === 'membre') {
+          if (participant.statutInscription === 'finalisée') {
+            stats.totalMembres++;
+            stats.revenuMembres += PRIX.membre;
+            if (participant.modePaiement) {
+              stats.paiementsParMode[participant.modePaiement] += PRIX.membre;
+            }
+          } else {
+            stats.enAttenteMembres++;
+            stats.aEncaisserMembres += PRIX.membre;
+          }
+        } else if (participant.statut === 'non-membre') {
+          if (participant.statutInscription === 'finalisée') {
+            stats.totalNonMembres++;
+            stats.revenuNonMembres += PRIX.nonMembre;
+            if (participant.modePaiement) {
+              stats.paiementsParMode[participant.modePaiement] += PRIX.nonMembre;
+            }
+          } else {
+            stats.enAttenteNonMembres++;
+            stats.aEncaisserNonMembres += PRIX.nonMembre;
+          }
+        }
+      });
+    }
 
     stats.revenuTotal = stats.revenuMembres + stats.revenuNonMembres;
     stats.aEncaisserTotal = stats.aEncaisserMembres + stats.aEncaisserNonMembres;
@@ -118,9 +280,9 @@ export function FinancePage() {
   };
 
   // Statistiques par canal
-  const statsGeneral = useMemo(() => calculateStatsByCanal(), [mockParticipants]);
-  const statsExterne = useMemo(() => calculateStatsByCanal('externe'), [mockParticipants]);
-  const statsAsapay = useMemo(() => calculateStatsByCanal('asapay'), [mockParticipants]);
+  const statsGeneral = useMemo(() => calculateStatsByCanal(), [enrichedPayments, mockParticipants]);
+  const statsExterne = useMemo(() => calculateStatsByCanal('externe'), [enrichedPayments, mockParticipants]);
+  const statsAsapay = useMemo(() => calculateStatsByCanal('asapay'), [enrichedPayments, mockParticipants]);
 
   // Formater les montants en FCFA
   const formatCurrency = (amount: number) => {
@@ -654,7 +816,7 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
 
           {/* Graphique circulaire amélioré */}
           <Card className="p-6 hover:shadow-lg transition-shadow">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items中心 gap-2 mb-4">
               <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
                 <Coins className="w-4 h-4 text-white" />
               </div>
@@ -670,7 +832,7 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
                   cx="50%"
                   cy="50%"
                   labelLine={true}
-                  label={(entry) => {
+                  label={(entry: any) => {
                     const percent = ((entry.value / stats.revenuTotal) * 100).toFixed(1);
                     return `${entry.name}: ${percent}%`;
                   }}
@@ -788,6 +950,18 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {isLoadingPayments && (
+            <Badge className="bg-gray-100 text-gray-700 px-4 py-2">
+              <Activity className="w-4 h-4 mr-2" />
+              Chargement des données...
+            </Badge>
+          )}
+          {!isLoadingPayments && enrichedPayments.length > 0 && (
+            <Badge className="bg-blue-100 text-blue-700 px-4 py-2">
+              <Activity className="w-4 h-4 mr-2" />
+              Données API ({enrichedPayments.length} paiements)
+            </Badge>
+          )}
           <Badge className="bg-green-100 text-green-700 px-4 py-2">
             <Coins className="w-4 h-4 mr-2" />
             {formatCurrency(statsGeneral.revenuTotal)} encaissés
@@ -848,3 +1022,5 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
     </div>
   );
 }
+
+

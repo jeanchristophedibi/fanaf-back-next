@@ -7,7 +7,7 @@ import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage
 import { OrganisationsPage } from '../../../components/organisations/OrganisationsPage';
 import { NetworkingPage } from '../../../components/NetworkingPage';
 import { CheckInScanner } from '../../../components/CheckInScanner';
-import { FinancePage } from '../../../components/FinancePage';
+import { FinancePage } from '../../../components/finance/FinancePage';
 import { ListePaiementsPage } from '../../../components/ListePaiementsPage';
 import { HistoriqueDemandesPage } from '../../../components/HistoriqueDemandesPage';
 import { usePathname } from 'next/navigation';
