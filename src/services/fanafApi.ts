@@ -286,13 +286,20 @@ class FanafApiService {
   async getNetworkingRequests(params?: {
     page?: number;
     per_page?: number;
-    type?: 'participant' | 'sponsor';
+    target?: 'user' | 'sponsor';
+    type?: 'participant' | 'sponsor'; // Déprécié, utiliser 'target' à la place
     status?: string;
   }): Promise<PaginatedResponse<any>> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
-    if (params?.type) queryParams.append('type', params.type);
+    // Utiliser 'target' si fourni, sinon convertir 'type' en 'target' pour compatibilité
+    if (params?.target) {
+      queryParams.append('target', params.target);
+    } else if (params?.type) {
+      // Conversion: 'participant' -> 'user', 'sponsor' -> 'sponsor'
+      queryParams.append('target', params.type === 'participant' ? 'user' : 'sponsor');
+    }
     if (params?.status) queryParams.append('status', params.status);
 
     const query = queryParams.toString();

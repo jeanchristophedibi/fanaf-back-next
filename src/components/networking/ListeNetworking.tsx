@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Eye, Check, X, User, Download, Mail } from 'lucide-react';
-import { getParticipantById, getReferentSponsor, getOrganisationById, updateRendezVous, type RendezVous, type StatutRendezVous } from '../data/mockData';
+import { Eye, Check, X, User, Download, Mail, Loader2 } from 'lucide-react';
+import { getParticipantById, getReferentSponsor, getOrganisationById, type RendezVous, type StatutRendezVous } from '../data/mockData';
+import { networkingDataService } from '../data/networkingData';
+import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';
 import { List, type Column, type ListAction, type RowAction } from '../list/List';
 
@@ -20,14 +22,44 @@ const statutRdvColors: Record<string, string> = {
 };
 
 interface ListeNetworkingProps {
-  rendezVous: RendezVous[];
   activeFilter?: 'participant' | 'sponsor' | 'all' | 'liste' | 'historique';
   readOnly?: boolean;
 }
 
-export function ListeNetworking({ rendezVous, activeFilter, readOnly = false }: ListeNetworkingProps) {
+export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetworkingProps) {
+  // Rendez-vous depuis le service centralisé networkingDataService
+  const [rendezVous, setRendezVous] = useState<RendezVous[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [statutFilter, setStatutFilter] = useState<string>('tous');
   const [selectedRendezVous, setSelectedRendezVous] = useState<RendezVous[]>([]);
+  
+  // Charger les rendez-vous via le service au montage
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setIsLoading(true);
+        const filters: { type?: 'participant' | 'sponsor'; status?: string } = {};
+        
+        // Appliquer le filtre de type si spécifié
+        if (activeFilter === 'participant') {
+          filters.type = 'participant';
+        } else if (activeFilter === 'sponsor') {
+          filters.type = 'sponsor';
+        }
+        // Si statutFilter est spécifié, l'ajouter
+        if (statutFilter !== 'tous') {
+          filters.status = statutFilter;
+        }
+        
+        const requests = await networkingDataService.loadNetworkingRequests(filters);
+        if (mounted) setRendezVous(requests);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [activeFilter, statutFilter]);
 
   // Enrichir les rendez-vous avec des champs de recherche calculés
   const rendezVousWithSearch = useMemo(() => {
@@ -90,21 +122,42 @@ export function ListeNetworking({ rendezVous, activeFilter, readOnly = false }: 
     if (rendezVous.type === 'participant' && !recepteur) return null;
     if (rendezVous.type === 'sponsor' && !referentSponsor) return null;
 
-    const handleAction = (newStatut: StatutRendezVous) => {
-      updateRendezVous(rendezVous.id, {
-        statut: newStatut,
-        commentaire: commentaire || undefined,
-      });
-      setIsOpen(false);
-      
-      const messages: Record<string, string> = {
-        'acceptée': 'Rendez-vous accepté',
-        'occupée': 'Rendez-vous refusé (occupé)',
-        'en-attente': 'Rendez-vous mis en attente',
-        'annulée': 'Rendez-vous annulé',
-      };
-      
-      toast.success(messages[newStatut] || 'Statut mis à jour');
+    const handleAction = async (newStatut: StatutRendezVous) => {
+      try {
+        // Appeler l'API pour accepter ou refuser
+        if (newStatut === 'acceptée') {
+          await fanafApi.acceptNetworkingRequest(rendezVous.id);
+        } else if (newStatut === 'occupée') {
+          await fanafApi.refuseNetworkingRequest(rendezVous.id);
+        }
+        
+        // Mettre à jour le cache local
+        networkingDataService.updateRequest(rendezVous.id, {
+          statut: newStatut,
+          commentaire: commentaire || undefined,
+        });
+        
+        // Mettre à jour l'état local
+        setRendezVous(prev => prev.map(rdv => 
+          rdv.id === rendezVous.id 
+            ? { ...rdv, statut: newStatut, commentaire: commentaire || undefined }
+            : rdv
+        ));
+        
+        setIsOpen(false);
+        
+        const messages: Record<string, string> = {
+          'acceptée': 'Rendez-vous accepté',
+          'occupée': 'Rendez-vous refusé (occupé)',
+          'en-attente': 'Rendez-vous mis en attente',
+          'annulée': 'Rendez-vous annulé',
+        };
+        
+        toast.success(messages[newStatut] || 'Statut mis à jour');
+      } catch (error: any) {
+        console.error('Erreur lors de la mise à jour du rendez-vous:', error);
+        toast.error(error?.message || 'Erreur lors de la mise à jour du rendez-vous');
+      }
     };
 
     return (
@@ -391,9 +444,15 @@ export function ListeNetworking({ rendezVous, activeFilter, readOnly = false }: 
     {
       label: 'Accepter',
       icon: <Check className="w-4 h-4" />,
-      onClick: (rdv) => {
-        updateRendezVous(rdv.id, { statut: 'acceptée' });
-        toast.success('Rendez-vous accepté');
+      onClick: async (rdv) => {
+        try {
+          await fanafApi.acceptNetworkingRequest(rdv.id);
+          networkingDataService.updateRequest(rdv.id, { statut: 'acceptée' });
+          setRendezVous(prev => prev.map(r => r.id === rdv.id ? { ...r, statut: 'acceptée' } : r));
+          toast.success('Rendez-vous accepté');
+        } catch (error: any) {
+          toast.error(error?.message || 'Erreur lors de l\'acceptation');
+        }
       },
       variant: 'ghost',
       className: 'h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50',
@@ -403,9 +462,15 @@ export function ListeNetworking({ rendezVous, activeFilter, readOnly = false }: 
     {
       label: 'Refuser',
       icon: <X className="w-4 h-4" />,
-      onClick: (rdv) => {
-        updateRendezVous(rdv.id, { statut: 'occupée' });
-        toast.success('Rendez-vous refusé');
+      onClick: async (rdv) => {
+        try {
+          await fanafApi.refuseNetworkingRequest(rdv.id);
+          networkingDataService.updateRequest(rdv.id, { statut: 'occupée' });
+          setRendezVous(prev => prev.map(r => r.id === rdv.id ? { ...r, statut: 'occupée' } : r));
+          toast.success('Rendez-vous refusé');
+        } catch (error: any) {
+          toast.error(error?.message || 'Erreur lors du refus');
+        }
       },
       variant: 'ghost',
       className: 'h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50',
@@ -469,7 +534,17 @@ export function ListeNetworking({ rendezVous, activeFilter, readOnly = false }: 
 
   return (
     <>
-    <List
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-md">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <Loader2 className="w-10 h-10 text-orange-600 animate-spin" />
+            </div>
+            <p className="text-sm font-medium text-gray-700">Chargement des rendez-vous...</p>
+          </div>
+        </div>
+      )}
+      <List
       data={filteredRendezVous}
       columns={columns}
       getRowId={(rdv) => rdv.id}

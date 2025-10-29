@@ -1,14 +1,32 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Calendar, Users, Building2, CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
-import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
+import type { RendezVous } from "../data/mockData";
+import { networkingDataService } from "../data/networkingData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
+import { Skeleton } from "../ui/skeleton";
 
 export function WidgetNetworking() {
-  const { rendezVous } = useDynamicInscriptions({ includeRendezVous: true });
+  const [rendezVous, setRendezVous] = useState<RendezVous[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const requests = await networkingDataService.loadNetworkingRequests();
+        if (mounted) setRendezVous(requests);
+      } catch (error) {
+        console.error('Erreur lors du chargement des rendez-vous:', error);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const stats = useMemo(() => {
     const rdvParticipants = rendezVous.filter(r => r.type === 'participant');
@@ -24,6 +42,25 @@ export function WidgetNetworking() {
       total: rendezVous.length
     };
   }, [rendezVous]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Card key={i} className="border-t-4 border-t-purple-500">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex-1">
+                <Skeleton className="h-4 w-32 mb-2" />
+                <Skeleton className="h-8 w-16 mb-2" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Skeleton className="w-12 h-12 rounded-xl" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">

@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from './ui/button';
 import { List, CalendarDays } from 'lucide-react';
-import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
+import type { RendezVous } from './data/mockData';
+import { networkingDataService } from './data/networkingData';
 import { CalendarView } from './networking/CalendarView';
 import { WidgetNetworking } from './networking/WidgetNetworking';
 import { ListeNetworking } from './networking/ListeNetworking';
@@ -15,10 +16,34 @@ interface NetworkingPageProps {
 }
 
 export function NetworkingPage({ subSection, filter, readOnly = false }: NetworkingPageProps) {
-  const { rendezVous: rendezVousData } = useDynamicInscriptions({ includeRendezVous: true });
+  // Rendez-vous depuis le service centralisé networkingDataService
+  const [rendezVousData, setRendezVousData] = useState<RendezVous[]>([]);
   const activeFilter = filter || subSection;
   const [statutFilter, setStatutFilter] = useState<string>('tous');
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
+
+  // Charger les rendez-vous via le service au montage
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const filters: { type?: 'participant' | 'sponsor' } = {};
+        
+        // Appliquer le filtre de type si spécifié
+        if (activeFilter === 'participant') {
+          filters.type = 'participant';
+        } else if (activeFilter === 'sponsor') {
+          filters.type = 'sponsor';
+        }
+        
+        const requests = await networkingDataService.loadNetworkingRequests(filters);
+        if (mounted) setRendezVousData(requests);
+      } catch (error) {
+        console.error('Erreur lors du chargement des rendez-vous:', error);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [activeFilter]);
 
   // Rendez-vous pour la vue calendrier - affiche toujours les rendez-vous acceptés + les filtres actifs
   const calendarRendezVous = useMemo(() => {
@@ -90,7 +115,6 @@ export function NetworkingPage({ subSection, filter, readOnly = false }: Network
         <CalendarView rendezVous={calendarRendezVous} readOnly={readOnly} activeFilter={activeFilter} />
       ) : (
         <ListeNetworking 
-          rendezVous={rendezVousData} 
           activeFilter={activeFilter === 'historique' ? 'all' : activeFilter}
           readOnly={readOnly}
         />

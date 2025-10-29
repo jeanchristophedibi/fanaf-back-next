@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
@@ -9,8 +9,9 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Checkbox } from '../ui/checkbox';
-import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
-import { getOrganisationById, getPlanVolByType, getParticipantById } from '../data/mockData';
+import { planVolDataService } from '../data/planvolData';
+import { inscriptionsDataService } from '../data/inscriptionsData';
+import { companiesDataService } from '../data/companiesData';
 import { Download, Plane, Search, Calendar, AlertCircle, Eye, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { List, type Column, type ListAction } from '../list/List';
@@ -28,7 +29,45 @@ interface GroupedPlanVol {
 }
 
 export function ListePlanVol() {
-  const { organisations: mockOrganisations } = useDynamicInscriptions({ includeOrganisations: true });
+  const [plansVol, setPlansVol] = useState<any[]>([]);
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [organisations, setOrganisations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Charger les données depuis l'API
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        // Charger les plans de vol, participants et organisations
+        const [plans, part, orgs] = await Promise.all([
+          planVolDataService.loadFlightPlans(),
+          inscriptionsDataService.loadParticipants(),
+          companiesDataService.loadOrganisations(),
+        ]);
+        setPlansVol(plans);
+        setParticipants(part);
+        setOrganisations(orgs);
+      } catch (error) {
+        console.error('Erreur lors du chargement des données:', error);
+        toast.error('Erreur lors du chargement des plans de vol');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
+
+  // Fonction helper pour obtenir un participant par ID
+  const getParticipantById = (id: string) => {
+    return participants.find(p => p.id === id);
+  };
+
+  // Fonction helper pour obtenir une organisation par ID
+  const getOrganisationById = (id: string) => {
+    return organisations.find(o => o.id === id);
+  };
 
   const [showFilters, setShowFilters] = useState(false);
   const [tempTypeVolFilters, setTempTypeVolFilters] = useState<string[]>([]);
@@ -47,7 +86,7 @@ export function ListePlanVol() {
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
 
   const uniquePaysVol = useMemo(() => {
-    const allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
+    const allPlansVol = [...planVolDataService.getFlightPlansByType('arrivee'), ...planVolDataService.getFlightPlansByType('depart')];
     const paysSet = new Set<string>();
     allPlansVol.forEach(pv => {
       const participant = getParticipantById(pv.participantId);
@@ -84,7 +123,7 @@ export function ListePlanVol() {
 
   // Groupement et filtrage des plans de vol
   const groupedPlansVol = useMemo(() => {
-    let allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
+    let allPlansVol = [...planVolDataService.getFlightPlansByType('arrivee'), ...planVolDataService.getFlightPlansByType('depart')];
 
     // Filtres par type de vol
     if (appliedTypeVolFilters.length > 0) {
@@ -178,7 +217,7 @@ export function ListePlanVol() {
     });
 
     return grouped;
-  }, [appliedTypeVolFilters, appliedOrganisationFilters, appliedPaysVolFilters, appliedDateDebut, appliedDateFin]);
+  }, [appliedTypeVolFilters, appliedOrganisationFilters, appliedPaysVolFilters, appliedDateDebut, appliedDateFin, plansVol, participants, organisations]);
 
   const isArrivingTomorrow = (dateString: string) => {
     const today = new Date();
@@ -443,7 +482,7 @@ export function ListePlanVol() {
             <div>
               <Label className="text-sm mb-3 block text-gray-900">Organisation</Label>
               <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                {mockOrganisations.slice(0, 12).map((org) => (
+                {organisations.slice(0, 12).map((org) => (
                   <div key={org.id} className="flex items-center space-x-2">
                     <Checkbox
                       id={`org-planvol-${org.id}`}
@@ -562,6 +601,7 @@ export function ListePlanVol() {
       enableSelection={true}
       buildActions={buildActions}
       onSelectionChange={handleSelectionChange}
+      loading={loading}
       emptyMessage="Aucun participant trouvé"
     />
   );

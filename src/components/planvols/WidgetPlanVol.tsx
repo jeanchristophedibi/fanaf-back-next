@@ -1,22 +1,79 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Plane, TrendingUp } from "lucide-react";
-import { getPlanVolByType } from "../data/mockData";
+import { planVolDataService } from "../data/planvolData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
+import { Skeleton } from "../ui/skeleton";
 
 export function WidgetPlanVol() {
-  const stats = useMemo(() => {
-    const arrivees = getPlanVolByType('arrivee');
-    const departs = getPlanVolByType('depart');
-    return {
-      total: arrivees.length + departs.length,
-      arrivees: arrivees.length,
-      departs: departs.length
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    total: 0,
+    arrivees: 0,
+    departs: 0
+  });
+
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setLoading(true);
+        const plansVol = await planVolDataService.loadFlightPlans();
+        const arrivees = planVolDataService.getFlightPlansByType('arrivee');
+        const departs = planVolDataService.getFlightPlansByType('depart');
+        setStats({
+          total: arrivees.length + departs.length,
+          arrivees: arrivees.length,
+          departs: departs.length
+        });
+      } catch (error) {
+        console.error('Erreur lors du chargement des statistiques:', error);
+      } finally {
+        setLoading(false);
+      }
     };
+
+    loadStats();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card className="border-t-4 border-t-orange-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-32 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+        <Card className="border-t-4 border-t-green-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-28 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+        <Card className="border-t-4 border-t-blue-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
