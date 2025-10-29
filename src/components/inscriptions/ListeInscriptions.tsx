@@ -25,8 +25,15 @@ import JSZip from 'jszip';
 interface ListeInscriptionsProps {
     readOnly?: boolean;
     userProfile?: 'agence' | 'fanaf' | 'asaci';
+    defaultStatuts?: Array<'membre' | 'non-membre' | 'vip' | 'speaker'>;
+    restrictStatutOptions?: Array<'membre' | 'non-membre' | 'vip' | 'speaker'>;
 }
-export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: ListeInscriptionsProps = {}) {
+export function ListeInscriptions({ 
+    readOnly = false, 
+    userProfile = 'agence', 
+    defaultStatuts,
+    restrictStatutOptions,
+}: ListeInscriptionsProps = {}) {
     const { participants, organisations } = useDynamicInscriptions({ includeOrganisations: true });
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
@@ -57,6 +64,25 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
         'vip': 'bg-cyan-100 text-cyan-800',
         'speaker': 'bg-yellow-100 text-yellow-800',
     };
+
+    // Options de statuts disponibles (peuvent être restreintes via props)
+    const allStatutOptions: Array<'membre' | 'non-membre' | 'vip' | 'speaker'> = ['membre', 'non-membre', 'vip', 'speaker'];
+    const statutOptions = restrictStatutOptions && restrictStatutOptions.length > 0
+        ? restrictStatutOptions
+        : allStatutOptions;
+
+    // Verrouiller le filtre Statut si des valeurs par défaut ET une restriction sont définies côté appelant
+    const isStatutLocked = Array.isArray(defaultStatuts) && defaultStatuts.length > 0 
+        && Array.isArray(restrictStatutOptions) && restrictStatutOptions.length > 0;
+
+    // Appliquer des statuts par défaut au chargement si fournis
+    useEffect(() => {
+        if (defaultStatuts && defaultStatuts.length > 0) {
+            setTempStatutFilters(defaultStatuts);
+            setAppliedStatutFilters(defaultStatuts);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     
     const statutInscriptionColors: Record<string, string> = {
         'finalisée': 'bg-emerald-100 text-emerald-800',
@@ -75,7 +101,13 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
         setTempStatutInscriptionFilters([]);
         setTempOrganisationFilters([]);
         setTempPaysFilters([]);
-        setAppliedStatutFilters([]);
+        // Si verrouillé, conserver les statuts par défaut
+        if (isStatutLocked && defaultStatuts) {
+            setAppliedStatutFilters(defaultStatuts);
+            setTempStatutFilters(defaultStatuts);
+        } else {
+            setAppliedStatutFilters([]);
+        }
         setAppliedStatutInscriptionFilters([]);
         setAppliedOrganisationFilters([]);
         setAppliedPaysFilters([]);
@@ -83,7 +115,13 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
     };
     
     const handleApplyFilters = () => {
-        setAppliedStatutFilters(tempStatutFilters);
+        // Si verrouillé, imposer les statuts par défaut
+        if (isStatutLocked && defaultStatuts) {
+            setAppliedStatutFilters(defaultStatuts);
+            setTempStatutFilters(defaultStatuts);
+        } else {
+            setAppliedStatutFilters(tempStatutFilters);
+        }
         setAppliedStatutInscriptionFilters(tempStatutInscriptionFilters);
         setAppliedOrganisationFilters(tempOrganisationFilters);
         setAppliedPaysFilters(tempPaysFilters);
@@ -362,12 +400,14 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
           <div>
             <Label className="text-xs mb-1.5 block text-gray-900">Statut Participant</Label>
             <div className="space-y-1">
-              {['membre', 'non-membre', 'vip', 'speaker'].map((statut) => (
+              {statutOptions.map((statut) => (
                 <div key={statut} className="flex items-center space-x-1.5">
                   <Checkbox
                     id={`statut-${statut}`}
                     checked={tempStatutFilters.includes(statut)}
+                    disabled={isStatutLocked}
                     onCheckedChange={(checked) => {
+                      if (isStatutLocked) return;
                       if (checked) {
                         setTempStatutFilters([...tempStatutFilters, statut]);
                       } else {

@@ -1,132 +1,86 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { DashboardHome } from '../../../components/dashboard/DashboardHome';
 import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
-import { OrganisationsPage } from '../../../components/OrganisationsPage';
+import { OrganisationsPage } from '../../../components/organisations/OrganisationsPage';
 import { NetworkingPage } from '../../../components/NetworkingPage';
 import { CheckInScanner } from '../../../components/CheckInScanner';
 import { FinancePage } from '../../../components/FinancePage';
 import { ListePaiementsPage } from '../../../components/ListePaiementsPage';
 import { HistoriqueDemandesPage } from '../../../components/HistoriqueDemandesPage';
+import { usePathname } from 'next/navigation';
 import type { NavItem } from './types';
 
-interface AdminFanafDashboardProps {
-  onSwitchProfile?: () => void;
-}
+export default function AdminFanafDashboard() {
+  const pathname = usePathname();
 
-export default function AdminFanafDashboard({ onSwitchProfile }: AdminFanafDashboardProps = {}) {
-  const [activeNav, setActiveNav] = useState<NavItem>('home');
-
-  const renderContent = () => {
-    switch (activeNav) {
-      case 'home':
-        return <DashboardHome />;
-      
-      case 'finance':
-        return <FinancePage />;
-      
-      case 'finance-paiements':
+  // Déterminer le contenu basé sur l'URL
+  const getContent = () => {
+    if (pathname?.includes('/check-in')) {
+      return <CheckInScanner readOnly />;
+    }
+    
+    if (pathname?.includes('/finance')) {
+      if (pathname?.includes('/paiements')) {
         return <ListePaiementsPage />;
-      
-      case 'check-in':
-        return <CheckInScanner readOnly />;
-
-      case 'inscriptions-liste':
-        return <ListeInscriptionsPage readOnly userProfile="fanaf" />;
-      
-      case 'inscriptions-membre':
+      }
+      return <FinancePage />;
+    }
+    
+    if (pathname?.includes('/inscriptions')) {
+      if (pathname?.includes('/membre')) {
         return <InscriptionsPage subSection="membre" readOnly />;
-      
-      case 'inscriptions-non-membre':
+      }
+      if (pathname?.includes('/non-membre')) {
         return <InscriptionsPage subSection="non-membre" readOnly />;
-      
-      case 'inscriptions-vip':
+      }
+      if (pathname?.includes('/vip')) {
         return <InscriptionsPage subSection="vip" readOnly />;
-      
-      case 'inscriptions-speaker':
+      }
+      if (pathname?.includes('/speaker')) {
         return <InscriptionsPage subSection="speaker" readOnly />;
-      
-      case 'inscriptions-planvol':
+      }
+      if (pathname?.includes('/planvol')) {
         return <InscriptionsPage subSection="planvol" readOnly />;
-
-
-      case 'organisations-liste':
-        return <OrganisationsPage filter="all" readOnly />;
-      
-      case 'organisations-membre':
-        return <OrganisationsPage filter="membre" readOnly />;
-      
-      case 'organisations-non-membre':
-        return <OrganisationsPage filter="non-membre" readOnly />;
-      
-      case 'organisations-sponsor':
-        return <OrganisationsPage filter="sponsor" readOnly />;
-
-      case 'networking-liste':
-        return <NetworkingPage filter="all" readOnly />;
-      
-      case 'networking-participant':
-        return <NetworkingPage filter="participant" readOnly />;
-      
-      case 'networking-sponsor':
-        return <NetworkingPage filter="sponsor" readOnly />;
-      
-      case 'networking-historique':
-
-      return <HistoriqueDemandesPage />;
-
-      default:
-        return <DashboardHome />;
+      }
+      return <ListeInscriptionsPage readOnly userProfile="fanaf" />;
     }
-  };
-
-  const getPageTitle = () => {
-    switch (activeNav) {
-      case 'home': return 'Tableau de bord';
-      case 'finance': return 'Encaissement';
-      case 'finance-paiements': return 'Liste des paiements';
-      case 'check-in': return 'Check-in Participants';
-      case 'inscriptions-liste': return 'Liste des inscriptions';
-      case 'inscriptions-membre': return 'Inscriptions - Membres';
-      case 'inscriptions-non-membre': return 'Inscriptions - Non-membres';
-      case 'inscriptions-vip': return 'Inscriptions - VIP';
-      case 'inscriptions-speaker': return 'Inscriptions - Speakers';
-      case 'inscriptions-planvol': return 'Plans de vol';
-      case 'organisations-liste': return 'Organisations';
-      case 'organisations-membre': return 'Organisations membres';
-      case 'organisations-non-membre': return 'Organisations non-membres';
-      case 'organisations-sponsor': return 'Sponsors';
-      case 'networking-liste': return 'Networking';
-      case 'networking-participant': return 'Rendez-vous participants';
-      case 'networking-sponsor': return 'Rendez-vous sponsors';
-      case 'networking-historique': return 'Historique des demandes';
-      default: return 'Tableau de bord';
+    
+    if (pathname?.includes('/organisations')) {
+      if (pathname?.includes('/membre')) {
+        return <OrganisationsPage subSection="membre" readOnly />;
+      }
+      if (pathname?.includes('/non-membre')) {
+        return <OrganisationsPage subSection="non-membre" readOnly />;
+      }
+      if (pathname?.includes('/sponsor')) {
+        return <OrganisationsPage subSection="sponsor" readOnly />;
+      }
+      return <OrganisationsPage readOnly />;
     }
+    
+    if (pathname?.includes('/networking')) {
+      if (pathname?.includes('/participant')) {
+        return <NetworkingPage subSection="participant" readOnly />;
+      }
+      if (pathname?.includes('/sponsor')) {
+        return <NetworkingPage subSection="sponsor" readOnly />;
+      }
+      if (pathname?.includes('/historique')) {
+        return <HistoriqueDemandesPage />;
+      }
+      return <NetworkingPage readOnly />;
+    }
+    
+    // Par défaut, afficher le dashboard home
+    return <DashboardHome userProfile="fanaf" />;
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-     
-      <main className="flex-1 overflow-auto">
-        {/* Header */}
-        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-6 py-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-gray-900">
-                {getPageTitle()}
-              </h1>
-              <p className="text-sm text-gray-500">FANAF 2026 - Administrateur FANAF</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Contenu principal */}
-        <div>
-          {renderContent()}
-        </div>
-      </main>
+    <div className="p-6">
+      {getContent()}
     </div>
   );
 }

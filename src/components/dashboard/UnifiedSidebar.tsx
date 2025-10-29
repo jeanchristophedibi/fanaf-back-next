@@ -63,8 +63,8 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             { id: 'home', label: 'Accueil', icon: Home },
             { id: 'check-in', label: 'Check-in', icon: ScanLine },
           ],
-          showTresorerie: true,
           showInscriptions: true,
+          showTresorerie: true,
           showOrganisations: true,
           showNetworking: true,
           showPaiements: false,
@@ -217,50 +217,6 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
           );
         })}
 
-        {/* Trésorerie submenu */}
-        {menuConfig.showTresorerie && (
-          <Collapsible open={tresorerieOpen} onOpenChange={setTresorerieOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  isTresorerieActive
-                    ? 'bg-orange-50 text-orange-700'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Coins className="w-5 h-5" />
-                  <span className="text-sm">Trésorerie</span>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform ${
-                    tresorerieOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 mt-1">
-              {tresorerieSubItems.map((subItem) => {
-                const isActive = activeNav === subItem.id;
-                
-                return (
-                  <button
-                    key={subItem.id}
-                    onClick={() => onNavChange(subItem.id)}
-                    className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
-                      isActive
-                        ? 'bg-orange-100 text-orange-700'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {subItem.label}
-                  </button>
-                );
-              })}
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
         {/* Inscriptions submenu */}
         {menuConfig.showInscriptions && (
           <Collapsible open={inscriptionsOpen} onOpenChange={setInscriptionsOpen}>
@@ -285,6 +241,50 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 mt-1">
               {inscriptionsSubItems.map((subItem) => {
+                const isActive = activeNav === subItem.id;
+                
+                return (
+                  <button
+                    key={subItem.id}
+                    onClick={() => onNavChange(subItem.id)}
+                    className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
+                      isActive
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {subItem.label}
+                  </button>
+                );
+              })}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Encaissement submenu */}
+        {menuConfig.showTresorerie && (
+          <Collapsible open={tresorerieOpen} onOpenChange={setTresorerieOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  isTresorerieActive
+                    ? 'bg-orange-50 text-orange-700'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Coins className="w-5 h-5" />
+                  <span className="text-sm">Encaissement</span>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform ${
+                    tresorerieOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1 mt-1">
+              {tresorerieSubItems.map((subItem) => {
                 const isActive = activeNav === subItem.id;
                 
                 return (
@@ -437,49 +437,6 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
           </Collapsible>
         )}
 
-        {/* Tresorerie submenu */}
-        {menuConfig.showTresorerie && (
-          <Collapsible open={tresorerieOpen} onOpenChange={setTresorerieOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  isTresorerieActive
-                    ? 'bg-orange-50 text-orange-700'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Coins className="w-5 h-5" />
-                  <span className="text-sm">Trésorerie</span>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform ${
-                    tresorerieOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 mt-1">
-              {tresorerieSubItems.map((subItem) => {
-                const isActive = activeNav === subItem.id;
-                
-                return (
-                  <button
-                    key={subItem.id}
-                    onClick={() => onNavChange(subItem.id)}
-                    className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
-                      isActive
-                        ? 'bg-orange-100 text-orange-700'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {subItem.label}
-                  </button>
-                );
-              })}
-            </CollapsibleContent>
-          </Collapsible>
-        )}
       </nav>
       
       <Separator />

@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { useState, useMemo } from 'react';
 import { Coins, TrendingUp, Users, Download, Building2, Eye, Receipt, Wallet, CreditCard, Banknote, Smartphone, Target, TrendingDown, Activity, ArrowUpRight, ArrowDownRight, Percent, FileText } from 'lucide-react';

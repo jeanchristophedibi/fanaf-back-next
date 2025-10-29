@@ -5,7 +5,7 @@ import { AdminFanafSidebar } from './Sidebar';
 import { DashboardHome } from '../../../components/dashboard/DashboardHome';
 import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
-import { OrganisationsPage } from '../../../components/OrganisationsPage';
+import { OrganisationsPage } from '../../../components/organisations/OrganisationsPage';
 import { NetworkingPage } from '../../../components/NetworkingPage';
 import { CheckInScanner } from '../../../components/CheckInScanner';
 import { FinancePage } from '../../../components/FinancePage';

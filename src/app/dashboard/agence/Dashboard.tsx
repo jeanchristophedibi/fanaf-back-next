@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { DashboardHome } from '../../../components/dashboard/DashboardHome';
-import { OrganisationsPage } from '../../../components/OrganisationsPage';
+import { OrganisationsPage } from '../../../components/organisations/OrganisationsPage';
 import { NetworkingPage } from '../../../components/NetworkingPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
 import { ComiteOrganisationPage } from '../../../components/ComiteOrganisationPage';

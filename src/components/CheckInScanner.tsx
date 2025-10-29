@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { CheckCircle, Building2, Clock, Search, AlertTriangle, XCircle, Calendar, Download, Filter, Users, TrendingUp, ChevronDown, ChevronUp, MapPin, Briefcase, Hash } from 'lucide-react';
 import { Button } from './ui/button';
