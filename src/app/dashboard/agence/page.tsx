@@ -1,8 +1,8 @@
 'use client';
 
-import Dashboard from './Dashboard';
+import React from 'react';
+import { DashboardHome } from '../../../components/dashboard/DashboardHome';
 
-export default function AgencePage() {
-  return <Dashboard userProfile="agence" onLogout={() => {}} />;
+export default function AgenceHomePage() {
+  return <DashboardHome userProfile="agence" />;
 }
-

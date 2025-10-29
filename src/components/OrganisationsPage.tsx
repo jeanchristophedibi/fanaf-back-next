@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Search, Filter, Eye, Download, Building2, UserPlus, User, QrCode, Package, History, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getParticipantsByOrganisation, getParticipantById } from './data/mockData';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
-import type { OrganisationSubSection } from '../app/dashboard/agence/Dashboard';
+import type { OrganisationSubSection } from '../app/dashboard/agence/types';
 import { BadgeReferentGenerator } from './BadgeReferentGenerator';
 import { AnimatedStat } from './AnimatedStat';
 import { HistoriqueRendezVousDialog } from './HistoriqueRendezVousDialog';

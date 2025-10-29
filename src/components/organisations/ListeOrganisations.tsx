@@ -12,7 +12,7 @@ import { getParticipantsByOrganisation } from "../data/mockData";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
 import { BadgeReferentGenerator } from "../BadgeReferentGenerator";
 import { HistoriqueRendezVousDialog } from "../HistoriqueRendezVousDialog";
-import type { OrganisationSubSection } from "../../app/dashboard/agence/Dashboard";
+import type { OrganisationSubSection } from "../../app/dashboard/agence/types";
 
 const statutOrgColors = {
   'membre': 'bg-teal-100 text-teal-800',

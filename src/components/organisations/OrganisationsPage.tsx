@@ -9,7 +9,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { UserPlus } from "lucide-react";
 import { useState } from "react";
-import type { OrganisationSubSection } from "../../app/dashboard/agence/Dashboard";
+import type { OrganisationSubSection } from "../../app/dashboard/agence/types";
 
 interface OrganisationsPageProps {
   subSection?: OrganisationSubSection;
