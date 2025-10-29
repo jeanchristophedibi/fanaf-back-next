@@ -11,6 +11,7 @@ import { List, type Column, type ListAction } from "../list/List";
 import { getParticipantsByOrganisation } from "../data/mockData";
 import type { Organisation } from "../data/mockData";
 import { companiesDataService } from "../data/companiesData";
+import { sponsorsDataService } from "../data/sponsorsData";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
 import { BadgeReferentGenerator } from "../BadgeReferentGenerator";
 import { HistoriqueRendezVousDialog } from "../HistoriqueRendezVousDialog";

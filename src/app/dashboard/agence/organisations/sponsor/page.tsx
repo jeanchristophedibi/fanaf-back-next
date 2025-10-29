@@ -1,8 +1,8 @@
 "use client";
 
-import { OrganisationsPage } from '../../../../../components/organisations/OrganisationsPage';
+import { SponsorsPage } from '../../../../../components/sponsors/SponsorsPage';
 
 export default function OrganisationsSponsorAgencePage() {
-  return <OrganisationsPage filter="sponsor" />;
+  return <SponsorsPage />;
 }
 
