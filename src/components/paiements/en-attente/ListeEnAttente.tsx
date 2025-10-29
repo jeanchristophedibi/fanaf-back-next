@@ -370,10 +370,7 @@ export function ListeEnAttente() {
             </motion.div>
           )}
         </div>
-      </Card>
 
-      {/* Tableau des paiements en attente */}
-      <Card>
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-gray-900">Paiements en attente d'encaissement</h2>

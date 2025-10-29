@@ -304,6 +304,23 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
     
     return (
 <div>
+  {filteredParticipants.length > badgesGenerables && (
+    <Card className="border-orange-200 bg-orange-50 pt-5 mb-3">
+      <CardContent className="p-3">
+        <div className="flex items-start gap-2">
+          <QrCode className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-xs text-orange-900">
+              <span className="font-medium">{filteredParticipants.length - badgesGenerables} participant(s)</span> ne peuvent pas encore générer leur badge car leur inscription n'est pas finalisée (paiement en attente).
+            </p>
+            <p className="text-xs text-orange-700 mt-1">
+              Les badges seront disponibles uniquement après validation du paiement.
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )}
 <Card className="mb-3">
   <CardContent className="p-3">
     <div className="flex items-center justify-between mb-2">
@@ -557,27 +574,7 @@ export function ListeInscriptions({ readOnly = false, userProfile = 'agence' }: 
       </div>
     </div>
   </CardContent>
-</Card>
 
-{filteredParticipants.length > badgesGenerables && (
-  <Card className="border-orange-200 bg-orange-50 pt-5">
-    <CardContent className="p-3">
-      <div className="flex items-start gap-2">
-        <QrCode className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
-        <div>
-          <p className="text-xs text-orange-900">
-            <span className="font-medium">{filteredParticipants.length - badgesGenerables} participant(s)</span> ne peuvent pas encore générer leur badge car leur inscription n'est pas finalisée (paiement en attente).
-          </p>
-          <p className="text-xs text-orange-700 mt-1">
-            Les badges seront disponibles uniquement après validation du paiement.
-          </p>
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-)}
-
-<Card className="mt-6">
   <CardContent className="p-0">
     <div className="overflow-x-auto">
       <Table>

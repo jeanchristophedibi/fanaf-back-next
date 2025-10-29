@@ -358,7 +358,7 @@ export function ListePaiements() {
   };
 
   return (
-    <div className="space-y-3">
+    <div>
       {/* Barre de recherche et filtres */}
       <Card className="p-6 rounded-b-none border-b-0">
         <div className="space-y-4">
@@ -456,10 +456,7 @@ export function ListePaiements() {
             </motion.div>
           )}
         </div>
-      </Card>
 
-      {/* Tableau des paiements */}
-      <Card className="rounded-t-none">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-gray-900">Liste des paiements finalisés</h2>
