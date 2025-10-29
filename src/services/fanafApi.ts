@@ -236,12 +236,14 @@ class FanafApiService {
    * Récupérer toutes les companies/organisations
    */
   async getCompanies(params?: {
-    page?: number;
-    per_page?: number;
+  page?: number;
+  per_page?: number;
+  type?: 'company' | 'association';
   }): Promise<PaginatedResponse<any>> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    if (params?.type) queryParams.append('type', params.type);
 
     const query = queryParams.toString();
     const endpoint = `/api/v1/admin/companies${query ? `?${query}` : ''}`;
@@ -256,6 +258,24 @@ class FanafApiService {
     per_page?: number;
   }): Promise<PaginatedResponse<any>> {
     return this.getCompanies(params);
+  }
+
+  // ==================== SPONSORS ====================
+
+  /**
+   * Récupérer tous les sponsors
+   */
+  async getSponsors(params?: {
+    page?: number;
+    per_page?: number;
+  }): Promise<PaginatedResponse<any>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+
+    const query = queryParams.toString();
+    const endpoint = `/api/v1/admin/sponsors${query ? `?${query}` : ''}`;
+    return this.fetchApi<PaginatedResponse<any>>(endpoint);
   }
 
   // ==================== NETWORKING ====================

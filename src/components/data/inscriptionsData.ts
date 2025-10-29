@@ -5,44 +5,7 @@
 
 import { fanafApi } from '../../services/fanafApi';
 import type { Participant, Organisation, StatutParticipant, StatutInscription } from './mockData';
-
-/**
- * Mappe les données d'organisation de l'API vers le format Organisation
- */
-export function mapApiAssociationToOrganisation(apiData: any): Organisation {
-  return {
-    id: apiData.id || apiData.organisation_id || apiData.association_id || '',
-    nom: apiData.nom || apiData.name || apiData.organization_name || '',
-    contact: apiData.contact || apiData.phone || apiData.telephone || apiData.contact_phone || '',
-    email: apiData.email || apiData.contact_email || '',
-    pays: apiData.pays || apiData.country || apiData.country_name || '',
-    dateCreation: apiData.date_creation || apiData.dateCreation || apiData.created_at || new Date().toISOString(),
-    statut: mapApiStatutToOrganisationStatut(apiData.statut || apiData.status || apiData.type),
-    secteurActivite: apiData.secteur_activite || apiData.secteurActivite || apiData.sector || apiData.activity_sector,
-    referent: apiData.referent_nom || apiData.referent ? {
-      nom: apiData.referent_nom || apiData.referent?.nom || apiData.referent_nom || '',
-      prenom: apiData.referent_prenom || apiData.referent?.prenom || apiData.referent_prenom || '',
-      email: apiData.referent_email || apiData.referent?.email || apiData.referent_email || '',
-      telephone: apiData.referent_telephone || apiData.referent?.telephone || apiData.referent_telephone || '',
-      fonction: apiData.referent_fonction || apiData.referent?.fonction || apiData.referent_fonction || '',
-    } : undefined,
-  };
-}
-
-/**
- * Mappe le statut de l'API vers le format StatutOrganisation
- */
-function mapApiStatutToOrganisationStatut(apiStatut: any): 'membre' | 'non-membre' | 'sponsor' {
-  if (!apiStatut) return 'non-membre';
-  
-  const statut = String(apiStatut).toLowerCase();
-  if (statut === 'member' || statut === 'membre') {
-    return 'membre';
-  } else if (statut === 'sponsor') {
-    return 'sponsor';
-  }
-  return 'non-membre';
-}
+import { companiesDataService } from './companiesData';
 
 /**
  * Mappe les données d'inscription de l'API vers le format Participant
@@ -188,106 +151,6 @@ export function mapApiRegistrationToParticipant(apiData: any): Participant {
   };
 
   return participant;
-}
-
-/**
- * Récupère toutes les organisations depuis l'API avec gestion de la pagination
- */
-export async function fetchOrganisations(): Promise<Organisation[]> {
-  try {
-    const allOrganisations: Organisation[] = [];
-    let page = 1;
-    let hasMore = true;
-    const perPage = 100;
-
-    while (hasMore) {
-      try {
-        const response = await fanafApi.getCompanies({
-          per_page: perPage,
-          page: page,
-        }) as any;
-
-        // Extraire les données de la réponse
-        // Vérifier aussi response.data.data comme pour les registrations (structure Laravel)
-        let data: any[] = [];
-        
-        if (Array.isArray(response)) {
-          data = response;
-          hasMore = false;
-          console.log(`[fetchOrganisations] Réponse est un tableau direct, ${data.length} éléments`);
-        } else if (response?.data?.data && Array.isArray(response.data.data)) {
-          // Structure imbriquée: response.data.data (double data) - PRIORITÉ
-          data = response.data.data;
-          if (response.data.last_page !== undefined) {
-            hasMore = page < (response.data.last_page || 1);
-            console.log(`[fetchOrganisations] Pagination (structure imbriquée): page ${page}/${response.data.last_page}, total: ${response.data.total}`);
-          } else {
-            hasMore = data.length >= perPage;
-          }
-        } else if (response?.data && Array.isArray(response.data)) {
-          data = response.data;
-          // Vérifier s'il y a plus de pages
-          if (response?.meta) {
-            hasMore = page < (response.meta.last_page || response.meta.total_pages || 1);
-            console.log(`[fetchOrganisations] Pagination (via meta): page ${page}/${response.meta.last_page || response.meta.total_pages}, total: ${response.meta.total}`);
-          } else if (response.data.last_page !== undefined) {
-            hasMore = page < (response.data.last_page || 1);
-            console.log(`[fetchOrganisations] Pagination (via data): page ${page}/${response.data.last_page}, total: ${response.data.total}`);
-          } else {
-            hasMore = data.length === perPage;
-          }
-        } else if (response?.results && Array.isArray(response.results)) {
-          data = response.results;
-          hasMore = data.length === perPage;
-        } else if (response?.items && Array.isArray(response.items)) {
-          data = response.items;
-          hasMore = data.length === perPage;
-        } else if (response?.associations && Array.isArray(response.associations)) {
-          data = response.associations;
-          hasMore = data.length === perPage;
-        } else if (response?.companies && Array.isArray(response.companies)) {
-          data = response.companies;
-          hasMore = data.length === perPage;
-        } else {
-          console.warn(`[fetchOrganisations] Format de réponse inattendu pour page ${page}:`, {
-            hasResponse: !!response,
-            hasData: !!response?.data,
-            hasDataData: !!response?.data?.data,
-            responseKeys: response ? Object.keys(response) : []
-          });
-          hasMore = false;
-        }
-        
-        if (data.length > 0 && page === 1) {
-          console.log(`[fetchOrganisations] Premier élément exemple:`, {
-            id: data[0]?.id,
-            nom: data[0]?.nom || data[0]?.name,
-            keys: Object.keys(data[0] || {})
-          });
-        }
-
-        // Mapper toutes les organisations de cette page
-        const mapped = data.map(item => mapApiAssociationToOrganisation(item));
-        allOrganisations.push(...mapped);
-
-        // Si pas assez de données, pas de page suivante
-        if (data.length < perPage) {
-          hasMore = false;
-        }
-
-        page++;
-      } catch (pageError) {
-        console.error(`Erreur lors du chargement de la page ${page} des organisations:`, pageError);
-        hasMore = false; // Arrêter en cas d'erreur
-      }
-    }
-
-    console.log(`[fetchOrganisations] ${allOrganisations.length} organisations chargées (${page - 1} page(s))`);
-    return allOrganisations;
-  } catch (error: any) {
-    console.error('Erreur lors du chargement des organisations:', error);
-    throw error;
-  }
 }
 
 /**
@@ -576,47 +439,14 @@ export async function fetchRegistrations(
  * Classe pour gérer les données d'inscriptions avec cache
  */
 export class InscriptionsDataService {
-  private organisationsCache: Organisation[] = [];
   private participantsCache: Participant[] = [];
-  private organisationsById: Map<string, Organisation> = new Map();
-  // Index pour rechercher par nom (company) - insensible à la casse et aux espaces
-  private organisationsByName: Map<string, Organisation> = new Map();
   private lastLoadedCategories: Array<'member' | 'not_member' | 'vip'> | null = null;
-  private isOrganisationsLoaded = false;
 
   /**
-   * Charge et cache les organisations (utilise le cache si déjà chargées)
+   * Charge et cache les organisations (utilise companiesDataService)
    */
   async loadOrganisations(forceReload = false): Promise<Organisation[]> {
-    // Si déjà chargées et pas de rechargement forcé, retourner le cache
-    if (!forceReload && this.isOrganisationsLoaded && this.organisationsCache.length > 0) {
-      console.log(`[loadOrganisations] Utilisation du cache (${this.organisationsCache.length} organisations)`);
-      return this.organisationsCache;
-    }
-
-    try {
-      this.organisationsCache = await fetchOrganisations();
-      // Créer un index par ID et par nom pour un accès rapide
-      this.organisationsById.clear();
-      this.organisationsByName.clear();
-      
-      this.organisationsCache.forEach(org => {
-        if (org.id) {
-          this.organisationsById.set(org.id, org);
-        }
-        if (org.nom) {
-          // Normaliser le nom (minuscules, sans espaces superflus) pour la recherche
-          const normalizedName = org.nom.trim().toLowerCase().replace(/\s+/g, ' ');
-          this.organisationsByName.set(normalizedName, org);
-        }
-      });
-      this.isOrganisationsLoaded = true;
-      console.log(`[loadOrganisations] ${this.organisationsCache.length} organisations chargées et indexées (par ID et par nom)`);
-      return this.organisationsCache;
-    } catch (error) {
-      console.error('Erreur lors du chargement des organisations:', error);
-      return this.organisationsCache; // Retourner le cache même en cas d'erreur
-    }
+    return companiesDataService.loadOrganisations(forceReload);
   }
 
   /**
@@ -694,12 +524,13 @@ export class InscriptionsDataService {
       let notFoundOrganisations = new Set<string>();
       
       // Vérifier d'abord que les organisations sont bien chargées
-      if (this.organisationsCache.length === 0) {
+      const loadedOrganisations = await companiesDataService.loadOrganisations();
+      if (loadedOrganisations.length === 0) {
         console.warn(`[loadParticipants] Aucune organisation chargée ! Les organisations doivent être chargées en premier avec loadOrganisations()`);
       } else {
-        console.log(`[loadParticipants] ${this.organisationsCache.length} organisations disponibles pour le mapping`);
+        console.log(`[loadParticipants] ${loadedOrganisations.length} organisations disponibles pour le mapping`);
         // Afficher quelques exemples d'organisations pour debug
-        const sampleOrgs = this.organisationsCache.slice(0, 5);
+        const sampleOrgs = loadedOrganisations.slice(0, 5);
         console.log(`[loadParticipants] Exemples d'organisations chargées:`, 
           sampleOrgs.map(o => ({ id: o.id, nom: o.nom }))
         );
@@ -708,10 +539,10 @@ export class InscriptionsDataService {
       for (const participant of this.participantsCache) {
         if (participant.organisationId) {
           // Si organisationId ne correspond pas à un ID d'organisation, chercher par nom
-          let org = this.getOrganisationById(participant.organisationId);
+          let org = companiesDataService.getOrganisationById(participant.organisationId);
           if (!org) {
             // Essayer de trouver par nom (cas où l'API a envoyé "company" au lieu de "organisation_id")
-            org = this.getOrganisationByName(participant.organisationId);
+            org = companiesDataService.getOrganisationByName(participant.organisationId);
             if (org) {
               const oldOrgId = participant.organisationId;
               participant.organisationId = org.id;
@@ -739,7 +570,7 @@ export class InscriptionsDataService {
       
       // Log pour débugger les participants sans organisation
       const participantsWithoutOrg = this.participantsCache.filter(p => 
-        !p.organisationId || p.organisationId === '' || !this.getOrganisationById(p.organisationId)
+        !p.organisationId || p.organisationId === '' || !companiesDataService.getOrganisationById(p.organisationId)
       );
       if (participantsWithoutOrg.length > 0) {
         console.warn(`[loadParticipants] ${participantsWithoutOrg.length} participants sans organisation trouvée:`, 
@@ -765,27 +596,7 @@ export class InscriptionsDataService {
    * Obtient une organisation par son ID depuis le cache
    */
   getOrganisationById(id: string): Organisation | undefined {
-    if (!id || id === '') {
-      return undefined;
-    }
-    
-    // Chercher directement par ID
-    let org = this.organisationsById.get(id);
-    
-    // Si non trouvé, essayer de chercher dans le cache (peut-être un problème de casse ou format)
-    if (!org && this.organisationsCache.length > 0) {
-      org = this.organisationsCache.find(o => 
-        o.id === id || 
-        o.id?.toLowerCase() === id.toLowerCase() ||
-        String(o.id) === String(id)
-      );
-      // Si trouvé, l'ajouter au Map pour un accès futur plus rapide
-      if (org) {
-        this.organisationsById.set(id, org);
-      }
-    }
-    
-    return org;
+    return companiesDataService.getOrganisationById(id);
   }
 
   /**
@@ -793,59 +604,14 @@ export class InscriptionsDataService {
    * Utile quand l'API envoie le nom de l'entreprise au lieu de l'ID
    */
   getOrganisationByName(name: string): Organisation | undefined {
-    if (!name || name === '') {
-      return undefined;
-    }
-    
-    // Normaliser le nom pour la recherche (insensible à la casse, sans espaces superflus)
-    const normalizedName = name.trim().toLowerCase().replace(/\s+/g, ' ');
-    
-    // Chercher dans l'index par nom (recherche exacte)
-    let org = this.organisationsByName.get(normalizedName);
-    
-    // Si non trouvé, chercher avec correspondance partielle (fuzzy)
-    if (!org && this.organisationsCache.length > 0) {
-      // Essayer plusieurs stratégies de recherche
-      // 1. Correspondance exacte après normalisation
-      org = this.organisationsCache.find(o => {
-        const orgName = o.nom?.trim().toLowerCase().replace(/\s+/g, ' ') || '';
-        return orgName === normalizedName;
-      });
-      
-      // 2. Si pas trouvé, correspondance partielle (le nom cherché est contenu dans le nom de l'org)
-      if (!org) {
-        org = this.organisationsCache.find(o => {
-          const orgName = o.nom?.trim().toLowerCase().replace(/\s+/g, ' ') || '';
-          return orgName.includes(normalizedName) || normalizedName.includes(orgName);
-        });
-      }
-      
-      // 3. Si pas trouvé, essayer de trouver avec des mots clés (ex: "APSAB" dans "APSAB Association")
-      if (!org) {
-        const nameWords = normalizedName.split(/\s+/).filter(w => w.length > 2); // Mots de plus de 2 caractères
-        org = this.organisationsCache.find(o => {
-          const orgName = o.nom?.trim().toLowerCase().replace(/\s+/g, ' ') || '';
-          return nameWords.some(word => orgName.includes(word));
-        });
-      }
-      
-      // Si trouvé, l'ajouter au Map pour un accès futur plus rapide
-      if (org && org.nom) {
-        const orgNormalizedName = org.nom.trim().toLowerCase().replace(/\s+/g, ' ');
-        this.organisationsByName.set(orgNormalizedName, org);
-        // Ajouter aussi le nom recherché pour un accès direct futur
-        this.organisationsByName.set(normalizedName, org);
-      }
-    }
-    
-    return org;
+    return companiesDataService.getOrganisationByName(name);
   }
 
   /**
    * Obtient toutes les organisations du cache
    */
   getOrganisations(): Organisation[] {
-    return this.organisationsCache;
+    return companiesDataService.getOrganisations();
   }
 
   /**
@@ -859,12 +625,9 @@ export class InscriptionsDataService {
    * Vide le cache
    */
   clearCache() {
-    this.organisationsCache = [];
     this.participantsCache = [];
-    this.organisationsById.clear();
-    this.organisationsByName.clear();
-    this.isOrganisationsLoaded = false;
     this.lastLoadedCategories = null;
+    companiesDataService.clearCache();
   }
 }
 

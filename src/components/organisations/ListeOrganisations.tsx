@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Eye, Download, User, QrCode, History } from "lucide-react";
 import { List, type Column, type ListAction } from "../list/List";
 import { getParticipantsByOrganisation } from "../data/mockData";
+import type { Organisation } from "../data/mockData";
+import { companiesDataService } from "../data/companiesData";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
 import { BadgeReferentGenerator } from "../BadgeReferentGenerator";
 import { HistoriqueRendezVousDialog } from "../HistoriqueRendezVousDialog";
@@ -33,7 +35,11 @@ interface ListeOrganisationsProps {
 }
 
 export function ListeOrganisations({ subSection, filter, readOnly = false }: ListeOrganisationsProps) {
-  const { organisations, rendezVous } = useDynamicInscriptions({ includeOrganisations: true, includeRendezVous: true });
+  // Rendez-vous toujours depuis le hook existant
+  const { rendezVous } = useDynamicInscriptions({ includeRendezVous: true });
+  // Organisations depuis le service centralisé companiesDataService
+  const [organisations, setOrganisations] = useState<Organisation[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const activeFilter = filter || subSection;
   const [searchTerm, setSearchTerm] = useState('');
   const [paysFilter, setPaysFilter] = useState<string>('tous');
@@ -41,6 +47,21 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
+  // Charger les organisations via le service au montage
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setIsLoading(true);
+        const orgs = await companiesDataService.loadOrganisations();
+        if (mounted) setOrganisations(orgs);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   const filteredOrganisations = useMemo(() => {
     let filtered = [...organisations];
 
@@ -346,6 +367,7 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
         readOnly={readOnly}
         enableSelection={true}
         buildActions={buildActions}
+        loading={isLoading as any}
       />
 
       {/* Dialogue historique rendez-vous */}
