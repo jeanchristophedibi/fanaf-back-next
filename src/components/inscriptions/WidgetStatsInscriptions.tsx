@@ -1,3 +1,5 @@
+"use client";
+
 import { Card, CardContent } from '../ui/card';
 import { CheckCircle2, Clock } from 'lucide-react';
 import { AnimatedStat } from '../AnimatedStat';
@@ -5,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from '../ui/badge';
 import { Phone, Mail, Globe, Calendar } from 'lucide-react';
 import { getOrganisationById, type Participant } from '../data/mockData';
+import { motion } from 'motion/react';
 
 interface WidgetStatsInscriptionsProps {
   stats: {
@@ -28,64 +31,63 @@ const statutColors: Record<string, string> = {
 
 export function WidgetStatsInscriptions({ stats, participants }: WidgetStatsInscriptionsProps) {
   return (
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          {/* Card Widget Stats Inscriptions Finalisées */}
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-green-700 mb-1 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Inscriptions finalisées
-                  </p>
-                  <AnimatedStat value={stats.finalises} className="text-3xl text-green-900" />
-                  <p className="text-xs text-green-600 mt-1">Paiements effectués</p>
-                </div>
-                <div className="bg-green-600 p-3 rounded-lg">
-                  <CheckCircle2 className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          {/* Card Widget Stats Inscriptions Finalisées */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Card className="border-t-4 border-t-green-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Inscriptions finalisées</p>
+              <AnimatedStat value={stats.finalises} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Paiements effectués</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-          <Dialog>
-            <DialogTrigger asChild>
-              <div>
-                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 cursor-pointer hover:shadow-lg transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-orange-700 mb-1 flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          En attente de paiement
-                        </p>
-                        <AnimatedStat value={stats.enAttente} className="text-3xl text-orange-900" />
-                        <p className="text-xs text-orange-600 mt-1">Cliquer pour voir les détails</p>
-                      </div>
-                      <div className="bg-orange-600 p-3 rounded-lg">
-                        <Clock className="w-6 h-6 text-white" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-orange-600" />
-                  Participants en attente de paiement ({stats.enAttente})
-                </DialogTitle>
-                <DialogDescription>
-                  Liste des participants dont l'inscription n'est pas encore finalisée. Utilisez ces informations pour effectuer un suivi (appel, email, SMS).
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 mt-4">
-                {participants.filter(p => p.statutInscription !== 'finalisée' && p.statut !== 'vip' && p.statut !== 'speaker').length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">Aucun participant en attente de paiement</p>
-                ) : (
-                  participants.filter(p => p.statutInscription !== 'finalisée' && p.statut !== 'vip' && p.statut !== 'speaker').map((participant) => {
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <Dialog>
+          <DialogTrigger asChild>
+            <div>
+              <Card className="border-t-4 border-t-orange-500 cursor-pointer hover:shadow-lg transition-shadow">
+                <CardContent className="p-6 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">En attente de paiement</p>
+                    <AnimatedStat value={stats.enAttente} className="text-3xl text-gray-900" />
+                    <p className="text-xs text-gray-500 mt-1">Cliquer pour voir les détails</p>
+                  </div>
+                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-orange-600" />
+                Participants en attente de paiement ({stats.enAttente})
+              </DialogTitle>
+              <DialogDescription>
+                Liste des participants dont l'inscription n'est pas encore finalisée. Utilisez ces informations pour effectuer un suivi (appel, email, SMS).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 mt-4">
+              {participants.filter(p => p.statutInscription !== 'finalisée' && p.statut !== 'vip' && p.statut !== 'speaker').length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">Aucun participant en attente de paiement</p>
+              ) : (
+                participants.filter(p => p.statutInscription !== 'finalisée' && p.statut !== 'vip' && p.statut !== 'speaker').map((participant) => {
                   const organisation = getOrganisationById(participant.organisationId);
                   return (
                     <Card key={participant.id} className="border-orange-200">
@@ -147,10 +149,11 @@ export function WidgetStatsInscriptions({ stats, participants }: WidgetStatsInsc
                     </Card>
                   );
                 })
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-    );
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </motion.div>
+    </div>
+  );
 }

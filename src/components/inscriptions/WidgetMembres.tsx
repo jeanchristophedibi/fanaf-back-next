@@ -29,16 +29,15 @@ export function WidgetMembres() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-purple-700 mb-1">Total Membres</p>
-                <AnimatedStat value={stats.total} className="text-3xl text-purple-900" />
-              </div>
-              <div className="bg-purple-600 p-3 rounded-lg">
-                <UserCheck className="w-8 h-8 text-white" />
-              </div>
+        <Card className="border-t-4 border-t-purple-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Total Membres</p>
+              <AnimatedStat value={stats.total} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Inscriptions membres</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <UserCheck className="w-6 h-6 text-white" />
             </div>
           </CardContent>
         </Card>
@@ -49,17 +48,15 @@ export function WidgetMembres() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700 mb-1">Finalisées</p>
-                <AnimatedStat value={stats.finalises} className="text-3xl text-green-900" />
-                <p className="text-xs text-green-600 mt-1">Inscriptions payées</p>
-              </div>
-              <div className="bg-green-600 p-3 rounded-lg">
-                <UserCheck className="w-8 h-8 text-white" />
-              </div>
+        <Card className="border-t-4 border-t-green-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Finalisées</p>
+              <AnimatedStat value={stats.finalises} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Inscriptions payées</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center">
+              <UserCheck className="w-6 h-6 text-white" />
             </div>
           </CardContent>
         </Card>
@@ -70,17 +67,15 @@ export function WidgetMembres() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
       >
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-orange-700 mb-1">En attente</p>
-                <AnimatedStat value={stats.enAttente} className="text-3xl text-orange-900" />
-                <p className="text-xs text-orange-600 mt-1">Paiement en attente</p>
-              </div>
-              <div className="bg-orange-600 p-3 rounded-lg">
-                <UserCheck className="w-8 h-8 text-white" />
-              </div>
+        <Card className="border-t-4 border-t-orange-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">En attente</p>
+              <AnimatedStat value={stats.enAttente} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Paiement en attente</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
+              <UserCheck className="w-6 h-6 text-white" />
             </div>
           </CardContent>
         </Card>
@@ -88,4 +83,3 @@ export function WidgetMembres() {
     </div>
   );
 }
-

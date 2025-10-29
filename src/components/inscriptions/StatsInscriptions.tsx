@@ -1,6 +1,10 @@
+"use client";
+
 import React from 'react';
-import { Card } from '../ui/card';
+import { Card, CardContent } from '../ui/card';
 import { Users, UserCheck, Award, Mic } from 'lucide-react';
+import { motion } from 'motion/react';
+import { AnimatedStat } from '../AnimatedStat';
 
 interface StatsInscriptionsProps {
   stats: {
@@ -14,66 +18,101 @@ interface StatsInscriptionsProps {
 
 export function StatsInscriptions({ stats }: StatsInscriptionsProps) {
   return (
-    <div className="grid grid-cols-5 gap-3">
-    <Card className="p-3 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-600 mb-0.5">Total</p>
-          <p className="text-xl text-gray-900">{stats.total}</p>
-        </div>
-        <div className="bg-blue-500 p-1.5 rounded-lg">
-          <Users className="w-3.5 h-3.5 text-white" />
-        </div>
-      </div>
-    </Card>
-    
-    <Card className="p-3 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-600 mb-0.5">Membres</p>
-          <p className="text-xl text-gray-900">{stats.membres}</p>
-        </div>
-        <div className="bg-green-500 p-1.5 rounded-lg">
-          <UserCheck className="w-3.5 h-3.5 text-white" />
-        </div>
-      </div>
-    </Card>
-    
-    <Card className="p-3 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-600 mb-0.5">Non-Membres</p>
-          <p className="text-xl text-gray-900">{stats.nonMembres}</p>
-        </div>
-        <div className="bg-gray-500 p-1.5 rounded-lg">
-          <Users className="w-3.5 h-3.5 text-white" />
-        </div>
-      </div>
-    </Card>
-    
-    <Card className="p-3 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-600 mb-0.5">VIP</p>
-          <p className="text-xl text-gray-900">{stats.vip}</p>
-        </div>
-        <div className="bg-purple-500 p-1.5 rounded-lg">
-          <Award className="w-3.5 h-3.5 text-white" />
-        </div>
-      </div>
-    </Card>
-    
-    <Card className="p-3 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-600 mb-0.5">Speakers</p>
-          <p className="text-xl text-gray-900">{stats.speakers}</p>
-        </div>
-        <div className="bg-orange-500 p-1.5 rounded-lg">
-          <Mic className="w-3.5 h-3.5 text-white" />
-        </div>
-      </div>
-    </Card>
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Card className="border-t-4 border-t-blue-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Total</p>
+              <AnimatedStat value={stats.total} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Total inscriptions</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+      
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <Card className="border-t-4 border-t-purple-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Membres</p>
+              <AnimatedStat value={stats.membres} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Associations membres</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <UserCheck className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+      
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <Card className="border-t-4 border-t-gray-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Non-Membres</p>
+              <AnimatedStat value={stats.nonMembres} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Entreprises</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+      
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <Card className="border-t-4 border-t-cyan-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">VIP</p>
+              <AnimatedStat value={stats.vip} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Inscriptions VIP</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl flex items-center justify-center">
+              <Award className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+      
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <Card className="border-t-4 border-t-yellow-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Speakers</p>
+              <AnimatedStat value={stats.speakers} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Intervenants</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center">
+              <Mic className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }
