@@ -202,21 +202,37 @@ export async function fetchOrganisations(): Promise<Organisation[]> {
 
     while (hasMore) {
       try {
-        const response = await fanafApi.getAssociations({
+        const response = await fanafApi.getCompanies({
           per_page: perPage,
           page: page,
         }) as any;
 
         // Extraire les données de la réponse
+        // Vérifier aussi response.data.data comme pour les registrations (structure Laravel)
         let data: any[] = [];
         
         if (Array.isArray(response)) {
           data = response;
+          hasMore = false;
+          console.log(`[fetchOrganisations] Réponse est un tableau direct, ${data.length} éléments`);
+        } else if (response?.data?.data && Array.isArray(response.data.data)) {
+          // Structure imbriquée: response.data.data (double data) - PRIORITÉ
+          data = response.data.data;
+          if (response.data.last_page !== undefined) {
+            hasMore = page < (response.data.last_page || 1);
+            console.log(`[fetchOrganisations] Pagination (structure imbriquée): page ${page}/${response.data.last_page}, total: ${response.data.total}`);
+          } else {
+            hasMore = data.length >= perPage;
+          }
         } else if (response?.data && Array.isArray(response.data)) {
           data = response.data;
           // Vérifier s'il y a plus de pages
           if (response?.meta) {
             hasMore = page < (response.meta.last_page || response.meta.total_pages || 1);
+            console.log(`[fetchOrganisations] Pagination (via meta): page ${page}/${response.meta.last_page || response.meta.total_pages}, total: ${response.meta.total}`);
+          } else if (response.data.last_page !== undefined) {
+            hasMore = page < (response.data.last_page || 1);
+            console.log(`[fetchOrganisations] Pagination (via data): page ${page}/${response.data.last_page}, total: ${response.data.total}`);
           } else {
             hasMore = data.length === perPage;
           }
@@ -229,8 +245,25 @@ export async function fetchOrganisations(): Promise<Organisation[]> {
         } else if (response?.associations && Array.isArray(response.associations)) {
           data = response.associations;
           hasMore = data.length === perPage;
+        } else if (response?.companies && Array.isArray(response.companies)) {
+          data = response.companies;
+          hasMore = data.length === perPage;
         } else {
+          console.warn(`[fetchOrganisations] Format de réponse inattendu pour page ${page}:`, {
+            hasResponse: !!response,
+            hasData: !!response?.data,
+            hasDataData: !!response?.data?.data,
+            responseKeys: response ? Object.keys(response) : []
+          });
           hasMore = false;
+        }
+        
+        if (data.length > 0 && page === 1) {
+          console.log(`[fetchOrganisations] Premier élément exemple:`, {
+            id: data[0]?.id,
+            nom: data[0]?.nom || data[0]?.name,
+            keys: Object.keys(data[0] || {})
+          });
         }
 
         // Mapper toutes les organisations de cette page
@@ -431,6 +464,10 @@ export async function fetchRegistrations(
           for (const item of data) {
             const participant = mapApiRegistrationToParticipant(item);
             
+            // Corriger organisationId si on a seulement le nom de l'entreprise (company)
+            // On le fera après le chargement des organisations, car on a besoin du service pour mapper
+            // Pour l'instant, on garde le mapping actuel
+            
             // Log pour debug si le mapping produit un participant invalide
             if (!participant.id || !participant.email) {
               console.warn(`[fetchRegistrations] Participant mal mappé:`, {
@@ -536,6 +573,8 @@ export class InscriptionsDataService {
   private organisationsCache: Organisation[] = [];
   private participantsCache: Participant[] = [];
   private organisationsById: Map<string, Organisation> = new Map();
+  // Index pour rechercher par nom (company) - insensible à la casse et aux espaces
+  private organisationsByName: Map<string, Organisation> = new Map();
   private lastLoadedCategories: Array<'member' | 'not_member' | 'vip'> | null = null;
   private isOrganisationsLoaded = false;
 
@@ -551,15 +590,22 @@ export class InscriptionsDataService {
 
     try {
       this.organisationsCache = await fetchOrganisations();
-      // Créer un index par ID pour un accès rapide
+      // Créer un index par ID et par nom pour un accès rapide
       this.organisationsById.clear();
+      this.organisationsByName.clear();
+      
       this.organisationsCache.forEach(org => {
         if (org.id) {
           this.organisationsById.set(org.id, org);
         }
+        if (org.nom) {
+          // Normaliser le nom (minuscules, sans espaces superflus) pour la recherche
+          const normalizedName = org.nom.trim().toLowerCase().replace(/\s+/g, ' ');
+          this.organisationsByName.set(normalizedName, org);
+        }
       });
       this.isOrganisationsLoaded = true;
-      console.log(`[loadOrganisations] ${this.organisationsCache.length} organisations chargées et indexées`);
+      console.log(`[loadOrganisations] ${this.organisationsCache.length} organisations chargées et indexées (par ID et par nom)`);
       return this.organisationsCache;
     } catch (error) {
       console.error('Erreur lors du chargement des organisations:', error);
@@ -636,6 +682,55 @@ export class InscriptionsDataService {
       this.participantsCache = Array.from(uniqueParticipants.values());
       this.lastLoadedCategories = normalizedCategories as Array<'member' | 'not_member' | 'vip'>;
       
+      // Corriger les organisationId qui sont en réalité des noms d'entreprise (company)
+      // Les organisations doivent être déjà chargées pour que ça fonctionne
+      let correctedCount = 0;
+      let notFoundOrganisations = new Set<string>();
+      
+      // Vérifier d'abord que les organisations sont bien chargées
+      if (this.organisationsCache.length === 0) {
+        console.warn(`[loadParticipants] Aucune organisation chargée ! Les organisations doivent être chargées en premier avec loadOrganisations()`);
+      } else {
+        console.log(`[loadParticipants] ${this.organisationsCache.length} organisations disponibles pour le mapping`);
+        // Afficher quelques exemples d'organisations pour debug
+        const sampleOrgs = this.organisationsCache.slice(0, 5);
+        console.log(`[loadParticipants] Exemples d'organisations chargées:`, 
+          sampleOrgs.map(o => ({ id: o.id, nom: o.nom }))
+        );
+      }
+      
+      for (const participant of this.participantsCache) {
+        if (participant.organisationId) {
+          // Si organisationId ne correspond pas à un ID d'organisation, chercher par nom
+          let org = this.getOrganisationById(participant.organisationId);
+          if (!org) {
+            // Essayer de trouver par nom (cas où l'API a envoyé "company" au lieu de "organisation_id")
+            org = this.getOrganisationByName(participant.organisationId);
+            if (org) {
+              const oldOrgId = participant.organisationId;
+              participant.organisationId = org.id;
+              correctedCount++;
+              if (correctedCount <= 5) {
+                console.log(`[loadParticipants] Participant ${participant.email}: organisation "${oldOrgId}" → ID "${org.id}"`);
+              }
+            } else {
+              // Noter les organisations non trouvées pour debug
+              notFoundOrganisations.add(participant.organisationId);
+            }
+          }
+        }
+      }
+      
+      if (correctedCount > 0) {
+        console.log(`[loadParticipants] ${correctedCount} participants ont eu leur organisationId corrigé (mapping nom -> ID)`);
+      }
+      
+      if (notFoundOrganisations.size > 0) {
+        console.warn(`[loadParticipants] ${notFoundOrganisations.size} organisations non trouvées dans le cache (peut-être pas chargées depuis l'API):`, 
+          Array.from(notFoundOrganisations).slice(0, 10)
+        );
+      }
+      
       // Log pour débugger les participants sans organisation
       const participantsWithoutOrg = this.participantsCache.filter(p => 
         !p.organisationId || p.organisationId === '' || !this.getOrganisationById(p.organisationId)
@@ -645,7 +740,8 @@ export class InscriptionsDataService {
           participantsWithoutOrg.map(p => ({ 
             id: p.id, 
             email: p.email, 
-            organisationId: p.organisationId 
+            organisationId: p.organisationId,
+            nom: `${p.prenom} ${p.nom}`
           }))
         );
       }
@@ -687,6 +783,59 @@ export class InscriptionsDataService {
   }
 
   /**
+   * Obtient une organisation par son nom (company) depuis le cache
+   * Utile quand l'API envoie le nom de l'entreprise au lieu de l'ID
+   */
+  getOrganisationByName(name: string): Organisation | undefined {
+    if (!name || name === '') {
+      return undefined;
+    }
+    
+    // Normaliser le nom pour la recherche (insensible à la casse, sans espaces superflus)
+    const normalizedName = name.trim().toLowerCase().replace(/\s+/g, ' ');
+    
+    // Chercher dans l'index par nom (recherche exacte)
+    let org = this.organisationsByName.get(normalizedName);
+    
+    // Si non trouvé, chercher avec correspondance partielle (fuzzy)
+    if (!org && this.organisationsCache.length > 0) {
+      // Essayer plusieurs stratégies de recherche
+      // 1. Correspondance exacte après normalisation
+      org = this.organisationsCache.find(o => {
+        const orgName = o.nom?.trim().toLowerCase().replace(/\s+/g, ' ') || '';
+        return orgName === normalizedName;
+      });
+      
+      // 2. Si pas trouvé, correspondance partielle (le nom cherché est contenu dans le nom de l'org)
+      if (!org) {
+        org = this.organisationsCache.find(o => {
+          const orgName = o.nom?.trim().toLowerCase().replace(/\s+/g, ' ') || '';
+          return orgName.includes(normalizedName) || normalizedName.includes(orgName);
+        });
+      }
+      
+      // 3. Si pas trouvé, essayer de trouver avec des mots clés (ex: "APSAB" dans "APSAB Association")
+      if (!org) {
+        const nameWords = normalizedName.split(/\s+/).filter(w => w.length > 2); // Mots de plus de 2 caractères
+        org = this.organisationsCache.find(o => {
+          const orgName = o.nom?.trim().toLowerCase().replace(/\s+/g, ' ') || '';
+          return nameWords.some(word => orgName.includes(word));
+        });
+      }
+      
+      // Si trouvé, l'ajouter au Map pour un accès futur plus rapide
+      if (org && org.nom) {
+        const orgNormalizedName = org.nom.trim().toLowerCase().replace(/\s+/g, ' ');
+        this.organisationsByName.set(orgNormalizedName, org);
+        // Ajouter aussi le nom recherché pour un accès direct futur
+        this.organisationsByName.set(normalizedName, org);
+      }
+    }
+    
+    return org;
+  }
+
+  /**
    * Obtient toutes les organisations du cache
    */
   getOrganisations(): Organisation[] {
@@ -707,6 +856,7 @@ export class InscriptionsDataService {
     this.organisationsCache = [];
     this.participantsCache = [];
     this.organisationsById.clear();
+    this.organisationsByName.clear();
     this.isOrganisationsLoaded = false;
     this.lastLoadedCategories = null;
   }

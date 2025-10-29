@@ -230,12 +230,12 @@ class FanafApiService {
     return this.fetchApi<PaginatedResponse<any>>(endpoint);
   }
 
-  // ==================== ASSOCIATIONS/ORGANISATIONS ====================
+  // ==================== COMPANIES/ORGANISATIONS ====================
 
   /**
-   * Récupérer toutes les associations/organisations
+   * Récupérer toutes les companies/organisations
    */
-  async getAssociations(params?: {
+  async getCompanies(params?: {
     page?: number;
     per_page?: number;
   }): Promise<PaginatedResponse<any>> {
@@ -244,8 +244,18 @@ class FanafApiService {
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
 
     const query = queryParams.toString();
-    const endpoint = `/api/v1/admin/associations${query ? `?${query}` : ''}`;
+    const endpoint = `/api/v1/admin/companies${query ? `?${query}` : ''}`;
     return this.fetchApi<PaginatedResponse<any>>(endpoint);
+  }
+
+  /**
+   * @deprecated Utilisez getCompanies() à la place. Conserve pour compatibilité.
+   */
+  async getAssociations(params?: {
+    page?: number;
+    per_page?: number;
+  }): Promise<PaginatedResponse<any>> {
+    return this.getCompanies(params);
   }
 
   // ==================== NETWORKING ====================
