@@ -17,8 +17,8 @@ export default function AdminAsaciLayout({ children }: { children: React.ReactNo
   // Déterminer l'élément actif basé sur l'URL
   const getActiveNav = (): NavItem => {
     if (pathname?.includes('/inscriptions')) return 'inscriptions';
-    if (pathname?.includes('/paiements-attente')) return 'paiements-attente';
-    if (pathname?.includes('/paiements') && !pathname?.includes('/paiements-attente')) return 'paiements';
+    if (pathname?.includes('/paiements/attente')) return 'paiements-attente';
+    if (pathname?.includes('/paiements/liste')) return 'paiements';
     return 'home';
   };
 
@@ -33,10 +33,10 @@ export default function AdminAsaciLayout({ children }: { children: React.ReactNo
         router.push('/dashboard/admin-asaci/inscriptions');
         break;
       case 'paiements-attente':
-        router.push('/dashboard/admin-asaci/paiements-attente');
+        router.push('/dashboard/admin-asaci/paiements/attente');
         break;
       case 'paiements':
-        router.push('/dashboard/admin-asaci/paiements');
+        router.push('/dashboard/admin-asaci/paiements/liste');
         break;
     }
   };
