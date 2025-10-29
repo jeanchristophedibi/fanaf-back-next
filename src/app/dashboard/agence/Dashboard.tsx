@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { InscriptionsPage } from '../../../components/InscriptionsPage';
-import { DashboardHome } from '../../../components/accueil/DashboardHome';
+import { DashboardHome } from '../../../components/dashboard/DashboardHome';
 import { OrganisationsPage } from '../../../components/OrganisationsPage';
 import { NetworkingPage } from '../../../components/NetworkingPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';

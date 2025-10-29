@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Sidebar } from './Sidebar';
+import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
 import { usePathname, useRouter } from 'next/navigation';
 
 export type NavItem =
@@ -24,7 +24,7 @@ export default function AdminAsaciLayout({ children }: { children: React.ReactNo
 
   const activeNav = getActiveNav();
 
-  const handleNavChange = (nav: NavItem) => {
+  const handleNavChange = (nav: string) => {
     switch (nav) {
       case 'home':
         router.push('/dashboard/admin-asaci');
@@ -42,16 +42,14 @@ export default function AdminAsaciLayout({ children }: { children: React.ReactNo
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar
-        activeNav={activeNav}
-        onNavChange={handleNavChange}
-        onSwitchProfile={() => {}}
-      />
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
-    </div>
+    <UnifiedLayout
+      activeNav={activeNav}
+      onNavChange={handleNavChange}
+      userProfile="admin-asaci"
+      onSwitchProfile={() => {}}
+    >
+      {children}
+    </UnifiedLayout>
   );
 }
 

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { AdminFanafSidebar } from './Sidebar';
-import { DashboardHome } from '../../../components/accueil/DashboardHome';
+import { DashboardHome } from '../../../components/dashboard/DashboardHome';
 import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
 import { OrganisationsPage } from '../../../components/OrganisationsPage';

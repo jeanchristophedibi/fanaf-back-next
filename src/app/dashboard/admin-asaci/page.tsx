@@ -1,6 +1,6 @@
 'use client';
 
-import { DashboardHome } from '../../../components/accueil/DashboardHome';
+import { DashboardHome } from '../../../components/dashboard/DashboardHome';
 
 export default function AdminAsaciHomePage() {
   return <DashboardHome />;

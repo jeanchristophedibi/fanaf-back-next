@@ -1,7 +1,9 @@
+"use client";
+
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingUp, Calendar } from 'lucide-react';
+import { TrendingUp, Calendar, Users, Sparkles } from 'lucide-react';
 
 // Données simulées d'évolution des inscriptions
 const evolutionData = [
@@ -276,3 +278,4 @@ export function InscriptionsEvolutionChart() {
     </div>
   );
 }
+
