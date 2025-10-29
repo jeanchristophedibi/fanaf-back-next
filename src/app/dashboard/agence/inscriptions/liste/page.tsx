@@ -1,21 +1,8 @@
 "use client";
 
 import { ListeInscriptions } from '../../../../../components/inscriptions/ListeInscriptions';
-import { WidgetStatsInscriptions } from '../../../../../components/inscriptions/WidgetStatsInscriptions';
-import { useDynamicInscriptions } from '../../../../../components/hooks/useDynamicInscriptions';
 
 export default function ListeInscriptionsAgencePage() {
-  const { participants } = useDynamicInscriptions();
-  const stats = {
-    total: participants.length,
-    membres: participants.filter(p => p.statut === 'membre').length,
-    nonMembres: participants.filter(p => p.statut === 'non-membre').length,
-    vip: participants.filter(p => p.statut === 'vip').length,
-    speakers: participants.filter(p => p.statut === 'speaker').length,
-    finalises: participants.filter(p => p.statutInscription === 'finalisée').length,
-    enAttente: participants.filter(p => p.statutInscription === 'non-finalisée').length,
-  };
-  
   return (
     <div className="space-y-6 px-6 mt-6">
       <div>
@@ -24,8 +11,8 @@ export default function ListeInscriptionsAgencePage() {
           Liste des inscriptions pour FANAF 2026 - 50ème édition
         </p>
       </div>
-      <WidgetStatsInscriptions stats={stats} participants={participants} />
-      <ListeInscriptions userProfile="agence" />
+      {/* ListeInscriptions calcule maintenant ses propres stats et peut les afficher avec showStats={true} */}
+      <ListeInscriptions userProfile="agence" showStats={true} />
     </div>
   );
 }

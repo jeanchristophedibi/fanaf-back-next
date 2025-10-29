@@ -9,18 +9,20 @@ import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { Eye, User, Mail, Phone, Globe, Building, Calendar, QrCode, Package, Download, X } from 'lucide-react';
+import { Eye, User, Mail, Phone, Globe, Building, Calendar, QrCode, Package, Download, X, Loader2 } from 'lucide-react';
 import { type Participant, type Organisation } from '../data/mockData';
 import { inscriptionsDataService } from '../data/inscriptionsData';
 import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { toast } from 'sonner';
 import { List, type Column, type ListAction } from '../list/List';
+import { WidgetStatsInscriptions } from './WidgetStatsInscriptions';
 
 interface ListeInscriptionsProps {
     readOnly?: boolean;
     userProfile?: 'agence' | 'fanaf' | 'asaci';
     defaultStatuts?: Array<'membre' | 'non-membre' | 'vip' | 'speaker'>;
     restrictStatutOptions?: Array<'membre' | 'non-membre' | 'vip' | 'speaker'>;
+    showStats?: boolean; // Nouveau prop pour afficher/masquer les stats
 }
 
 export function ListeInscriptions({ 
@@ -28,6 +30,7 @@ export function ListeInscriptions({
     userProfile = 'agence', 
     defaultStatuts,
     restrictStatutOptions,
+    showStats = false,
 }: ListeInscriptionsProps = {}) {
     // État pour les données de l'API
     const [apiParticipants, setApiParticipants] = useState<Participant[]>([]);
@@ -259,6 +262,17 @@ export function ListeInscriptions({
     
     const uniquePays = [...new Set(participants.map(p => p.pays))].sort();
     const badgesGenerables = filteredParticipants.filter(p => p.statutInscription === 'finalisée').length;
+    
+    // Calculer les stats basées sur les participants chargés (API ou mock)
+    const stats = useMemo(() => ({
+        total: participants.length,
+        membres: participants.filter(p => p.statut === 'membre').length,
+        nonMembres: participants.filter(p => p.statut === 'non-membre').length,
+        vip: participants.filter(p => p.statut === 'vip').length,
+        speakers: participants.filter(p => p.statut === 'speaker').length,
+        finalises: participants.filter(p => p.statutInscription === 'finalisée').length,
+        enAttente: participants.filter(p => p.statutInscription === 'non-finalisée' && p.statut !== 'vip' && p.statut !== 'speaker').length,
+    }), [participants]);
     
     // Composant Dialog pour les détails du participant
     const ParticipantDetailsDialog = ({ participant }: { participant: Participant }) => {
@@ -676,6 +690,25 @@ export function ListeInscriptions({
 
     return (
         <>
+            {/* Loader overlay pendant le chargement */}
+            {isLoading && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-md">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="relative">
+                            <Loader2 className="w-10 h-10 text-orange-600 animate-spin" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700">Chargement des données...</p>
+                    </div>
+                </div>
+            )}
+            
+            {/* Afficher les stats si demandé */}
+            {showStats && (
+                <div className="mb-6">
+                    <WidgetStatsInscriptions stats={stats} participants={participants} />
+                </div>
+            )}
+            
             {filteredParticipants.length > badgesGenerables && showBadgeNotification && (
                 <Card className="border-orange-200 bg-orange-50 pt-5 mb-3">
     <CardContent className="p-3">

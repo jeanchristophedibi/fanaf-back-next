@@ -6,7 +6,8 @@ import { AnimatedStat } from '../AnimatedStat';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Phone, Mail, Globe, Calendar } from 'lucide-react';
-import { getOrganisationById, type Participant } from '../data/mockData';
+import { type Participant } from '../data/mockData';
+import { inscriptionsDataService } from '../data/inscriptionsData';
 import { motion } from 'motion/react';
 
 interface WidgetStatsInscriptionsProps {
@@ -88,7 +89,7 @@ export function WidgetStatsInscriptions({ stats, participants }: WidgetStatsInsc
                 <p className="text-sm text-gray-500 text-center py-4">Aucun participant en attente de paiement</p>
               ) : (
                 participants.filter(p => p.statutInscription !== 'finalisée' && p.statut !== 'vip' && p.statut !== 'speaker').map((participant) => {
-                  const organisation = getOrganisationById(participant.organisationId);
+                  const organisation = inscriptionsDataService.getOrganisationById(participant.organisationId);
                   return (
                     <Card key={participant.id} className="border-orange-200">
                       <CardContent className="p-4">

@@ -156,6 +156,10 @@ export function List<T extends Record<string, any>>({
     const endIndex = startIndex + itemsPerPage;
     return filteredData.slice(startIndex, endIndex);
   }, [filteredData, currentPage, itemsPerPage]);
+  
+  // Calculer la plage d'éléments affichés
+  const startItem = filteredData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
+  const endItem = Math.min(currentPage * itemsPerPage, filteredData.length);
 
   // Réinitialiser la page quand les filtres changent
   useEffect(() => {
@@ -258,18 +262,23 @@ export function List<T extends Record<string, any>>({
               </>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      placeholder={searchPlaceholder}
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  {filterComponent}
+                {/* Barre de recherche */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder={searchPlaceholder}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
+                
+                {/* Filtres sous la barre de recherche */}
+                {filterComponent && (
+                  <div className="mt-4">
+                    {filterComponent}
+                  </div>
+                )}
 
                 {/* Actions en masse */}
                 {enableSelection && selectedItems.length > 0 && buildActions.length > 0 && (
@@ -482,7 +491,7 @@ export function List<T extends Record<string, any>>({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-600">
-                Page {currentPage} sur {totalPages} ({filteredData.length} résultat{filteredData.length > 1 ? "s" : ""})
+                Page {currentPage} sur {totalPages} (Éléments {startItem}-{endItem} sur {filteredData.length})
               </p>
               <div className="flex items-center gap-2">
                 <Button
