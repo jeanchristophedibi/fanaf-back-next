@@ -15,7 +15,7 @@ interface UnifiedLayoutProps {
 export function UnifiedLayout({ activeNav, onNavChange, userProfile, onSwitchProfile, children }: UnifiedLayoutProps) {
   console.log('[UnifiedLayout] Rendering with userProfile:', userProfile, 'activeNav:', activeNav);
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       <UnifiedSidebar
         activeNav={activeNav}
         onNavChange={onNavChange}
@@ -23,9 +23,9 @@ export function UnifiedLayout({ activeNav, onNavChange, userProfile, onSwitchPro
         onSwitchProfile={onSwitchProfile}
       />
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </main>
       </div>

@@ -291,8 +291,8 @@ class FanafApiService {
   // ==================== REGISTRATIONS/INSCRIPTIONS ====================
 
   /**
-   * Récupérer les inscriptions
-   * @param category - member | not_member | vip
+   * Récupérer les inscriptions/registrations
+   * @param category - member | not_member | vip (optionnel - si non fourni, récupère tout)
    */
   async getRegistrations(params?: {
     category?: 'member' | 'not_member' | 'vip';
@@ -304,7 +304,8 @@ class FanafApiService {
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
     if (params?.page) queryParams.append('page', params.page.toString());
 
-    const endpoint = `/api/v1/admin/registrations?${queryParams.toString()}`;
+    // Utiliser l'endpoint /registrations qui correspond à la structure de réponse observée
+    const endpoint = `/api/v1/admin/registrations${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     return this.fetchApi<PaginatedResponse<any>>(endpoint);
   }
 

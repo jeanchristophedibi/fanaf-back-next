@@ -10,7 +10,8 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Eye, User, Mail, Phone, Globe, Building, Calendar, QrCode, Package, Download, X } from 'lucide-react';
-import { getOrganisationById, type Participant } from '../data/mockData';
+import { type Participant, type Organisation } from '../data/mockData';
+import { inscriptionsDataService } from '../data/inscriptionsData';
 import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { toast } from 'sonner';
 import { List, type Column, type ListAction } from '../list/List';
@@ -28,16 +29,112 @@ export function ListeInscriptions({
     defaultStatuts,
     restrictStatutOptions,
 }: ListeInscriptionsProps = {}) {
-    const { participants, organisations } = useDynamicInscriptions({ includeOrganisations: true });
+    // État pour les données de l'API
+    const [apiParticipants, setApiParticipants] = useState<Participant[]>([]);
+    const [organisations, setOrganisations] = useState<Organisation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [apiError, setApiError] = useState<string | null>(null);
     
-    // Simulation d'un chargement initial
+    // Charger les données (participants et organisations) depuis l'API
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setIsLoading(false);
-        }, 1000);
-        return () => clearTimeout(timer);
-    }, []);
+        const loadData = async () => {
+            setIsLoading(true);
+            setApiError(null);
+            
+            try {
+                // Charger les organisations en premier
+                const loadedOrganisations = await inscriptionsDataService.loadOrganisations();
+                setOrganisations(loadedOrganisations);
+                
+                // Mapper les statuts vers les catégories API si nécessaire
+                const categoriesToFetch: Array<'member' | 'not_member' | 'vip'> = [];
+                
+                if (defaultStatuts && defaultStatuts.length > 0) {
+                    if (defaultStatuts.includes('membre')) {
+                        categoriesToFetch.push('member');
+                    }
+                    if (defaultStatuts.includes('non-membre')) {
+                        categoriesToFetch.push('not_member');
+                    }
+                    if (defaultStatuts.includes('vip')) {
+                        categoriesToFetch.push('vip');
+                    }
+                } else {
+                    categoriesToFetch.push('member', 'not_member', 'vip');
+                }
+                
+                // Charger les participants
+                const loadedParticipants = await inscriptionsDataService.loadParticipants(
+                    categoriesToFetch.length > 0 ? categoriesToFetch : undefined
+                );
+                setApiParticipants(loadedParticipants);
+            } catch (err: any) {
+                console.error('Erreur lors du chargement des données:', err);
+                setApiError(err.message || 'Erreur lors du chargement des données');
+                toast.error(err.message || 'Erreur lors du chargement des données');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        
+        loadData();
+    }, [defaultStatuts]);
+    
+    // Utiliser les données API si disponibles, sinon les données mock (pour compatibilité)
+    const { participants: mockParticipants } = useDynamicInscriptions({ includeOrganisations: false });
+    
+    // S'assurer que les participants ont des IDs uniques (déduplication finale pour compatibilité avec mock)
+    const participants = useMemo(() => {
+        const source = apiParticipants.length > 0 ? apiParticipants : mockParticipants;
+        
+        console.log(`[ListeInscriptions] Participants reçus: ${source.length} (API: ${apiParticipants.length}, Mock: ${mockParticipants.length})`);
+        
+        // Pour les données API, la déduplication est déjà faite dans le service
+        if (apiParticipants.length > 0) {
+            // Vérifier que les participants ont bien tous des IDs et des propriétés essentielles
+            const invalidParticipants = apiParticipants.filter(p => !p.id || !p.email);
+            if (invalidParticipants.length > 0) {
+                console.warn(`[ListeInscriptions] ${invalidParticipants.length} participants invalides (sans ID ou email):`, invalidParticipants);
+            }
+            if (apiParticipants.length > 0) {
+                console.log(`[ListeInscriptions] Exemple de participant:`, {
+                    id: apiParticipants[0].id,
+                    nom: apiParticipants[0].nom,
+                    prenom: apiParticipants[0].prenom,
+                    email: apiParticipants[0].email,
+                    reference: apiParticipants[0].reference,
+                    statut: apiParticipants[0].statut,
+                    statutInscription: apiParticipants[0].statutInscription,
+                });
+            }
+            return apiParticipants;
+        }
+        
+        // Pour les mock data, effectuer une déduplication basée sur email et référence
+        const uniqueParticipants = new Map<string, Participant>();
+        const usedEmails = new Set<string>();
+        const usedReferences = new Set<string>();
+        
+        source.forEach((participant) => {
+            const emailKey = participant.email?.toLowerCase().trim() || '';
+            const refKey = participant.reference?.trim() || '';
+            const key = emailKey || refKey || participant.id;
+            
+            // Dédupliquer par email ou référence pour les mock data
+            const isDuplicate = 
+                (emailKey && usedEmails.has(emailKey)) ||
+                (refKey && usedReferences.has(refKey)) ||
+                uniqueParticipants.has(key);
+            
+            if (!isDuplicate) {
+                uniqueParticipants.set(key, participant);
+                if (emailKey) usedEmails.add(emailKey);
+                if (refKey) usedReferences.add(refKey);
+            }
+        });
+        
+        return Array.from(uniqueParticipants.values());
+    }, [apiParticipants, mockParticipants]);
     
     // États pour les filtres multi-sélection (avant validation)
     const [tempStatutFilters, setTempStatutFilters] = useState<string[]>([]);
@@ -138,17 +235,26 @@ export function ListeInscriptions({
     
     // Filtrer les participants selon les filtres appliqués
     const filteredParticipants = useMemo(() => {
-        return participants.filter(participant => {
-        const org = getOrganisationById(participant.organisationId);
-        const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
+        const filtered = participants.filter(participant => {
+            const org = inscriptionsDataService.getOrganisationById(participant.organisationId);
+            const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
             const matchesStatutInscription = appliedStatutInscriptionFilters.length === 0 || 
                 appliedStatutInscriptionFilters.includes(participant.statutInscription) ||
                 (appliedStatutInscriptionFilters.includes('exonéré') && (participant.statut === 'vip' || participant.statut === 'speaker'));
-        const matchesOrganisation = appliedOrganisationFilters.length === 0 || appliedOrganisationFilters.includes(participant.organisationId);
-        const matchesPays = appliedPaysFilters.length === 0 || appliedPaysFilters.includes(participant.pays);
-        
+            const matchesOrganisation = appliedOrganisationFilters.length === 0 || appliedOrganisationFilters.includes(participant.organisationId);
+            const matchesPays = appliedPaysFilters.length === 0 || appliedPaysFilters.includes(participant.pays);
+            
             return matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays;
         });
+        
+        console.log(`[ListeInscriptions] Participants filtrés: ${filtered.length} sur ${participants.length}`, {
+            appliedStatutFilters,
+            appliedStatutInscriptionFilters,
+            appliedOrganisationFilters,
+            appliedPaysFilters
+        });
+        
+        return filtered;
     }, [participants, appliedStatutFilters, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
     
     const uniquePays = [...new Set(participants.map(p => p.pays))].sort();
@@ -157,7 +263,8 @@ export function ListeInscriptions({
     // Composant Dialog pour les détails du participant
     const ParticipantDetailsDialog = ({ participant }: { participant: Participant }) => {
         const [isOpen, setIsOpen] = useState(false);
-        const organisation = getOrganisationById(participant.organisationId);
+        const organisation = inscriptionsDataService.getOrganisationById(participant.organisationId);
+       
         
         return (
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -260,6 +367,16 @@ export function ListeInscriptions({
     
     // Colonnes pour le composant List
     const columns: Column<Participant>[] = [
+        {
+            key: 'dateInscription',
+            header: "Date d'inscription",
+            sortable: true,
+            render: (p) => (
+                <span className="text-gray-600 text-xs">
+                    {new Date(p.dateInscription).toLocaleDateString('fr-FR')}
+                </span>
+            )
+        },
         { 
             key: 'reference', 
             header: 'Référence', 
@@ -285,7 +402,7 @@ export function ListeInscriptions({
             header: 'Organisation',
             sortable: true,
             render: (p) => {
-                const org = getOrganisationById(p.organisationId);
+                const org = inscriptionsDataService.getOrganisationById(p.organisationId);
                 return <span className="text-gray-600 text-xs">{org?.nom || 'N/A'}</span>;
             },
             sortKey: 'organisationId'
@@ -331,16 +448,6 @@ export function ListeInscriptions({
                     <span className="text-gray-400 text-xs">-</span>
                 );
             }
-        },
-        {
-            key: 'dateInscription',
-            header: "Date d'inscription",
-            sortable: true,
-            render: (p) => (
-                <span className="text-gray-600 text-xs">
-                    {new Date(p.dateInscription).toLocaleDateString('fr-FR')}
-                </span>
-            )
         },
         {
             key: 'actions',
@@ -522,7 +629,7 @@ export function ListeInscriptions({
     ];
 
     const exportData = (p: Participant) => {
-        const org = getOrganisationById(p.organisationId);
+        const org = inscriptionsDataService.getOrganisationById(p.organisationId);
         return [
             p.reference,
             p.nom,
@@ -613,6 +720,36 @@ export function ListeInscriptions({
                 emptyMessage="Aucun participant trouvé"
                 loading={isLoading}
             />
+            
+            {/* Affichage de l'erreur API si présente */}
+            {apiError && (
+                <Card className="border-red-200 bg-red-50 mt-4">
+                    <CardContent className="p-4">
+                        <div className="flex items-start gap-2">
+                            <X className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-red-900">Erreur lors du chargement des données</p>
+                                <p className="text-xs text-red-700 mt-1">{apiError}</p>
+                                <p className="text-xs text-red-600 mt-2">
+                                    Les données affichées proviennent du mode démo. Veuillez vérifier votre connexion et réessayer.
+                                </p>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    setApiError(null);
+                                    // Recharger les données
+                                    window.location.reload();
+                                }}
+                                className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-100"
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
         </>
     );
 }

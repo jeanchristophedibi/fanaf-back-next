@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
@@ -33,11 +33,23 @@ interface SubMenuItem {
 
 export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchProfile }: UnifiedSidebarProps) {
   // State for collapsible menus
-  const [inscriptionsOpen, setInscriptionsOpen] = useState(true);
-  const [organisationsOpen, setOrganisationsOpen] = useState(true);
-  const [networkingOpen, setNetworkingOpen] = useState(true);
-  const [paiementsOpen, setPaiementsOpen] = useState(true);
-  const [tresorerieOpen, setTresorerieOpen] = useState(true);
+  // Initialiser à false pour éviter les erreurs d'hydratation, puis mettre à true après montage
+  const [inscriptionsOpen, setInscriptionsOpen] = useState(false);
+  const [organisationsOpen, setOrganisationsOpen] = useState(false);
+  const [networkingOpen, setNetworkingOpen] = useState(false);
+  const [paiementsOpen, setPaiementsOpen] = useState(false);
+  const [tresorerieOpen, setTresorerieOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Synchroniser l'état après le montage pour éviter les erreurs d'hydratation
+  useEffect(() => {
+    setIsMounted(true);
+    setInscriptionsOpen(true);
+    setOrganisationsOpen(true);
+    setNetworkingOpen(true);
+    setPaiementsOpen(true);
+    setTresorerieOpen(true);
+  }, []);
 
   // Menu configuration based on user profile
   const getMenuConfig = () => {
@@ -182,7 +194,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
   const isTresorerieActive = activeNav.startsWith('finance');
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-hidden">
       <div className="p-6">
         <div className="space-y-3">
           <Logo className="h-10 w-auto object-contain" alt="ASACI Technologies" />
