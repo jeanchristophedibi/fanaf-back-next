@@ -1,24 +1,33 @@
+"use client";
+
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Clock, User, Filter, Users, Briefcase, X } from 'lucide-react';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Card } from './ui/card';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Checkbox } from './ui/checkbox';
-import { getOrganisationById } from './data/mockData';
+import { ChevronLeft, ChevronRight, Clock, User, Filter, Users, Briefcase, X, Eye, Check } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { Card } from '../ui/card';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Checkbox } from '../ui/checkbox';
+import { getOrganisationById } from '../data/mockData';
 import {
   getParticipantById,
   getReferentSponsor,
+  updateRendezVous,
   type RendezVous,
-} from './data/mockData';
+  type StatutRendezVous,
+} from '../data/mockData';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '../ui/dialog';
+import { Textarea } from '../ui/textarea';
+import { toast } from 'sonner';
 import { motion } from 'motion/react';
 
 interface CalendarViewProps {
   rendezVous: RendezVous[];
+  readOnly?: boolean;
+  activeFilter?: 'participant' | 'sponsor' | 'all' | 'liste' | 'historique';
 }
 
-export function CalendarView({ rendezVous }: CalendarViewProps) {
+export function CalendarView({ rendezVous, readOnly = false, activeFilter }: CalendarViewProps) {
   // Dates de l'événement FANAF 2026 (9-11 février 2026)
   const eventStartDate = new Date(2026, 1, 9); // 9 février 2026
   const eventEndDate = new Date(2026, 1, 11); // 11 février 2026
@@ -146,6 +155,183 @@ export function CalendarView({ rendezVous }: CalendarViewProps) {
       day: 'numeric',
       month: 'short',
     });
+  };
+
+  // Dialog de détails avec actions pour les sponsors
+  const RendezVousDialog = ({ rdv }: { rdv: RendezVous }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [commentaire, setCommentaire] = useState(rdv.commentaire || '');
+    const demandeur = getParticipantById(rdv.demandeurId);
+    const demandeurOrganisation = demandeur ? getOrganisationById(demandeur.organisationId) : undefined;
+    const recepteur = rdv.type === 'participant' ? getParticipantById(rdv.recepteurId) : undefined;
+    const recepteurOrganisation = recepteur ? getOrganisationById(recepteur.organisationId) : undefined;
+    const referentSponsor = rdv.type === 'sponsor' ? getReferentSponsor(rdv.recepteurId) : undefined;
+
+    if (!demandeur) return null;
+    if (rdv.type === 'participant' && !recepteur) return null;
+    if (rdv.type === 'sponsor' && !referentSponsor) return null;
+
+    const handleAction = (newStatut: StatutRendezVous) => {
+      updateRendezVous(rdv.id, {
+        statut: newStatut,
+        commentaire: commentaire || undefined,
+      });
+      setIsOpen(false);
+      
+      const messages: Record<string, string> = {
+        'acceptée': 'Rendez-vous accepté',
+        'occupée': 'Rendez-vous refusé (occupé)',
+        'en-attente': 'Rendez-vous mis en attente',
+        'annulée': 'Rendez-vous annulé',
+      };
+      
+      toast.success(messages[newStatut] || 'Statut mis à jour');
+    };
+
+    return (
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger asChild>
+          <motion.div
+            className="absolute left-1 right-1 top-1 bottom-1 cursor-pointer"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          />
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Détails de la demande de rendez-vous</DialogTitle>
+            <DialogDescription>
+              Informations complètes sur la demande de rendez-vous
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div>
+              <Label className="text-gray-700">Type de rendez-vous</Label>
+              <p className="mt-1 text-gray-900">
+                <Badge className={rdv.type === 'participant' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}>
+                  {rdv.type === 'participant' ? 'Participant' : 'Sponsor'}
+                </Badge>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-gray-700">Demandeur</Label>
+                <div className="mt-1 p-3 bg-gray-50 rounded-md border border-gray-200">
+                  <p className="text-gray-900">{demandeur.prenom} {demandeur.nom}</p>
+                  <p className="text-sm text-gray-600 mt-1">{demandeur.email}</p>
+                  <p className="text-sm text-gray-600">{demandeur.telephone}</p>
+                  {demandeurOrganisation && (
+                    <p className="text-sm text-gray-600 mt-1">Organisation: {demandeurOrganisation.nom}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-gray-700 flex items-center gap-2">
+                  {rdv.type === 'sponsor' ? (
+                    <>
+                      <User className="w-4 h-4 text-orange-600" />
+                      Référent Sponsor
+                    </>
+                  ) : (
+                    'Récepteur'
+                  )}
+                </Label>
+                <div className="mt-1 p-3 bg-gray-50 rounded-md border border-gray-200">
+                  {rdv.type === 'sponsor' && referentSponsor ? (
+                    <>
+                      <p className="text-gray-900">{referentSponsor.prenom} {referentSponsor.nom}</p>
+                      <p className="text-sm text-orange-600">{referentSponsor.fonction}</p>
+                      <p className="text-sm text-gray-600">{referentSponsor.email}</p>
+                      <p className="text-sm text-gray-600">{referentSponsor.telephone}</p>
+                      <p className="text-sm text-gray-600 mt-1">Organisation: {referentSponsor.organisationNom}</p>
+                    </>
+                  ) : recepteur ? (
+                    <>
+                      <p className="text-gray-900">{recepteur.prenom} {recepteur.nom}</p>
+                      <p className="text-sm text-gray-600">{recepteur.email}</p>
+                      <p className="text-sm text-gray-600">{recepteur.telephone}</p>
+                      {recepteurOrganisation && (
+                        <p className="text-sm text-gray-600 mt-1">Organisation: {recepteurOrganisation.nom}</p>
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-gray-700">Date</Label>
+                <p className="mt-1 text-gray-900">
+                  {new Date(rdv.date).toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </p>
+              </div>
+              <div>
+                <Label className="text-gray-700">Heure</Label>
+                <p className="mt-1 text-gray-900">{rdv.heure}</p>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-gray-700">Statut</Label>
+              <div className="mt-1">
+                <Badge className={getStatutColor(rdv.statut)}>
+                  {rdv.statut}
+                </Badge>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-gray-700">Commentaire</Label>
+              {(activeFilter === 'sponsor' || rdv.type === 'sponsor') && !readOnly ? (
+                <Textarea
+                  placeholder="Ajouter un commentaire (optionnel)..."
+                  value={commentaire}
+                  onChange={(e) => setCommentaire(e.target.value)}
+                  className="mt-1"
+                  rows={4}
+                />
+              ) : (
+                <div className="mt-1 p-3 bg-gray-50 rounded-md border border-gray-200">
+                  <p className="text-gray-900">{rdv.commentaire || 'Aucun commentaire'}</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            {!readOnly && (activeFilter === 'sponsor' || rdv.type === 'sponsor') ? (
+              <>
+                <Button
+                  onClick={() => handleAction('occupée')}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <X className="w-4 h-4" />
+                  Refuser (Occupé)
+                </Button>
+                <Button
+                  onClick={() => handleAction('acceptée')}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                >
+                  <Check className="w-4 h-4" />
+                  Accepter
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setIsOpen(false)} variant="outline">
+                Fermer
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
   };
 
   return (
@@ -354,7 +540,7 @@ export function CalendarView({ rendezVous }: CalendarViewProps) {
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <Button variant="outline" onClick={goToToday}>
-              Premier jour
+            {view === 'week' ? '9-11 février' : currentDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
             </Button>
             <Button
               variant="outline"
@@ -366,7 +552,7 @@ export function CalendarView({ rendezVous }: CalendarViewProps) {
           </div>
 
           <h2 className="text-xl text-gray-900">
-            FANAF 2026 - {view === 'week' ? '9-11 février' : currentDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+            FANAF 2026 
           </h2>
         </div>
 
@@ -490,11 +676,12 @@ export function CalendarView({ rendezVous }: CalendarViewProps) {
                               animate={{ opacity: 1, scale: 1 }}
                               className={`absolute left-1 right-1 top-1 p-1.5 rounded border-l-4 ${getStatutColor(
                                 rdv.statut
-                              )} bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer z-10 ${
+                              )} bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer z-10 relative ${
                                 rdv.type === 'sponsor' ? 'border-t-2 border-t-orange-400' : 'border-t-2 border-t-blue-400'
                               } ${rdv.statut === 'annulée' ? 'opacity-60' : ''}`}
                               style={{ height: '110px' }}
                             >
+                              <RendezVousDialog rdv={rdv} />
                               <div className="flex items-center justify-between mb-0.5">
                                 {rdv.type === 'sponsor' ? (
                                   <Badge className="bg-orange-100 text-orange-700 text-xs h-4 px-1">
@@ -508,6 +695,36 @@ export function CalendarView({ rendezVous }: CalendarViewProps) {
                                   </Badge>
                                 )}
                                 <div className="flex items-center gap-0.5">
+                                  {!readOnly && (activeFilter === 'sponsor' || rdv.type === 'sponsor') && (
+                                    <div className="flex items-center gap-0.5 mr-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-4 w-4 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          updateRendezVous(rdv.id, { statut: 'acceptée' });
+                                          toast.success('Rendez-vous accepté');
+                                        }}
+                                        title="Accepter"
+                                      >
+                                        <Check className="w-2.5 h-2.5" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-4 w-4 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          updateRendezVous(rdv.id, { statut: 'occupée' });
+                                          toast.success('Rendez-vous refusé');
+                                        }}
+                                        title="Refuser"
+                                      >
+                                        <X className="w-2.5 h-2.5" />
+                                      </Button>
+                                    </div>
+                                  )}
                                   <Clock className="w-2.5 h-2.5 text-gray-500" />
                                   <span className="text-xs text-gray-900">{rdv.heure}</span>
                                 </div>
@@ -571,45 +788,7 @@ export function CalendarView({ rendezVous }: CalendarViewProps) {
         </div>
       </Card>
 
-      {/* Statistiques du jour/semaine */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-gray-600 mb-1">Total rendez-vous</p>
-          <p className="text-2xl text-gray-900">
-            {weekDays.reduce((acc, day) => acc + getRendezVousForDate(day).length, 0)}
-          </p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-gray-600 mb-1">Acceptés</p>
-          <p className="text-2xl text-green-600">
-            {weekDays.reduce(
-              (acc, day) =>
-                acc + getRendezVousForDate(day).filter((r) => r.statut === 'acceptée').length,
-              0
-            )}
-          </p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-gray-600 mb-1">En attente</p>
-          <p className="text-2xl text-orange-600">
-            {weekDays.reduce(
-              (acc, day) =>
-                acc + getRendezVousForDate(day).filter((r) => r.statut === 'en-attente').length,
-              0
-            )}
-          </p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-gray-600 mb-1">Annulés</p>
-          <p className="text-2xl text-gray-600">
-            {weekDays.reduce(
-              (acc, day) =>
-                acc + getRendezVousForDate(day).filter((r) => r.statut === 'annulée').length,
-              0
-            )}
-          </p>
-        </Card>
-      </div>
+
     </div>
   );
 }

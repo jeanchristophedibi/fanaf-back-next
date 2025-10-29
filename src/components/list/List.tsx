@@ -6,7 +6,8 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { Search, Filter, Download, ArrowUpDown, ArrowUp, ArrowDown, Check } from "lucide-react";
+import { Search, Filter, Download, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { Skeleton } from "../ui/skeleton";
 
 export interface Column<T> {
@@ -15,6 +16,7 @@ export interface Column<T> {
   sortable?: boolean;
   render?: (item: T) => ReactNode;
   sortKey?: string; // Clé alternative pour le tri (si différente de key)
+  width?: string; // Largeur de la colonne (ex: "w-16", "w-24", "min-w-[100px]")
 }
 
 export interface ListAction<T> {
@@ -23,6 +25,17 @@ export interface ListAction<T> {
   onClick: (selectedItems: T[]) => void;
   variant?: "default" | "destructive" | "outline";
   disabled?: (selectedItems: T[]) => boolean;
+}
+
+export interface RowAction<T> {
+  label: string;
+  icon?: ReactNode;
+  onClick: (item: T) => void;
+  variant?: "default" | "destructive" | "outline" | "ghost";
+  disabled?: (item: T) => boolean;
+  shouldShow?: (item: T) => boolean; // Condition d'affichage
+  className?: string; // Classes CSS personnalisées
+  title?: string; // Tooltip
 }
 
 export interface ListProps<T> {
@@ -45,6 +58,8 @@ export interface ListProps<T> {
   enableSelection?: boolean;
   filterTitle?: string;
   loading?: boolean;
+  rowActions?: RowAction<T>[]; // Actions par ligne
+  rowActionsWidth?: string; // Largeur de la colonne Actions (défaut: "w-32")
 }
 
 export function List<T extends Record<string, any>>({
@@ -67,11 +82,14 @@ export function List<T extends Record<string, any>>({
   enableSelection = false,
   filterTitle = "Filtres et recherche",
   loading = false,
+  rowActions = [],
+  rowActionsWidth = "w-32",
 }: ListProps<T>) {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [internalSelectedItems, setInternalSelectedItems] = useState<Set<string | number>>(new Set());
+  const [showBulkActions, setShowBulkActions] = useState(true);
 
   // Utiliser la sélection contrôlée ou interne
   const isControlled = controlledSelectedItems !== undefined && onSelectionChange !== undefined;
@@ -255,28 +273,55 @@ export function List<T extends Record<string, any>>({
 
                 {/* Actions en masse */}
                 {enableSelection && selectedItems.length > 0 && buildActions.length > 0 && (
-                  <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                    <span className="text-sm text-orange-900 font-medium">
-                      {selectedItems.length} élément{selectedItems.length > 1 ? "s" : ""} sélectionné{selectedItems.length > 1 ? "s" : ""}
-                    </span>
-                    <div className="flex items-center gap-2 ml-auto">
-                      {buildActions.map((action, index) => {
-                        const disabled = action.disabled ? action.disabled(selectedItems) : false;
-                        return (
+                  <Collapsible open={showBulkActions} onOpenChange={setShowBulkActions}>
+                    <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                      <span className="text-sm text-orange-900 font-medium">
+                        {selectedItems.length} élément{selectedItems.length > 1 ? "s" : ""} sélectionné{selectedItems.length > 1 ? "s" : ""}
+                      </span>
+                      <div className="flex items-center gap-2 ml-auto">
+                        <CollapsibleTrigger asChild>
                           <Button
-                            key={index}
-                            variant={action.variant || "default"}
+                            variant="ghost"
                             size="sm"
-                            onClick={() => action.onClick(selectedItems)}
-                            disabled={disabled || readOnly}
+                            className="h-7 px-2 text-orange-700 hover:text-orange-800 hover:bg-orange-100"
                           >
-                            {action.icon}
-                            {action.label}
+                            {showBulkActions ? (
+                              <>
+                                <ChevronUp className="w-4 h-4 mr-1" />
+                                Masquer
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-4 h-4 mr-1" />
+                                Afficher
+                              </>
+                            )}
                           </Button>
-                        );
-                      })}
+                        </CollapsibleTrigger>
+                      </div>
                     </div>
-                  </div>
+                    <CollapsibleContent>
+                      <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200 border-t-0 rounded-t-none">
+                        <div className="flex items-center gap-2 ml-auto">
+                          {buildActions.map((action, index) => {
+                            const disabled = action.disabled ? action.disabled(selectedItems) : false;
+                            return (
+                              <Button
+                                key={index}
+                                variant={action.variant || "default"}
+                                size="sm"
+                                onClick={() => action.onClick(selectedItems)}
+                                disabled={disabled || readOnly}
+                              >
+                                {action.icon}
+                                {action.label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
 
                 <div className="flex items-center justify-between">
@@ -313,7 +358,7 @@ export function List<T extends Record<string, any>>({
                     </TableHead>
                   )}
                   {columns.map((column) => (
-                    <TableHead key={column.key}>
+                    <TableHead key={column.key} className={column.width}>
                       {column.sortable ? (
                         <button
                           onClick={() => handleSort(column.key)}
@@ -335,6 +380,11 @@ export function List<T extends Record<string, any>>({
                       )}
                     </TableHead>
                   ))}
+                  {rowActions.length > 0 && (
+                    <TableHead className={`${rowActionsWidth} text-center`}>
+                      Actions
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -352,12 +402,17 @@ export function List<T extends Record<string, any>>({
                           <Skeleton className="h-4 w-full" />
                         </TableCell>
                       ))}
+                      {rowActions.length > 0 && (
+                        <TableCell>
+                          <Skeleton className="h-8 w-24" />
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={enableSelection ? columns.length + 1 : columns.length}
+                      colSpan={enableSelection ? columns.length + 1 + (rowActions.length > 0 ? 1 : 0) : columns.length + (rowActions.length > 0 ? 1 : 0)}
                       className="text-center text-gray-500 py-8"
                     >
                       {emptyMessage}
@@ -375,10 +430,41 @@ export function List<T extends Record<string, any>>({
                           </TableCell>
                         )}
                         {columns.map((column) => (
-                          <TableCell key={column.key}>
+                          <TableCell key={column.key} className={column.width}>
                             {column.render ? column.render(item) : String(item[column.key] || "")}
                           </TableCell>
                         ))}
+                        {rowActions.length > 0 && (
+                          <TableCell className={`${rowActionsWidth} text-center`}>
+                            <div className="flex justify-center items-center gap-1">
+                              {rowActions
+                                .filter((action) => {
+                                  // Vérifier si l'action doit être affichée
+                                  if (action.shouldShow) {
+                                    return action.shouldShow(item);
+                                  }
+                                  return true; // Afficher par défaut si shouldShow n'est pas défini
+                                })
+                                .map((action, index) => {
+                                  const isDisabled = action.disabled ? action.disabled(item) : false;
+                                  
+                                  return (
+                                    <Button
+                                      key={index}
+                                      size="sm"
+                                      variant={action.variant || "ghost"}
+                                      className={action.className || "h-8 w-8 p-0"}
+                                      onClick={() => action.onClick(item)}
+                                      disabled={isDisabled || readOnly}
+                                      title={action.title || action.label}
+                                    >
+                                      {action.icon || action.label}
+                                    </Button>
+                                  );
+                                })}
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })

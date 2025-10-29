@@ -1,25 +1,35 @@
 "use client";
 
 import React, { useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Input } from '../ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
-import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
-import { getOrganisationById, getPlanVolByType, getParticipantById, getPlanVolByParticipant } from '../data/mockData';
-import { Download, Plane, Search, TrendingUp, Calendar, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, FileText, Mail } from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '../ui/pagination';
+import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
+import { getOrganisationById, getPlanVolByType, getParticipantById } from '../data/mockData';
+import { Download, Plane, Search, Calendar, AlertCircle, Eye, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { List, type Column, type ListAction } from '../list/List';
+
+interface GroupedPlanVol {
+  participantId: string;
+  arrivee: any | null;
+  depart: any | null;
+  _searchText?: string; // Pour la recherche
+  nom?: string; // Pour le tri
+  prenom?: string; // Pour le tri
+  organisation?: string; // Pour le tri
+  _arriveeDate?: number; // Timestamp pour le tri
+  _departDate?: number; // Timestamp pour le tri
+}
 
 export function ListePlanVol() {
-  const { participants: mockParticipants, organisations: mockOrganisations } = useDynamicInscriptions({ includeOrganisations: true });
+  const { organisations: mockOrganisations } = useDynamicInscriptions({ includeOrganisations: true });
 
-  const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [tempTypeVolFilters, setTempTypeVolFilters] = useState<string[]>([]);
   const [tempOrganisationFilters, setTempOrganisationFilters] = useState<string[]>([]);
@@ -33,14 +43,8 @@ export function ListePlanVol() {
   const [appliedDateDebut, setAppliedDateDebut] = useState<string>('');
   const [appliedDateFin, setAppliedDateFin] = useState<string>('');
 
-  // Tri et pagination
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-  
   // Sélection
-  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
 
   const uniquePaysVol = useMemo(() => {
     const allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
@@ -78,29 +82,16 @@ export function ListePlanVol() {
     toast.success('Filtres réinitialisés');
   };
 
+  // Groupement et filtrage des plans de vol
   const groupedPlansVol = useMemo(() => {
     let allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
 
-    if (searchTerm) {
-      allPlansVol = allPlansVol.filter(pv => {
-        const participant = getParticipantById(pv.participantId);
-        if (!participant) return false;
-        const organisation = getOrganisationById(participant.organisationId);
-        return (
-          participant.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          participant.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          pv.numeroVol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          organisation?.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          pv.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          pv.aeroport.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-    }
-
+    // Filtres par type de vol
     if (appliedTypeVolFilters.length > 0) {
       allPlansVol = allPlansVol.filter(pv => appliedTypeVolFilters.includes(pv.type));
     }
 
+    // Filtres par organisation
     if (appliedOrganisationFilters.length > 0) {
       allPlansVol = allPlansVol.filter(pv => {
         const participant = getParticipantById(pv.participantId);
@@ -108,6 +99,7 @@ export function ListePlanVol() {
       });
     }
 
+    // Filtres par pays
     if (appliedPaysVolFilters.length > 0) {
       allPlansVol = allPlansVol.filter(pv => {
         const participant = getParticipantById(pv.participantId);
@@ -115,6 +107,7 @@ export function ListePlanVol() {
       });
     }
 
+    // Filtres par période
     if (appliedDateDebut || appliedDateFin) {
       allPlansVol = allPlansVol.filter(pv => {
         const volDate = new Date(pv.date);
@@ -133,17 +126,45 @@ export function ListePlanVol() {
       });
     }
 
-    const participantMap = new Map();
+    // Groupement par participant
+    const participantMap = new Map<string, GroupedPlanVol>();
     allPlansVol.forEach(pv => {
       if (!participantMap.has(pv.participantId)) {
         participantMap.set(pv.participantId, { participantId: pv.participantId, arrivee: null, depart: null });
       }
-      const entry = participantMap.get(pv.participantId);
-      if (pv.type === 'arrivee') entry.arrivee = pv; else entry.depart = pv;
+      const entry = participantMap.get(pv.participantId)!;
+      if (pv.type === 'arrivee') entry.arrivee = pv; 
+      else entry.depart = pv;
     });
 
-    const grouped = Array.from(participantMap.values());
-    grouped.sort((a: any, b: any) => {
+    // Enrichir avec des champs de recherche et de tri
+    const grouped = Array.from(participantMap.values()).map(group => {
+      const participant = getParticipantById(group.participantId);
+      const organisation = participant ? getOrganisationById(participant.organisationId) : null;
+      
+      const searchTerms = [
+        participant?.nom || '',
+        participant?.prenom || '',
+        organisation?.nom || '',
+        group.arrivee?.numeroVol || '',
+        group.depart?.numeroVol || '',
+        group.arrivee?.aeroport || '',
+        group.depart?.aeroport || '',
+      ].filter(Boolean).join(' ').toLowerCase();
+      
+      return {
+        ...group,
+        _searchText: searchTerms,
+        nom: participant?.nom?.toLowerCase() || '',
+        prenom: participant?.prenom?.toLowerCase() || '',
+        organisation: organisation?.nom?.toLowerCase() || '',
+        _arriveeDate: group.arrivee ? new Date(group.arrivee.date).getTime() : 0,
+        _departDate: group.depart ? new Date(group.depart.date).getTime() : 0
+      };
+    });
+
+    // Tri par défaut par date (arrivée ou départ)
+    grouped.sort((a, b) => {
       const dateA = a.arrivee?.date || a.depart?.date || '';
       const dateB = b.arrivee?.date || b.depart?.date || '';
       if (dateA && dateB) {
@@ -155,109 +176,9 @@ export function ListePlanVol() {
       }
       return 0;
     });
+
     return grouped;
-  }, [searchTerm, appliedTypeVolFilters, appliedOrganisationFilters, appliedPaysVolFilters, appliedDateDebut, appliedDateFin]);
-
-  // Tri des groupes
-  const sortedGroups = useMemo(() => {
-    const arr = [...groupedPlansVol];
-    if (!sortColumn) return arr;
-    const getValue = (g: any) => {
-      const participant = getParticipantById(g.participantId);
-      switch (sortColumn) {
-        case 'nom':
-          return (participant?.nom || '').toLowerCase();
-        case 'prenom':
-          return (participant?.prenom || '').toLowerCase();
-        case 'organisation':
-          return (getOrganisationById(participant?.organisationId || '')?.nom || '').toLowerCase();
-        case 'arrivee':
-          return g.arrivee ? new Date(g.arrivee.date).getTime() : 0;
-        case 'depart':
-          return g.depart ? new Date(g.depart.date).getTime() : 0;
-        default:
-          return 0;
-      }
-    };
-    arr.sort((a, b) => {
-      const va = getValue(a);
-      const vb = getValue(b);
-      if (typeof va === 'string' && typeof vb === 'string') {
-        return sortDirection === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-      }
-      return sortDirection === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
-    });
-    return arr;
-  }, [groupedPlansVol, sortColumn, sortDirection]);
-
-  const totalPages = Math.ceil(sortedGroups.length / itemsPerPage);
-  const paginatedGroups = sortedGroups.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const handleSort = (column: string) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  const planVolStats = useMemo(() => {
-    const arrivees = getPlanVolByType('arrivee');
-    const departs = getPlanVolByType('depart');
-    return { total: arrivees.length + departs.length, arrivees: arrivees.length, departs: departs.length };
-  }, []);
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const allIds = new Set(paginatedGroups.map((g: any) => g.participantId));
-      setSelectedParticipants(allIds);
-    } else {
-      setSelectedParticipants(new Set());
-    }
-  };
-
-  const handleSelectItem = (participantId: string, checked: boolean) => {
-    const newSelection = new Set(selectedParticipants);
-    if (checked) {
-      newSelection.add(participantId);
-    } else {
-      newSelection.delete(participantId);
-    }
-    setSelectedParticipants(newSelection);
-  };
-
-  const allSelected = paginatedGroups.length > 0 && paginatedGroups.every((g: any) => selectedParticipants.has(g.participantId));
-  const someSelected = paginatedGroups.some((g: any) => selectedParticipants.has(g.participantId));
-
-  const exportToCSV = (dataToExport?: any[]) => {
-    const data = dataToExport || groupedPlansVol;
-    const headers = ['Nom', 'Prénom', 'Organisation', 'Vol Arrivée', 'Date Arrivée', 'Heure Arrivée', 'Vol Départ', 'Date Départ', 'Heure Départ'];
-    const csvContent = [
-      headers.join(','),
-      ...data.map((group: any) => {
-        const participant = getParticipantById(group.participantId);
-        const organisation = participant ? getOrganisationById(participant.organisationId) : null;
-        return [
-          participant?.nom || '',
-          participant?.prenom || '',
-          organisation?.nom || '',
-          group.arrivee?.numeroVol || 'N/A',
-          group.arrivee ? new Date(group.arrivee.date).toLocaleDateString('fr-FR') : 'N/A',
-          group.arrivee?.heure || 'N/A',
-          group.depart?.numeroVol || 'N/A',
-          group.depart ? new Date(group.depart.date).toLocaleDateString('fr-FR') : 'N/A',
-          group.depart?.heure || 'N/A'
-        ].join(',');
-      })
-    ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `plan-de-vol-fanaf.csv`;
-    a.click();
-  };
+  }, [appliedTypeVolFilters, appliedOrganisationFilters, appliedPaysVolFilters, appliedDateDebut, appliedDateFin]);
 
   const isArrivingTomorrow = (dateString: string) => {
     const today = new Date();
@@ -269,414 +190,380 @@ export function ListePlanVol() {
     return arrivalDate.getTime() === tomorrow.getTime();
   };
 
-  return (
-    <div className="">
-      {/* Stats */}
-     
+  // Dialog de détails
+  const DetailsDialog = ({ group }: { group: GroupedPlanVol }) => {
+    const participant = getParticipantById(group.participantId);
+    if (!participant) return null;
 
-      {/* Filtres */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+    return (
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50">
+            <Eye className="w-4 h-4" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plane className="w-5 h-5 text-orange-600" />
+              Plan de vol - {participant.prenom} {participant.nom}
+            </DialogTitle>
+            <DialogDescription>
+              Détails des vols d'arrivée et de départ du participant
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-green-50 border-green-200">
+              <CardHeader>
+                <CardTitle className="text-sm text-green-800">Arrivée</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-gray-700 space-y-2">
+                {group.arrivee ? (
+                  <>
+                    <div>Vol: <Badge className="bg-green-100 text-green-800">{group.arrivee.numeroVol}</Badge></div>
+                    <div className="flex items-center gap-2"><Calendar className="w-3 h-3" /> {new Date(group.arrivee.date).toLocaleDateString('fr-FR')} • 🕐 {group.arrivee.heure}</div>
+                    <div>Aéroport: {group.arrivee.aeroport}</div>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-500">Aucune arrivée</span>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-50 border-blue-200">
+              <CardHeader>
+                <CardTitle className="text-sm text-blue-800">Départ</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-gray-700 space-y-2">
+                {group.depart ? (
+                  <>
+                    <div>Vol: <Badge className="bg-blue-100 text-blue-800">{group.depart.numeroVol}</Badge></div>
+                    <div className="flex items-center gap-2"><Calendar className="w-3 h-3" /> {new Date(group.depart.date).toLocaleDateString('fr-FR')} • 🕐 {group.depart.heure}</div>
+                    <div>Aéroport: {group.depart.aeroport}</div>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-500">Aucun départ</span>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  // Colonnes pour le composant List
+  const columns: Column<GroupedPlanVol>[] = [
+    {
+      key: 'nom',
+      header: 'Nom',
+      sortable: true,
+      render: (group) => {
+        const participant = getParticipantById(group.participantId);
+        return <span className="text-gray-900">{participant?.nom || 'N/A'}</span>;
+      },
+      sortKey: 'nom'
+    },
+    {
+      key: 'prenom',
+      header: 'Prénom',
+      sortable: true,
+      render: (group) => {
+        const participant = getParticipantById(group.participantId);
+        return <span className="text-gray-900">{participant?.prenom || 'N/A'}</span>;
+      },
+      sortKey: 'prenom'
+    },
+    {
+      key: 'organisation',
+      header: 'Organisation',
+      sortable: true,
+      render: (group) => {
+        const participant = getParticipantById(group.participantId);
+        const organisation = participant ? getOrganisationById(participant.organisationId) : null;
+        return <span className="text-gray-600">{organisation?.nom || 'N/A'}</span>;
+      },
+      sortKey: 'organisation'
+    },
+    {
+      key: 'pays',
+      header: 'Pays',
+      sortable: false,
+      render: (group) => {
+        const participant = getParticipantById(group.participantId);
+        return <span className="text-gray-600">{participant?.pays || 'N/A'}</span>;
+      }
+    },
+    {
+      key: 'arrivee',
+      header: 'Arrivée',
+      sortable: true,
+      render: (group) => {
+        const participant = getParticipantById(group.participantId);
+        const isImminentArrival = group.arrivee && isArrivingTomorrow(group.arrivee.date);
+        
+        if (!group.arrivee) {
+          return <span className="text-xs text-gray-400">Aucune arrivée</span>;
+        }
+        
+        return (
+          <div className="space-y-1 bg-green-50/50 p-2 rounded">
             <div className="flex items-center gap-2">
-              <Search className="w-5 h-5" />
-              Recherche et Filtres
-            </div>
-            <Button variant={showFilters ? 'default' : 'outline'} size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
-              <Search className="w-4 h-4" />
-              Filtres
-              {activeFiltersCount > 0 && (
-                <Badge variant="secondary" className="ml-1 bg-orange-600 text-white">
-                  {activeFiltersCount}
+              <Badge className="bg-green-100 text-green-800 text-xs">{group.arrivee.numeroVol}</Badge>
+              {isImminentArrival && (
+                <Badge className="bg-red-500 text-white flex items-center gap-1 animate-pulse text-xs">
+                  <AlertCircle className="w-3 h-3" />
+                  Demain
                 </Badge>
               )}
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Rechercher par nom, prénom, numéro de vol, organisation, aéroport..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          {showFilters && (
-            <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label className="text-sm mb-3 block text-gray-900">Type de vol</Label>
-                  <div className="space-y-2">
-                    {['arrivee', 'depart'].map((type) => (
-                      <div key={type} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={`type-vol-${type}`}
-                          checked={tempTypeVolFilters.includes(type)}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            if (checked) setTempTypeVolFilters([...tempTypeVolFilters, type]);
-                            else setTempTypeVolFilters(tempTypeVolFilters.filter(t => t !== type));
-                          }}
-                        />
-                        <label htmlFor={`type-vol-${type}`} className="text-sm cursor-pointer capitalize">
-                          {type === 'arrivee' ? 'Arrivée' : 'Départ'}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm mb-3 block text-gray-900">Période</Label>
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-xs text-gray-600 mb-1 block">Date de début</Label>
-                      <Input type="date" value={tempDateDebut} onChange={(e) => setTempDateDebut(e.target.value)} className="text-sm" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-gray-600 mb-1 block">Date de fin</Label>
-                      <Input type="date" value={tempDateFin} onChange={(e) => setTempDateFin(e.target.value)} className="text-sm" />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm mb-3 block text-gray-900">Pays</Label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                    {uniquePaysVol.map((pays) => (
-                      <div key={pays} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={`pays-vol-${pays}`}
-                          checked={tempPaysVolFilters.includes(pays)}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            if (checked) setTempPaysVolFilters([...tempPaysVolFilters, pays]);
-                            else setTempPaysVolFilters(tempPaysVolFilters.filter(p => p !== pays));
-                          }}
-                        />
-                        <label htmlFor={`pays-vol-${pays}`} className="text-sm cursor-pointer">
-                          {pays}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm mb-3 block text-gray-900">Organisation</Label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                    {mockOrganisations.slice(0, 12).map((org) => (
-                      <div key={org.id} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={`org-planvol-${org.id}`}
-                          checked={tempOrganisationFilters.includes(org.id)}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            if (checked) setTempOrganisationFilters([...tempOrganisationFilters, org.id]);
-                            else setTempOrganisationFilters(tempOrganisationFilters.filter(o => o !== org.id));
-                          }}
-                        />
-                        <label htmlFor={`org-planvol-${org.id}`} className="text-sm cursor-pointer truncate">
-                          {org.nom}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <Separator className="my-4" />
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={handleResetFilters}>
-                  Réinitialiser
-                </Button>
-                <Button size="sm" onClick={handleApplyFilters} className="bg-orange-600 hover:bg-orange-700">
-                  Appliquer les filtres
-                </Button>
-              </div>
             </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              {groupedPlansVol.length} participant(s) trouvé(s)
-              {activeFiltersCount > 0 && (
-                <span className="ml-2 text-orange-600">({activeFiltersCount} filtre{activeFiltersCount > 1 ? 's' : ''} actif{activeFiltersCount > 1 ? 's' : ''})</span>
-              )}
-            </p>
-            <div className="flex items-center gap-2">
-              {selectedParticipants.size > 0 && (
-                <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                  <span className="text-sm text-orange-900 font-medium">
-                    {selectedParticipants.size} participant{selectedParticipants.size > 1 ? 's' : ''} sélectionné{selectedParticipants.size > 1 ? 's' : ''}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const selectedData = paginatedGroups.filter((g: any) => selectedParticipants.has(g.participantId));
-                      exportToCSV(selectedData);
-                    }}
-                    className="h-7 text-xs"
-                  >
-                    <Download className="w-3 h-3 mr-1" />
-                    Exporter les sélectionnés
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const selectedData = paginatedGroups.filter((g: any) => selectedParticipants.has(g.participantId));
-                      toast.info(`Envoi d'email pour ${selectedData.length} participant(s)...`);
-                      // TODO: Implémenter l'envoi d'email
-                    }}
-                    className="h-7 text-xs"
-                  >
-                    <Mail className="w-3 h-3 mr-1" />
-                    Envoyer email
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedParticipants(new Set())}
-                    className="h-7 text-xs"
-                  >
-                    Tout désélectionner
-                  </Button>
-                </div>
-              )}
-              <Button onClick={() => exportToCSV()} variant="outline" size="sm" disabled={groupedPlansVol.length === 0}>
-                <Download className="w-4 h-4 mr-2" />
-                Exporter CSV
-              </Button>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <Calendar className="w-3 h-3" />
+              {new Date(group.arrivee.date).toLocaleDateString('fr-FR')}
             </div>
+            <div className="text-xs text-gray-600">🕐 {group.arrivee.heure}</div>
+            <div className="text-xs text-gray-500">De: {group.arrivee.aeroportOrigine?.split(' - ')[1] || 'N/A'}</div>
           </div>
-        </CardContent>
+        );
+      },
+      sortKey: '_arriveeDate' // Le tri se fera sur la date d'arrivée
+    },
+    {
+      key: 'depart',
+      header: 'Départ',
+      sortable: true,
+      render: (group) => {
+        if (!group.depart) {
+          return <span className="text-xs text-gray-400">Aucun départ</span>;
+        }
+        
+        return (
+          <div className="space-y-1 bg-blue-50/50 p-2 rounded">
+            <Badge className="bg-blue-100 text-blue-800 text-xs">{group.depart.numeroVol}</Badge>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <Calendar className="w-3 h-3" />
+              {new Date(group.depart.date).toLocaleDateString('fr-FR')}
+            </div>
+            <div className="text-xs text-gray-600">🕐 {group.depart.heure}</div>
+            <div className="text-xs text-gray-500">Vers: {group.depart.aeroportDestination?.split(' - ')[1] || 'N/A'}</div>
+          </div>
+        );
+      },
+      sortKey: '_departDate' // Le tri se fera sur la date de départ
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (group) => <DetailsDialog group={group} />
+    }
+  ];
 
-        <CardHeader>
-          <CardTitle>Plan de vol par participant</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
+  // Composant de filtre personnalisé
+  const filterComponent = (
+    <div className="space-y-4">
+      <Button 
+        variant={showFilters ? 'default' : 'outline'} 
+        size="sm" 
+        onClick={() => setShowFilters(!showFilters)} 
+        className="gap-2 w-full md:w-auto"
+      >
+        <Search className="w-4 h-4" />
+        Filtres
+        {activeFiltersCount > 0 && (
+          <Badge variant="secondary" className="ml-1 bg-orange-600 text-white">
+            {activeFiltersCount}
+          </Badge>
+        )}
+      </Button>
+
+      {showFilters && (
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <Label className="text-sm mb-3 block text-gray-900">Type de vol</Label>
+              <div className="space-y-2">
+                {['arrivee', 'depart'].map((type) => (
+                  <div key={type} className="flex items-center space-x-2">
                     <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={handleSelectAll}
-                      className={someSelected && !allSelected ? "data-[state=checked]:bg-orange-500" : ""}
+                      id={`type-vol-${type}`}
+                      checked={tempTypeVolFilters.includes(type)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setTempTypeVolFilters([...tempTypeVolFilters, type]);
+                        } else {
+                          setTempTypeVolFilters(tempTypeVolFilters.filter(t => t !== type));
+                        }
+                      }}
                     />
-                  </TableHead>
-                  <TableHead onClick={() => handleSort('nom')} className="cursor-pointer select-none">
-                    <div className="flex items-center gap-1">
-                      Nom
-                      {sortColumn === 'nom' ? (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
-                    </div>
-                  </TableHead>
-                  <TableHead onClick={() => handleSort('prenom')} className="cursor-pointer select-none">
-                    <div className="flex items-center gap-1">
-                      Prénom
-                      {sortColumn === 'prenom' ? (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
-                    </div>
-                  </TableHead>
-                  <TableHead onClick={() => handleSort('organisation')} className="cursor-pointer select-none">
-                    <div className="flex items-center gap-1">
-                      Organisation
-                      {sortColumn === 'organisation' ? (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
-                    </div>
-                  </TableHead>
-                  <TableHead>Pays</TableHead>
-                  <TableHead onClick={() => handleSort('arrivee')} className="bg-green-50 cursor-pointer select-none">
-                    <div className="flex items-center gap-1">
-                      Arrivée
-                      {sortColumn === 'arrivee' ? (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
-                    </div>
-                  </TableHead>
-                  <TableHead onClick={() => handleSort('depart')} className="bg-blue-50 cursor-pointer select-none">
-                    <div className="flex items-center gap-1">
-                      Départ
-                      {sortColumn === 'depart' ? (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
-                    </div>
-                  </TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedGroups.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                      Aucun participant trouvé
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedGroups.map((group: any) => {
-                    const participant = getParticipantById(group.participantId);
-                    if (!participant) return null;
-                    const organisation = getOrganisationById(participant.organisationId);
-                    const isImminentArrival = group.arrivee && isArrivingTomorrow(group.arrivee.date);
-                    const isSelected = selectedParticipants.has(group.participantId);
-                    return (
-                      <TableRow key={group.participantId} className={isSelected ? "bg-orange-50" : ""}>
-                        <TableCell>
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) => handleSelectItem(group.participantId, checked as boolean)}
-                          />
-                        </TableCell>
-                        <TableCell className="text-gray-900">{participant.nom}</TableCell>
-                        <TableCell className="text-gray-900">{participant.prenom}</TableCell>
-                        <TableCell className="text-gray-600">{organisation?.nom || 'N/A'}</TableCell>
-                        <TableCell className="text-gray-600">{participant.pays}</TableCell>
-                        <TableCell className="bg-green-50/50">
-                          {group.arrivee ? (
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <Badge className="bg-green-100 text-green-800 text-xs">{group.arrivee.numeroVol}</Badge>
-                                {isImminentArrival && (
-                                  <Badge className="bg-red-500 text-white flex items-center gap-1 animate-pulse text-xs">
-                                    <AlertCircle className="w-3 h-3" />
-                                    Demain
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-gray-600">
-                                <Calendar className="w-3 h-3" />
-                                {new Date(group.arrivee.date).toLocaleDateString('fr-FR')}
-                              </div>
-                              <div className="text-xs text-gray-600">🕐 {group.arrivee.heure}</div>
-                              <div className="text-xs text-gray-500">De: {group.arrivee.aeroportOrigine?.split(' - ')[1] || 'N/A'}</div>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400">Aucune arrivée</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="bg-blue-50/50">
-                          {group.depart ? (
-                            <div className="space-y-1">
-                              <Badge className="bg-blue-100 text-blue-800 text-xs">{group.depart.numeroVol}</Badge>
-                              <div className="flex items-center gap-2 text-xs text-gray-600">
-                                <Calendar className="w-3 h-3" />
-                                {new Date(group.depart.date).toLocaleDateString('fr-FR')}
-                              </div>
-                              <div className="text-xs text-gray-600">🕐 {group.depart.heure}</div>
-                              <div className="text-xs text-gray-500">Vers: {group.depart.aeroportDestination?.split(' - ')[1] || 'N/A'}</div>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400">Aucun départ</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50">
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2">
-                                  <Plane className="w-5 h-5 text-orange-600" />
-                                  Plan de vol - {participant.prenom} {participant.nom}
-                                </DialogTitle>
-                                <DialogDescription>
-                                  Détails des vols d'arrivée et de départ du participant
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Card className="bg-green-50 border-green-200">
-                                  <CardHeader>
-                                    <CardTitle className="text-sm text-green-800">Arrivée</CardTitle>
-                                  </CardHeader>
-                                  <CardContent className="text-sm text-gray-700 space-y-2">
-                                    {group.arrivee ? (
-                                      <>
-                                        <div>Vol: <Badge className="bg-green-100 text-green-800">{group.arrivee.numeroVol}</Badge></div>
-                                        <div className="flex items-center gap-2"><Calendar className="w-3 h-3" /> {new Date(group.arrivee.date).toLocaleDateString('fr-FR')} • 🕐 {group.arrivee.heure}</div>
-                                        <div>Aéroport: {group.arrivee.aeroport}</div>
-                                      </>
-                                    ) : (
-                                      <span className="text-xs text-gray-500">Aucune arrivée</span>
-                                    )}
-                                  </CardContent>
-                                </Card>
-                                <Card className="bg-blue-50 border-blue-200">
-                                  <CardHeader>
-                                    <CardTitle className="text-sm text-blue-800">Départ</CardTitle>
-                                  </CardHeader>
-                                  <CardContent className="text-sm text-gray-700 space-y-2">
-                                    {group.depart ? (
-                                      <>
-                                        <div>Vol: <Badge className="bg-blue-100 text-blue-800">{group.depart.numeroVol}</Badge></div>
-                                        <div className="flex items-center gap-2"><Calendar className="w-3 h-3" /> {new Date(group.depart.date).toLocaleDateString('fr-FR')} • 🕐 {group.depart.heure}</div>
-                                        <div>Aéroport: {group.depart.aeroport}</div>
-                                      </>
-                                    ) : (
-                                      <span className="text-xs text-gray-500">Aucun départ</span>
-                                    )}
-                                  </CardContent>
-                                </Card>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                    <label htmlFor={`type-vol-${type}`} className="text-sm cursor-pointer capitalize">
+                      {type === 'arrivee' ? 'Arrivée' : 'Départ'}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-      {/* Pagination */}
-      {sortedGroups.length > 0 && totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-center">
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious 
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                />
-              </PaginationItem>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                if (page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)) {
-                  return (
-                    <PaginationItem key={page}>
-                      <PaginationLink onClick={() => setCurrentPage(page)} isActive={currentPage === page} className="cursor-pointer">
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                } else if (page === currentPage - 2 || page === currentPage + 2) {
-                  return (
-                    <PaginationItem key={page}>
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  );
-                }
-                return null;
-              })}
-              <PaginationItem>
-                <PaginationNext 
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+            <div>
+              <Label className="text-sm mb-3 block text-gray-900">Période</Label>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-gray-600 mb-1 block">Date de début</Label>
+                  <Input type="date" value={tempDateDebut} onChange={(e) => setTempDateDebut(e.target.value)} className="text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600 mb-1 block">Date de fin</Label>
+                  <Input type="date" value={tempDateFin} onChange={(e) => setTempDateFin(e.target.value)} className="text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm mb-3 block text-gray-900">Pays</Label>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                {uniquePaysVol.map((pays) => (
+                  <div key={pays} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`pays-vol-${pays}`}
+                      checked={tempPaysVolFilters.includes(pays)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setTempPaysVolFilters([...tempPaysVolFilters, pays]);
+                        } else {
+                          setTempPaysVolFilters(tempPaysVolFilters.filter(p => p !== pays));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`pays-vol-${pays}`} className="text-sm cursor-pointer">
+                      {pays}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm mb-3 block text-gray-900">Organisation</Label>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                {mockOrganisations.slice(0, 12).map((org) => (
+                  <div key={org.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`org-planvol-${org.id}`}
+                      checked={tempOrganisationFilters.includes(org.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setTempOrganisationFilters([...tempOrganisationFilters, org.id]);
+                        } else {
+                          setTempOrganisationFilters(tempOrganisationFilters.filter(o => o !== org.id));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`org-planvol-${org.id}`} className="text-sm cursor-pointer truncate">
+                      {org.nom}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <Separator className="my-4" />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={handleResetFilters}>
+              Réinitialiser
+            </Button>
+            <Button size="sm" onClick={handleApplyFilters} className="bg-orange-600 hover:bg-orange-700">
+              Appliquer les filtres
+            </Button>
+          </div>
         </div>
       )}
     </div>
+  );
+
+  // Export CSV
+  const exportHeaders = ['Nom', 'Prénom', 'Organisation', 'Vol Arrivée', 'Date Arrivée', 'Heure Arrivée', 'Vol Départ', 'Date Départ', 'Heure Départ'];
+  
+  const exportData = (group: GroupedPlanVol) => {
+    const participant = getParticipantById(group.participantId);
+    const organisation = participant ? getOrganisationById(participant.organisationId) : null;
+    return [
+      participant?.nom || '',
+      participant?.prenom || '',
+      organisation?.nom || '',
+      group.arrivee?.numeroVol || 'N/A',
+      group.arrivee ? new Date(group.arrivee.date).toLocaleDateString('fr-FR') : 'N/A',
+      group.arrivee?.heure || 'N/A',
+      group.depart?.numeroVol || 'N/A',
+      group.depart ? new Date(group.depart.date).toLocaleDateString('fr-FR') : 'N/A',
+      group.depart?.heure || 'N/A'
+    ];
+  };
+
+  // Actions en masse
+  const buildActions: ListAction<GroupedPlanVol>[] = [
+    {
+      label: 'Exporter les sélectionnés',
+      icon: <Download className="w-4 h-4" />,
+      onClick: (selectedItems) => {
+        toast.success(`Export de ${selectedItems.length} participant(s)...`);
+        // L'export sera géré par onExport
+      },
+      variant: 'outline'
+    },
+    {
+      label: 'Envoyer email',
+      icon: <Mail className="w-4 h-4" />,
+      onClick: (selectedItems) => {
+        toast.info(`Envoi d'email pour ${selectedItems.length} participant(s)...`);
+        // TODO: Implémenter l'envoi d'email
+      },
+      variant: 'outline'
+    }
+  ];
+
+  // Gestion de la sélection
+  const handleSelectionChange = (selectedItems: GroupedPlanVol[]) => {
+    setSelectedGroups(new Set(selectedItems.map(item => item.participantId)));
+  };
+
+  const handleExport = (filteredData: GroupedPlanVol[]) => {
+    const dataToExport = selectedGroups.size > 0
+      ? filteredData.filter(g => selectedGroups.has(g.participantId))
+      : filteredData;
+    
+    const csvContent = [
+      exportHeaders.join(','),
+      ...dataToExport.map(exportData)
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `plan-de-vol-fanaf.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  return (
+    <List
+      data={groupedPlansVol}
+      columns={columns}
+      getRowId={(group) => group.participantId}
+      searchPlaceholder="Rechercher par nom, prénom, numéro de vol, organisation, aéroport..."
+      searchKeys={['_searchText']}
+      filterComponent={filterComponent}
+      filterTitle="Plan de vol"
+      exportFilename="plan-de-vol-fanaf"
+      exportHeaders={exportHeaders}
+      exportData={exportData}
+      onExport={handleExport}
+      itemsPerPage={10}
+      enableSelection={true}
+      buildActions={buildActions}
+      onSelectionChange={handleSelectionChange}
+      emptyMessage="Aucun participant trouvé"
+    />
   );
 }
 

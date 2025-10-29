@@ -1,29 +1,43 @@
+"use client";
+
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent } from './ui/card';
-import { Input } from './ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { Search, Download, Eye, Calendar, Clock, User, Building2, Send, Inbox, FileText } from 'lucide-react';
-import { getParticipantById, getReferentSponsor, getOrganisationById } from './data/mockData';
+import { Eye, Clock, User, Send, Inbox, FileText, Download } from 'lucide-react';
+import { getOrganisationById } from './data/mockData';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { AnimatedStat } from './AnimatedStat';
 import { HistoriqueRendezVousDialog } from './HistoriqueRendezVousDialog';
-import { toast } from 'sonner';
+import { List, type Column, type RowAction, type ListAction } from './list/List';
 
-const statutRdvColors: Record<string, string> = {
-  'acceptée': 'bg-green-100 text-green-800',
-  'en-attente': 'bg-orange-100 text-orange-800',
-  'occupée': 'bg-red-100 text-red-800',
-};
+interface ParticipantWithStats {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  organisationId: string;
+  rendezVousEnvoyes: number;
+  rendezVousRecus: number;
+  totalRendezVous: number;
+  statsEnvoyes: {
+    acceptee: number;
+    enAttente: number;
+    occupee: number;
+  };
+  statsRecus: {
+    acceptee: number;
+    enAttente: number;
+    occupee: number;
+  };
+  _searchText?: string; // Pour la recherche
+}
 
 export function HistoriqueDemandesPage() {
   const { participants, rendezVous: rendezVousData } = useDynamicInscriptions({ includeRendezVous: true });
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [isHistoriqueOpen, setIsHistoriqueOpen] = useState(false);
 
-  // Calculer les statistiques pour chaque participant
+  // Calculer les statistiques pour chaque participant avec texte de recherche
   const participantsWithStats = useMemo(() => {
     return participants.map(participant => {
       const rendezVousEnvoyes = rendezVousData.filter(rdv => rdv.demandeurId === participant.id);
@@ -43,6 +57,9 @@ export function HistoriqueDemandesPage() {
         occupee: rendezVousRecus.filter(rdv => rdv.statut === 'occupée').length,
       };
 
+      const organisation = getOrganisationById(participant.organisationId);
+      const searchText = `${participant.nom} ${participant.prenom} ${participant.email} ${organisation?.nom || ''}`.toLowerCase();
+
       return {
         ...participant,
         rendezVousEnvoyes: rendezVousEnvoyes.length,
@@ -50,25 +67,10 @@ export function HistoriqueDemandesPage() {
         totalRendezVous,
         statsEnvoyes,
         statsRecus,
-      };
+        _searchText: searchText,
+      } as ParticipantWithStats;
     });
   }, [participants, rendezVousData]);
-
-  // Filtrer par recherche
-  const filteredParticipants = useMemo(() => {
-    if (!searchTerm) return participantsWithStats;
-
-    const lowerSearch = searchTerm.toLowerCase();
-    return participantsWithStats.filter(p => {
-      const organisation = getOrganisationById(p.organisationId);
-      return (
-        p.nom.toLowerCase().includes(lowerSearch) ||
-        p.prenom.toLowerCase().includes(lowerSearch) ||
-        p.email.toLowerCase().includes(lowerSearch) ||
-        organisation?.nom.toLowerCase().includes(lowerSearch)
-      );
-    });
-  }, [participantsWithStats, searchTerm]);
 
   // Statistiques globales
   const stats = useMemo(() => {
@@ -91,39 +93,171 @@ export function HistoriqueDemandesPage() {
     setIsHistoriqueOpen(true);
   };
 
-  const handleExport = () => {
-    const csvContent = [
-      ['Participant', 'Email', 'Organisation', 'Demandes Envoyées', 'Demandes Reçues', 'Total', 'Acceptées (E)', 'En Attente (E)', 'Occupées (E)', 'Acceptées (R)', 'En Attente (R)', 'Occupées (R)'].join(','),
-      ...filteredParticipants.map(p => {
+  // Colonnes pour le composant List
+  const columns: Column<ParticipantWithStats>[] = [
+    {
+      key: 'participant',
+      header: 'Participant',
+      sortable: true,
+      sortKey: 'nom',
+      render: (p) => (
+        <div>
+          <p className="text-gray-900">{p.prenom} {p.nom}</p>
+          <p className="text-xs text-gray-500">{p.email}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'organisation',
+      header: 'Organisation',
+      sortable: true,
+      render: (p) => {
+        const organisation = getOrganisationById(p.organisationId);
+        return <span className="text-gray-600">{organisation?.nom || 'N/A'}</span>;
+      },
+    },
+    {
+      key: 'envoyees',
+      header: 'Envoyées',
+      sortable: true,
+      render: (p) => (
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1">
+            <Send className="w-4 h-4 text-gray-400" />
+            <span className="text-gray-900">{p.rendezVousEnvoyes}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'recues',
+      header: 'Reçues',
+      sortable: true,
+      render: (p) => (
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1">
+            <Inbox className="w-4 h-4 text-gray-400" />
+            <span className="text-gray-900">{p.rendezVousRecus}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      sortable: true,
+      render: (p) => (
+        <div className="text-center">
+          <Badge className="bg-blue-100 text-blue-800">
+            {p.totalRendezVous}
+          </Badge>
+        </div>
+      ),
+    },
+    {
+      key: 'statutEnvoyees',
+      header: 'Statut Envoyées',
+      render: (p) => (
+        <div className="flex gap-1">
+          {p.statsEnvoyes.acceptee > 0 && (
+            <Badge className="bg-green-100 text-green-700 text-xs">
+              {p.statsEnvoyes.acceptee} ✓
+            </Badge>
+          )}
+          {p.statsEnvoyes.enAttente > 0 && (
+            <Badge className="bg-orange-100 text-orange-700 text-xs">
+              {p.statsEnvoyes.enAttente} ⏳
+            </Badge>
+          )}
+          {p.statsEnvoyes.occupee > 0 && (
+            <Badge className="bg-red-100 text-red-700 text-xs">
+              {p.statsEnvoyes.occupee} ✗
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'statutRecues',
+      header: 'Statut Reçues',
+      render: (p) => (
+        <div className="flex gap-1">
+          {p.statsRecus.acceptee > 0 && (
+            <Badge className="bg-green-100 text-green-700 text-xs">
+              {p.statsRecus.acceptee} ✓
+            </Badge>
+          )}
+          {p.statsRecus.enAttente > 0 && (
+            <Badge className="bg-orange-100 text-orange-700 text-xs">
+              {p.statsRecus.enAttente} ⏳
+            </Badge>
+          )}
+          {p.statsRecus.occupee > 0 && (
+            <Badge className="bg-red-100 text-red-700 text-xs">
+              {p.statsRecus.occupee} ✗
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  // Actions par ligne
+  const rowActions: RowAction<ParticipantWithStats>[] = [
+    {
+      label: 'Voir',
+      icon: <Eye className="w-4 h-4" />,
+      onClick: (p) => handleViewHistorique(p.id),
+      variant: 'ghost',
+      className: 'h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50',
+      title: 'Voir l\'historique',
+      disabled: (p) => p.totalRendezVous === 0,
+    },
+  ];
+
+  // Actions en masse
+  const buildActions: ListAction<ParticipantWithStats>[] = [
+    {
+      label: 'Exporter les sélectionnés',
+      icon: <Download className="w-4 h-4" />,
+      onClick: (selectedItems: ParticipantWithStats[]) => {
+        const csvContent = [
+          exportHeaders.join(','),
+          ...selectedItems.map(exportData).map(row => row.join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `historique-demandes-selectionnes-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      },
+      variant: 'outline',
+    },
+  ];
+
+  // Export CSV
+  const exportHeaders = ['Participant', 'Email', 'Organisation', 'Demandes Envoyées', 'Demandes Reçues', 'Total', 'Acceptées (E)', 'En Attente (E)', 'Occupées (E)', 'Acceptées (R)', 'En Attente (R)', 'Occupées (R)'];
+  const exportData = (p: ParticipantWithStats) => {
         const organisation = getOrganisationById(p.organisationId);
         return [
           `${p.prenom} ${p.nom}`,
           p.email,
           organisation?.nom || '',
-          p.rendezVousEnvoyes,
-          p.rendezVousRecus,
-          p.totalRendezVous,
-          p.statsEnvoyes.acceptee,
-          p.statsEnvoyes.enAttente,
-          p.statsEnvoyes.occupee,
-          p.statsRecus.acceptee,
-          p.statsRecus.enAttente,
-          p.statsRecus.occupee,
-        ].join(',');
-      })
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `historique-demandes-fanaf-2026-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    
-    toast.success('Historique des demandes exporté avec succès');
+      String(p.rendezVousEnvoyes),
+      String(p.rendezVousRecus),
+      String(p.totalRendezVous),
+      String(p.statsEnvoyes.acceptee),
+      String(p.statsEnvoyes.enAttente),
+      String(p.statsEnvoyes.occupee),
+      String(p.statsRecus.acceptee),
+      String(p.statsRecus.enAttente),
+      String(p.statsRecus.occupee),
+    ];
   };
 
   return (
@@ -209,146 +343,25 @@ export function HistoriqueDemandesPage() {
         </Card>
       </div>
 
-      {/* Barre de recherche et export */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Rechercher un participant..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button
-              onClick={handleExport}
-              className="bg-orange-600 hover:bg-orange-700"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Exporter
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tableau des participants */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Participant</TableHead>
-                  <TableHead>Organisation</TableHead>
-                  <TableHead className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Send className="w-4 h-4" />
-                      Envoyées
-                    </div>
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Inbox className="w-4 h-4" />
-                      Reçues
-                    </div>
-                  </TableHead>
-                  <TableHead className="text-center">Total</TableHead>
-                  <TableHead>Statut Envoyées</TableHead>
-                  <TableHead>Statut Reçues</TableHead>
-                  <TableHead className="text-center">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredParticipants.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-gray-500 py-8">
-                      Aucun participant trouvé
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredParticipants.map((participant) => {
-                    const organisation = getOrganisationById(participant.organisationId);
-                    
-                    return (
-                      <TableRow key={participant.id} className="hover:bg-gray-50">
-                        <TableCell>
-                          <div>
-                            <p className="text-gray-900">{participant.prenom} {participant.nom}</p>
-                            <p className="text-xs text-gray-500">{participant.email}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-gray-600">{organisation?.nom || 'N/A'}</TableCell>
-                        <TableCell className="text-center">
-                          <span className="text-gray-900">{participant.rendezVousEnvoyes}</span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <span className="text-gray-900">{participant.rendezVousRecus}</span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className="bg-blue-100 text-blue-800">
-                            {participant.totalRendezVous}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {participant.statsEnvoyes.acceptee > 0 && (
-                              <Badge className="bg-green-100 text-green-700 text-xs">
-                                {participant.statsEnvoyes.acceptee} ✓
-                              </Badge>
-                            )}
-                            {participant.statsEnvoyes.enAttente > 0 && (
-                              <Badge className="bg-orange-100 text-orange-700 text-xs">
-                                {participant.statsEnvoyes.enAttente} ⏳
-                              </Badge>
-                            )}
-                            {participant.statsEnvoyes.occupee > 0 && (
-                              <Badge className="bg-red-100 text-red-700 text-xs">
-                                {participant.statsEnvoyes.occupee} ✗
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {participant.statsRecus.acceptee > 0 && (
-                              <Badge className="bg-green-100 text-green-700 text-xs">
-                                {participant.statsRecus.acceptee} ✓
-                              </Badge>
-                            )}
-                            {participant.statsRecus.enAttente > 0 && (
-                              <Badge className="bg-orange-100 text-orange-700 text-xs">
-                                {participant.statsRecus.enAttente} ⏳
-                              </Badge>
-                            )}
-                            {participant.statsRecus.occupee > 0 && (
-                              <Badge className="bg-red-100 text-red-700 text-xs">
-                                {participant.statsRecus.occupee} ✗
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewHistorique(participant.id)}
-                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                            disabled={participant.totalRendezVous === 0}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Liste des participants avec List */}
+      <List
+        data={participantsWithStats}
+        columns={columns}
+        getRowId={(p) => p.id}
+        searchPlaceholder="Rechercher un participant..."
+        searchKeys={['_searchText', 'nom', 'prenom', 'email']}
+        filterTitle="Historique des demandes"
+        exportFilename={`historique-demandes-fanaf-2026-${new Date().toISOString().split('T')[0]}`}
+        exportHeaders={exportHeaders}
+        exportData={exportData}
+        itemsPerPage={10}
+        readOnly={true}
+        enableSelection={true}
+        buildActions={buildActions}
+        rowActions={rowActions}
+        rowActionsWidth="w-20"
+        emptyMessage="Aucun participant trouvé"
+      />
 
       {/* Dialog de l'historique */}
       {selectedParticipantId && (

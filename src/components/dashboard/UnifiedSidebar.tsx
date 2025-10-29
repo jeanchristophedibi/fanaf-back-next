@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins } from 'lucide-react';
+import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Button } from '../ui/button';
@@ -361,7 +361,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Calendar className="w-5 h-5" />
+                  <Handshake className="w-5 h-5" />
                   <span className="text-sm">Networking</span>
                 </div>
                 <ChevronDown
