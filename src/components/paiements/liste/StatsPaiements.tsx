@@ -2,16 +2,82 @@
 
 import { Card } from "../../ui/card";
 import { Coins, Building2, TrendingUp } from "lucide-react";
+import { fanafApi } from "../../../services/fanafApi";
 import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { motion } from "motion/react";
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { getOrganisationById } from "../../data/mockData";
+import { Skeleton } from "../../ui/skeleton";
+
+// Mapper le canal de paiement
+const mapPaymentProvider = (provider: string): 'externe' | 'asapay' => {
+  return provider === 'asapay' ? 'asapay' : 'externe';
+};
 
 export function StatsPaiements() {
-  const { participants } = useDynamicInscriptions();
+  const [apiPaiements, setApiPaiements] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   
-  // Calculer les statistiques pour les paiements finalisés
+  // Fallback vers les données mock si l'API échoue
+  const { participants } = useDynamicInscriptions();
+
+  // Charger les paiements depuis l'API
+  useEffect(() => {
+    const loadPayments = async () => {
+      setIsLoading(true);
+      setApiError(null);
+      
+      try {
+        // Charger tous les paiements (on prendra la première page pour les stats)
+        const response = await fanafApi.getPayments({
+          page: 1,
+          per_page: 100, // Charger un grand nombre pour avoir des stats correctes
+        });
+        
+        const paymentsData = response?.data?.data || response?.data || [];
+        setApiPaiements(paymentsData);
+      } catch (err: any) {
+        console.error('Erreur lors du chargement des statistiques de paiements:', err);
+        setApiError(err.message || 'Erreur lors du chargement des statistiques');
+        // Ne pas afficher d'erreur toast pour les stats, on utilise le fallback
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadPayments();
+  }, []);
+  
+  // Calculer les statistiques pour les paiements
   const stats = useMemo(() => {
+    // Si on a des données API, les utiliser
+    if (apiPaiements.length > 0) {
+      return apiPaiements.reduce((acc, payment) => {
+        acc.totalPaiements++;
+        acc.totalMontant += payment.amount || 0;
+        
+        const canal = mapPaymentProvider(payment.payment_provider || 'asapay');
+        if (canal === 'externe') {
+          acc.paiementsExterne++;
+          acc.montantExterne += payment.amount || 0;
+        } else if (canal === 'asapay') {
+          acc.paiementsAsapay++;
+          acc.montantAsapay += payment.amount || 0;
+        }
+        
+        return acc;
+      }, {
+        totalPaiements: 0,
+        totalMontant: 0,
+        paiementsExterne: 0,
+        montantExterne: 0,
+        paiementsAsapay: 0,
+        montantAsapay: 0
+      });
+    }
+    
+    // Sinon, fallback vers les données mock
     return participants
       .filter(p => p.statutInscription === 'finalisée')
       .reduce((acc, participant) => {
@@ -46,7 +112,26 @@ export function StatsPaiements() {
         paiementsAsapay: 0,
         montantAsapay: 0
       });
-  }, [participants]);
+  }, [apiPaiements, participants]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-3 gap-4">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="p-6">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-12 h-12 rounded-lg" />
+              <div className="flex-1">
+                <Skeleton className="h-4 w-24 mb-2" />
+                <Skeleton className="h-8 w-16 mb-2" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-3 gap-4">

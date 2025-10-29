@@ -352,6 +352,30 @@ class FanafApiService {
   async getBadgeScansCounters() {
     return this.fetchApi<any>('/api/v1/admin/dashboard/badge-scans/counters');
   }
+
+  // ==================== PAYMENTS/PAIEMENTS ====================
+
+  /**
+   * Récupérer les paiements
+   */
+  async getPayments(params?: {
+    page?: number;
+    per_page?: number;
+    payment_method?: string;
+    payment_provider?: string;
+    state?: string;
+  }): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    if (params?.payment_method) queryParams.append('payment_method', params.payment_method);
+    if (params?.payment_provider) queryParams.append('payment_provider', params.payment_provider);
+    if (params?.state) queryParams.append('state', params.state);
+
+    const query = queryParams.toString();
+    const endpoint = `/api/v1/admin/payments${query ? `?${query}` : ''}`;
+    return this.fetchApi<any>(endpoint);
+  }
 }
 
 export const fanafApi = new FanafApiService();

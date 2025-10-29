@@ -1,34 +1,83 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent } from "../ui/card";
 import { UserCheck } from "lucide-react";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
+import { inscriptionsDataService } from "../data/inscriptionsData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
+import { Skeleton } from "../ui/skeleton";
 
 export function WidgetMembres() {
-  const { participants } = useDynamicInscriptions();
+  const { participants: mockParticipants } = useDynamicInscriptions();
+  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const loaded = await inscriptionsDataService.loadParticipants(['member']);
+        setApiParticipants(loaded.filter((p) => p.statut === 'membre'));
+      } catch (e) {
+        console.error('Erreur chargement membres:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const participants = apiParticipants.length > 0 ? apiParticipants : mockParticipants.filter(p => p.statut === 'membre');
 
   const stats = useMemo(() => {
     const membres = participants.filter(p => p.statut === 'membre');
     const finalises = membres.filter(p => p.statutInscription === 'finalisée').length;
     const enAttente = membres.filter(p => p.statutInscription === 'non-finalisée').length;
-    
-    return {
-      total: membres.length,
-      finalises,
-      enAttente
-    };
+    return { total: membres.length, finalises, enAttente };
   }, [participants]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card className="border-t-4 border-t-purple-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-32 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+        <Card className="border-t-4 border-t-green-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-28 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+        <Card className="border-t-4 border-t-orange-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-36" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <Card className="border-t-4 border-t-purple-500">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
@@ -43,11 +92,7 @@ export function WidgetMembres() {
         </Card>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <Card className="border-t-4 border-t-green-500">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
@@ -62,11 +107,7 @@ export function WidgetMembres() {
         </Card>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <Card className="border-t-4 border-t-orange-500">
           <CardContent className="p-6 flex items-center justify-between">
             <div>

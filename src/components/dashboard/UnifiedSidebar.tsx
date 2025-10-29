@@ -458,7 +458,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
           <p className="text-xs text-gray-500">Connecté en tant que</p>
           <p className="text-sm text-gray-900">{menuConfig.title}</p>
         </div>
-        {onSwitchProfile && (
+        {/* {onSwitchProfile && (
           <Button 
             onClick={onSwitchProfile}
             variant="outline"
@@ -467,7 +467,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             <RefreshCw className="w-4 h-4" />
             Changer de profil
           </Button>
-        )}
+        )} */}
       </div>
     </aside>
   );

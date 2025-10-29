@@ -462,6 +462,12 @@ export async function fetchRegistrations(
           
           // Mapper les données
           for (const item of data) {
+            // Injecter la catégorie dans les données de l'API si elle n'existe pas
+            // car ironiquement l'API ne renvoie pas toujours ce champ dans la réponse
+            if (category && !item.category) {
+              item.category = category;
+            }
+            
             const participant = mapApiRegistrationToParticipant(item);
             
             // Corriger organisationId si on a seulement le nom de l'entreprise (company)

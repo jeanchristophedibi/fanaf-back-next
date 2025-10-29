@@ -1,14 +1,36 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Users } from "lucide-react";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
+import { inscriptionsDataService } from "../data/inscriptionsData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
+import { Skeleton } from "../ui/skeleton";
 
 export function WidgetNonMembres() {
-  const { participants } = useDynamicInscriptions();
+  const { participants: mockParticipants } = useDynamicInscriptions();
+  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Charger les participants depuis l'API
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const loadedParticipants = await inscriptionsDataService.loadParticipants(['not_member']);
+        setApiParticipants(loadedParticipants.filter(p => p.statut === 'non-membre'));
+      } catch (err) {
+        console.error('Erreur lors du chargement des non-membres:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+  
+  const participants = apiParticipants.length > 0 ? apiParticipants : mockParticipants.filter(p => p.statut === 'non-membre');
 
   const stats = useMemo(() => {
     const nonMembres = participants.filter(p => p.statut === 'non-membre');
@@ -21,6 +43,43 @@ export function WidgetNonMembres() {
       enAttente
     };
   }, [participants]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card className="border-t-4 border-t-amber-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-36 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+        <Card className="border-t-4 border-t-green-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-28 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+        <Card className="border-t-4 border-t-orange-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-36" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

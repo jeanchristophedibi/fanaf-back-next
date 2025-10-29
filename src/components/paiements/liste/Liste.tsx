@@ -7,28 +7,119 @@ import { Input } from "../../ui/input";
 import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
 import { Label } from "../../ui/label";
-import { Search, Filter, Download, X } from "lucide-react";
+import { Search, Filter, Download, X, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "../../ui/dialog";
 import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, Mail, Phone, Globe, Building, Calendar } from "lucide-react";
+import { fanafApi } from "../../../services/fanafApi";
 import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { getOrganisationById, type ModePaiement } from "../../data/mockData";
+import { toast } from "sonner";
+import { Skeleton } from "../../ui/skeleton";
+
+// Mapper le mode de paiement de l'API vers le format local
+const mapPaymentMethod = (apiMethod: string): ModePaiement => {
+  const mapping: Record<string, ModePaiement> = {
+    'cash': 'espèce',
+    'card': 'carte bancaire',
+    'orange_money': 'orange money',
+    'wave': 'wave',
+    'bank_transfer': 'virement',
+    'cheque': 'chèque',
+  };
+  return mapping[apiMethod] || 'espèce';
+};
+
+// Mapper le canal de paiement
+const mapPaymentProvider = (provider: string): 'externe' | 'asapay' => {
+  return provider === 'asapay' ? 'asapay' : 'externe';
+};
+
+// Déterminer si le paiement est complété
+const isPaymentCompleted = (state: string): boolean => {
+  return state?.includes('Completed') || false;
+};
+
+// Mapper les données API vers le format local
+const mapApiPaymentToLocal = (apiPayment: any) => {
+  return {
+    id: apiPayment.id,
+    reference: apiPayment.reference,
+    participantNom: apiPayment.user?.full_name || 'N/A',
+    participantEmail: apiPayment.user?.email || 'N/A',
+    organisationNom: 'N/A', // L'API ne fournit pas cette info directement
+    statut: 'membre', // Par défaut, à déterminer depuis d'autres sources si nécessaire
+    montant: apiPayment.amount || 0,
+    modePaiement: mapPaymentMethod(apiPayment.payment_method || 'cash'),
+    canalEncaissement: mapPaymentProvider(apiPayment.payment_provider || 'asapay'),
+    dateInscription: apiPayment.initiated_at || new Date().toISOString(),
+    datePaiement: apiPayment.completed_at || apiPayment.initiated_at || new Date().toISOString(),
+    administrateurEncaissement: 'N/A', // L'API ne fournit pas cette info
+    pays: 'N/A', // L'API ne fournit pas cette info directement
+    state: apiPayment.state,
+    isCompleted: isPaymentCompleted(apiPayment.state || ''),
+  };
+};
 
 export function ListePaiements() {
+  const [apiPaiements, setApiPaiements] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [totalApiPages, setTotalApiPages] = useState(1);
+  const [currentApiPage, setCurrentApiPage] = useState(1);
+  
+  // Fallback vers les données mock si l'API échoue
   const { participants } = useDynamicInscriptions();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<'all' | 'payé' | 'non-payé'>('all');
   const [filterMode, setFilterMode] = useState<'all' | ModePaiement>('all');
   const [filterCanal, setFilterCanal] = useState<'all' | 'externe' | 'asapay'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 20; // Correspond au per_page de l'API
   
   // État pour le tri
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
-  // Transformer les participants finalisés en paiements
+  // Charger les paiements depuis l'API
+  useEffect(() => {
+    const loadPayments = async () => {
+      setIsLoading(true);
+      setApiError(null);
+      
+      try {
+        const response = await fanafApi.getPayments({
+          page: currentApiPage,
+          per_page: itemsPerPage,
+        });
+        
+        // L'API retourne { data: { data: [...], current_page, last_page, ... }, meta: {...} }
+        const paymentsData = response?.data?.data || response?.data || [];
+        const pagination = response?.data || response?.meta || {};
+        
+        setApiPaiements(paymentsData.map(mapApiPaymentToLocal));
+        setTotalApiPages(pagination.last_page || pagination.meta?.last_page || 1);
+      } catch (err: any) {
+        console.error('Erreur lors du chargement des paiements:', err);
+        setApiError(err.message || 'Erreur lors du chargement des paiements');
+        toast.error(err.message || 'Erreur lors du chargement des paiements');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadPayments();
+  }, [currentApiPage, itemsPerPage]);
+
+  // Transformer les paiements API en format attendu
   const paiements = useMemo(() => {
+    // Si on a des données API, les utiliser
+    if (apiPaiements.length > 0) {
+      return apiPaiements;
+    }
+    
+    // Sinon, fallback vers les données mock (pour compatibilité)
     return participants
       .filter(p => p.statutInscription === 'finalisée')
       .map(p => {
@@ -56,11 +147,12 @@ export function ListePaiements() {
           datePaiement: p.datePaiement || p.dateInscription,
           administrateurEncaissement: p.caissier || 'N/A',
           pays: p.pays,
+          isCompleted: true,
         };
       });
-  }, [participants]);
+  }, [apiPaiements, participants]);
 
-  // Filtrer les paiements en attente
+  // Filtrer les paiements
   const filteredPaiements = useMemo(() => {
     let filtered = [...paiements];
 
@@ -79,9 +171,9 @@ export function ListePaiements() {
     // Filtre par statut de paiement
     if (filterStatut !== 'all') {
       if (filterStatut === 'payé') {
-        filtered = filtered.filter(p => p.modePaiement);
+        filtered = filtered.filter(p => p.isCompleted !== false);
       } else {
-        filtered = filtered.filter(p => !p.modePaiement);
+        filtered = filtered.filter(p => p.isCompleted === false);
       }
     }
 
@@ -132,13 +224,13 @@ export function ListePaiements() {
     setCurrentPage(1); // Réinitialiser à la page 1 lors du tri
   };
 
-  // Pagination
+  // Pagination locale (pour les résultats filtrés)
   const totalPages = Math.ceil(filteredPaiements.length / itemsPerPage);
   const paginatedPaiements = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredPaiements.slice(startIndex, endIndex);
-  }, [filteredPaiements, currentPage]);
+  }, [filteredPaiements, currentPage, itemsPerPage]);
 
   // Réinitialiser la page quand les filtres changent
   useEffect(() => {
@@ -192,7 +284,7 @@ export function ListePaiements() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `paiements-finalises-${new Date().toISOString().split(' ✓')[0]}.csv`;
+    link.download = `paiements-finalises-${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -235,7 +327,6 @@ export function ListePaiements() {
   // Composant modal pour les détails de paiement
   const PaiementDetailsDialog = ({ paiement }: { paiement: any }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const organisation = getOrganisationById(paiement.organisationId);
     
     return (
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -252,7 +343,7 @@ export function ListePaiements() {
               Détails du Paiement
             </DialogTitle>
             <DialogDescription>
-              Informations complètes pour {paiement.participantNom}
+              Informations complètes pour {paiement.participantNom俣}
             </DialogDescription>
           </DialogHeader>
           
@@ -359,10 +450,22 @@ export function ListePaiements() {
 
   return (
     <div>
+      {/* Loader overlay pendant le chargement */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-md">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <Loader2 className="w-10 h-10 text-orange-600 animate-spin" />
+            </div>
+            <p className="text-sm font-medium text-gray-700">Chargement des paiements...</p>
+          </div>
+        </div>
+      )}
+
       {/* Barre de recherche et filtres */}
       <Card className="p-6 rounded-b-none border-b-0">
         <div className="space-y-4">
-          <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex flex-col라는 lg:flex-row gap-4">
             {/* Recherche */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -371,6 +474,7 @@ export function ListePaiements() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
+                disabled={isLoading}
               />
             </div>
 
@@ -380,19 +484,20 @@ export function ListePaiements() {
                 variant="outline"
                 onClick={() => setShowFilters(!showFilters)}
                 className={showFilters ? 'bg-orange-50 border-orange-300' : ''}
+                disabled={isLoading}
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filtres
                 {activeFiltersCount > 0 && (
                   <Badge variant="destructive" className="ml-2 rounded-full px-1.5 min-w-[20px] h-5">
-                    !
+                    {activeFiltersCount}
                   </Badge>
                 )}
               </Button>
               <Button 
                 onClick={exportToCSV} 
                 variant="outline"
-                disabled={paiements.length === 0}
+                disabled={paiements.length === 0 || isLoading}
               >
                 <Download className="w-4 h-4 mr-2" />
                 Exporter CSV
@@ -410,7 +515,7 @@ export function ListePaiements() {
             >
               <div className="space-y-2">
                 <label className="text-sm text-gray-600">Mode de paiement</label>
-                <Select value={filterMode} onValueChange={(value: any) => setFilterMode(value)}>
+                <Select value={filterMode} onValueChange={(value: any) => setFilterMode(value)} disabled={isLoading}>
                   <SelectTrigger>
                     <SelectValue placeholder="Tous les modes" />
                   </SelectTrigger>
@@ -428,7 +533,7 @@ export function ListePaiements() {
 
               <div className="space-y-2">
                 <label className="text-sm text-gray-600">Canal d'encaissement</label>
-                <Select value={filterCanal} onValueChange={(value: any) => setFilterCanal(value)}>
+                <Select value={filterCanal} onValueChange={(value: any) => setFilterCanal(value)} disabled={isLoading}>
                   <SelectTrigger>
                     <SelectValue placeholder="Tous les canaux" />
                   </SelectTrigger>
@@ -459,9 +564,16 @@ export function ListePaiements() {
 
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <h2 className="text-gray-900">Liste des paiements finalisés</h2>
+            <h2 className="text-gray-900">Liste des paiements</h2>
             <p className="text-sm text-gray-500">
-              {paiements.length} paiement{paiements.length > 1 ? 's' : ''} trouvé{paiements.length > 1 ? 's' : ''}
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Chargement...
+                </span>
+              ) : (
+                `${filteredPaiements.length} paiement${filteredPaiements.length > 1 ? 's' : ''} trouvé${filteredPaiements.length > 1 ? 's' : ''}`
+              )}
             </p>
           </div>
         </div>
@@ -471,43 +583,43 @@ export function ListePaiements() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('reference')} className="flex items-center gap-1 hover:text-gray-700">
+                  <button onClick={() => handleSort('reference')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Référence
                     {sortConfig?.key === 'reference' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
-                <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('participantNom')} className="flex items-center gap-1 hover:text-gray-700">
+                <th className=" této py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+                  <button onClick={() => handleSort('participantNom')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Participant
                     {sortConfig?.key === 'participantNom' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('organisationNom')} className="flex items-center gap-1 hover:text-gray-700">
+                  <button onClick={() => handleSort('organisationNom')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Organisation
                     {sortConfig?.key === 'organisationNom' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('statut')} className="flex items-center gap-1 hover:text-gray-700">
+                  <button onClick={() => handleSort('statut')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Statut
                     {sortConfig?.key === 'statut' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('modePaiement')} className="flex items-center gap-1 hover:text-gray-700">
+                  <button onClick={() => handleSort('modePaiement')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Mode Paiement
-                    {sortConfig?.key === 'modePaiement' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+                    {sortConfig?.key === 'modePaiement' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-West" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('montant')} className="flex items-center gap-1 hover:text-gray-700">
+                  <button onClick={() => handleSort('montant')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Montant
                     {sortConfig?.key === 'montant' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('dateInscription')} className="flex items-center gap-1 hover:text-gray-700">
+                  <button onClick={() => handleSort('dateInscription')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Date Inscription
                     {sortConfig?.key === 'dateInscription' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
@@ -516,7 +628,16 @@ export function ListePaiements() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {paiements.length === 0 ? (
+              {isLoading ? (
+                // Skeleton loader
+                Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={`skeleton-${index}`}>
+                    <td colSpan={9} className="px-6 py-4">
+                      <Skeleton className="h-4 w-full" />
+                    </td>
+                  </tr>
+                ))
+              ) : filteredPaiements.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                     <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -524,51 +645,51 @@ export function ListePaiements() {
                   </td>
                 </tr>
               ) : (
-                paginatedPaiements.map((participant, index) => {
+                paginatedPaiements.map((paiement, index) => {
                   return (
                     <motion.tr
-                      key={participant.id}
+                      key={paiement.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
                       className="hover:bg-gray-50 transition-colors"
                     >
-                      <td className="px-6 py-4 text-sm text-gray-900">{participant.reference}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{paiement.reference}</td>
                       <td className="px-6 py-4">
                         <div>
-                          <p className="text-sm text-gray-900">{participant.participantNom}</p>
-                          <p className="text-xs text-gray-500">{participant.participantEmail}</p>
+                          <p className="text-sm text-gray-900">{paiement.participantNom}</p>
+                          <p className="text-xs text-gray-500">{paiement.participantEmail}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{participant.organisationNom}</td>
+                      <td className="这些都 py-4 text-sm text-gray-700">{paiement.organisationNom}</td>
                       <td className="px-6 py-4">
                         <Badge 
-                          variant={participant.statut === 'membre' ? 'default' : 'secondary'}
-                          className={participant.statut === 'membre' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}
+                          variant={paiement.statut === 'membre' ? 'default' : 'secondary'}
+                          className={paiement.statut === 'membre' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}
                         >
-                          {participant.statut === 'membre' ? 'Membre' : 'Non-Membre'}
+                          {paiement.statut === 'membre' ? 'Membre' : 'Non-Membre'}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
                         <Badge 
                           variant="outline"
                           className={
-                            participant.modePaiement === 'espèce' ? 'border-green-300 text-green-700 bg-green-50' :
-                            participant.modePaiement === 'virement' ? 'border-blue-300 text-blue-700 bg-blue-50' :
+                            paiement.modePaiement === 'espèce' ? 'border-green-300 text-green-700 bg-green-50' :
+                            paiement.modePaiement === 'virement' ? 'border-blue-300 text-blue-700 bg-blue-50' :
                             'border-purple-300 text-purple-700 bg-purple-50'
                           }
                         >
-                          {participant.modePaiement}
+                          {paiement.modePaiement}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-gray-900">
-                        {participant.montant.toLocaleString()} FCFA
+                        {paiement.montant.toLocaleString()} FCFA
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(participant.dateInscription).toLocaleDateString('fr-FR')}
+                        {new Date(paiement.dateInscription).toLocaleDateString('fr-FR')}
                       </td>
                       <td className="px-6 py-4">
-                        <PaiementDetailsDialog paiement={participant} />
+                        <PaiementDetailsDialog paiement={paiement} />
                       </td>
                     </motion.tr>
                   );
@@ -577,8 +698,74 @@ export function ListePaiements() {
             </tbody>
           </table>
         </div>
-      </Card>
 
+        {/* Pagination */}
+        {!isLoading && filteredPaiements.length > 0 && totalPages > 1 && (
+          <div className="p-4 border-t">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Page {currentPage} sur {totalPages} ({filteredPaiements.length} résultat{filteredPaiements.length > 1 ? 's' : ''})
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Précédent
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={currentPage === pageNum ? "bg-orange-600 hover:bg-orange-700" : ""}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Suivant
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Affichage de l'erreur API si présente */}
+        {apiError && (
+          <div className="p-4 border-t bg-red-50">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900">Erreur lors du chargement des paiements</p>
+                <p className="text-xs text-red-700 mt-1">{apiError}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

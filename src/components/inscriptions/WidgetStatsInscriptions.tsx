@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from '../ui/card';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { CheckCircle2, Clock, Loader2 } from 'lucide-react';
 import { AnimatedStat } from '../AnimatedStat';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '../ui/dialog';
 import { Badge } from '../ui/badge';

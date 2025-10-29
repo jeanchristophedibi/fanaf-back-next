@@ -192,9 +192,12 @@ export function ListeInscriptions({
         if (defaultStatuts && defaultStatuts.length > 0) {
             setTempStatutFilters(defaultStatuts);
             setAppliedStatutFilters(defaultStatuts);
+        } else if (!defaultStatuts || defaultStatuts.length === 0) {
+            // Si aucun defaultStatuts, réinitialiser les filtres
+            setTempStatutFilters([]);
+            setAppliedStatutFilters([]);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [defaultStatuts]);
     
     const getStatutPaiementLabel = (p: Participant) => {
         if (p.statut === 'vip' || p.statut === 'speaker') return 'exonéré';
@@ -238,6 +241,19 @@ export function ListeInscriptions({
     
     // Filtrer les participants selon les filtres appliqués
     const filteredParticipants = useMemo(() => {
+        // Debug: vérifier les statuts des participants
+        const statutsCounts = participants.reduce((acc, p) => {
+            acc[p.statut] = (acc[p.statut] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+        console.log(`[ListeInscriptions] Répartition des statuts:`, statutsCounts);
+        console.log(`[ListeInscriptions] Filtres appliqués:`, {
+            appliedStatutFilters,
+            appliedStatutInscriptionFilters,
+            appliedOrganisationFilters,
+            appliedPaysFilters
+        });
+        
         const filtered = participants.filter(participant => {
             const org = inscriptionsDataService.getOrganisationById(participant.organisationId);
             const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
@@ -250,11 +266,21 @@ export function ListeInscriptions({
             return matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays;
         });
         
+        // Logs de debug pour comprendre pourquoi la liste est vide
         console.log(`[ListeInscriptions] Participants filtrés: ${filtered.length} sur ${participants.length}`, {
+            totalParticipants: participants.length,
             appliedStatutFilters,
             appliedStatutInscriptionFilters,
             appliedOrganisationFilters,
-            appliedPaysFilters
+            appliedPaysFilters,
+            statutsUniques: [...new Set(participants.map(p => p.statut))],
+            // Exemple de quelques participants pour voir leurs statuts
+            exemplesParticipants: participants.slice(0, 3).map(p => ({
+                id: p.id,
+                statut: p.statut,
+                statutInscription: p.statutInscription,
+                nom: `${p.prenom} ${p.nom}`
+            }))
         });
         
         return filtered;
