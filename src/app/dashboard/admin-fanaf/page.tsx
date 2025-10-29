@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AdminFanafSidebar } from './Sidebar';
 import { DashboardHome } from '../../../components/dashboard/DashboardHome';
 import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
@@ -109,12 +108,7 @@ export default function AdminFanafDashboard({ onSwitchProfile }: AdminFanafDashb
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <AdminFanafSidebar 
-        activeNav={activeNav} 
-        onNavChange={setActiveNav}
-        onSwitchProfile={onSwitchProfile}
-      />
-      
+     
       <main className="flex-1 overflow-auto">
         {/* Header */}
         <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-6 py-3">
