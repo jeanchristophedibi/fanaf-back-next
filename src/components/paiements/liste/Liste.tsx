@@ -7,10 +7,11 @@ import { Input } from "../../ui/input";
 import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
 import { Label } from "../../ui/label";
-import { Search, Filter, Download, X, Loader2 } from "lucide-react";
+import { Search, Filter, Download, X, Loader2, CheckSquare, Square } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "../../ui/dialog";
-import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, Mail, Phone, Globe, Building, Calendar } from "lucide-react";
+import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, Mail, Phone, Globe, Building, Calendar, FileText } from "lucide-react";
+import { Checkbox } from "../../ui/checkbox";
 import { fanafApi } from "../../../services/fanafApi";
 import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { getOrganisationById, type ModePaiement } from "../../data/mockData";
@@ -81,6 +82,9 @@ export function ListePaiements() {
   
   // État pour le tri
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  
+  // État pour la sélection en masse
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
 
   // Charger les paiements depuis l'API
   useEffect(() => {
@@ -235,6 +239,8 @@ export function ListePaiements() {
   // Réinitialiser la page quand les filtres changent
   useEffect(() => {
     setCurrentPage(1);
+    // Réinitialiser la sélection quand les filtres changent
+    setSelectedIds(new Set());
   }, [searchTerm, filterStatut, filterMode, filterCanal]);
 
   const activeFiltersCount =
@@ -247,6 +253,82 @@ export function ListePaiements() {
     setFilterMode('all');
     setFilterCanal('all');
     setSearchTerm('');
+  };
+
+  // Gestion de la sélection
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(paginatedPaiements.map(p => p.id));
+      setSelectedIds(allIds);
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectItem = (id: string | number, checked: boolean) => {
+    const newSelected = new Set(selectedIds);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const isAllSelected = paginatedPaiements.length > 0 && paginatedPaiements.every(p => selectedIds.has(p.id));
+  const isIndeterminate = paginatedPaiements.some(p => selectedIds.has(p.id)) && !isAllSelected;
+  const selectedPaiements = paiements.filter(p => selectedIds.has(p.id));
+
+  // Actions en masse
+  const handleBulkExport = () => {
+    if (selectedPaiements.length === 0) {
+      toast.warning("Aucun paiement sélectionné");
+      return;
+    }
+
+    const headers = [
+      'Référence',
+      'Participant',
+      'Email',
+      'Organisation',
+      'Statut',
+      'Montant (FCFA)',
+      'Mode de paiement',
+      'Canal',
+      'Date inscription',
+      'Date paiement',
+      'Validé par',
+      'Pays',
+    ];
+
+    const rows = selectedPaiements.map(p => [
+      p.reference,
+      p.participantNom,
+      p.participantEmail,
+      p.organisationNom,
+      p.statut,
+      p.montant.toString(),
+      p.modePaiement,
+      p.canalEncaissement,
+      new Date(p.dateInscription).toLocaleDateString('fr-FR'),
+      new Date(p.datePaiement).toLocaleDateString('fr-FR'),
+      p.administrateurEncaissement,
+      p.pays,
+    ]);
+
+    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `paiements-selectionnes-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    
+    toast.success(`${selectedPaiements.length} paiement(s) exporté(s)`);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+    toast.info("Sélection effacée");
   };
 
   const exportToCSV = () => {
@@ -578,10 +660,66 @@ export function ListePaiements() {
           </div>
         </div>
 
+        {/* Barre d'actions en masse */}
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 bg-orange-50 border-b border-orange-200"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-orange-900">
+                  {selectedIds.size} paiement{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearSelection}
+                  className="text-orange-700 hover:text-orange-900 hover:bg-orange-100"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Effacer
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkExport}
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Exporter sélection
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    toast.info("Fonctionnalité à venir : Export PDF pour les sélectionnés");
+                  }}
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  PDF
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="w-12 px-4 py-3">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={handleSelectAll}
+                    disabled={isLoading || paginatedPaiements.length === 0}
+                    className={isIndeterminate ? "data-[state=checked]:bg-orange-600" : ""}
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
                   <button onClick={() => handleSort('reference')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Référence
@@ -632,28 +770,36 @@ export function ListePaiements() {
                 // Skeleton loader
                 Array.from({ length: 5 }).map((_, index) => (
                   <tr key={`skeleton-${index}`}>
-                    <td colSpan={9} className="px-6 py-4">
+                    <td colSpan={10} className="px-6 py-4">
                       <Skeleton className="h-4 w-full" />
                     </td>
                   </tr>
                 ))
               ) : filteredPaiements.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
                     <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                     <p>Aucun paiement trouvé</p>
                   </td>
                 </tr>
               ) : (
                 paginatedPaiements.map((paiement, index) => {
+                  const isSelected = selectedIds.has(paiement.id);
                   return (
                     <motion.tr
                       key={paiement.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      className="hover:bg-gray-50 transition-colors"
+                      className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-orange-50' : ''}`}
                     >
+                      <td className="px-4 py-4">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) => handleSelectItem(paiement.id, checked as boolean)}
+                          disabled={isLoading}
+                        />
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-900">{paiement.reference}</td>
                       <td className="px-6 py-4">
                         <div>
@@ -661,7 +807,7 @@ export function ListePaiements() {
                           <p className="text-xs text-gray-500">{paiement.participantEmail}</p>
                         </div>
                       </td>
-                      <td className="这些都 py-4 text-sm text-gray-700">{paiement.organisationNom}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{paiement.organisationNom}</td>
                       <td className="px-6 py-4">
                         <Badge 
                           variant={paiement.statut === 'membre' ? 'default' : 'secondary'}

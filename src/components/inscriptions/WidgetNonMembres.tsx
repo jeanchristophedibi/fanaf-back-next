@@ -27,7 +27,7 @@ export function WidgetNonMembres() {
         setIsLoading(false);
       }
     };
-    loadData();
+    loadData(); 
   }, []);
   
   const participants = apiParticipants.length > 0 ? apiParticipants : mockParticipants.filter(p => p.statut === 'non-membre');
