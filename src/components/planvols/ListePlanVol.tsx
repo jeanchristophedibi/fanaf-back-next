@@ -11,7 +11,8 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { getOrganisationById, getPlanVolByType, getParticipantById, getPlanVolByParticipant } from '../data/mockData';
-import { Download, Plane, Search, TrendingUp, Calendar, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye } from 'lucide-react';
+import { Download, Plane, Search, TrendingUp, Calendar, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, FileText, Mail } from 'lucide-react';
+import { Checkbox } from '../ui/checkbox';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '../ui/pagination';
 import { toast } from 'sonner';
 
@@ -37,6 +38,9 @@ export function ListePlanVol() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Sélection
+  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
 
   const uniquePaysVol = useMemo(() => {
     const allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
@@ -204,11 +208,34 @@ export function ListePlanVol() {
     return { total: arrivees.length + departs.length, arrivees: arrivees.length, departs: departs.length };
   }, []);
 
-  const exportToCSV = () => {
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(paginatedGroups.map((g: any) => g.participantId));
+      setSelectedParticipants(allIds);
+    } else {
+      setSelectedParticipants(new Set());
+    }
+  };
+
+  const handleSelectItem = (participantId: string, checked: boolean) => {
+    const newSelection = new Set(selectedParticipants);
+    if (checked) {
+      newSelection.add(participantId);
+    } else {
+      newSelection.delete(participantId);
+    }
+    setSelectedParticipants(newSelection);
+  };
+
+  const allSelected = paginatedGroups.length > 0 && paginatedGroups.every((g: any) => selectedParticipants.has(g.participantId));
+  const someSelected = paginatedGroups.some((g: any) => selectedParticipants.has(g.participantId));
+
+  const exportToCSV = (dataToExport?: any[]) => {
+    const data = dataToExport || groupedPlansVol;
     const headers = ['Nom', 'Prénom', 'Organisation', 'Vol Arrivée', 'Date Arrivée', 'Heure Arrivée', 'Vol Départ', 'Date Départ', 'Heure Départ'];
     const csvContent = [
       headers.join(','),
-      ...groupedPlansVol.map((group: any) => {
+      ...data.map((group: any) => {
         const participant = getParticipantById(group.participantId);
         const organisation = participant ? getOrganisationById(participant.organisationId) : null;
         return [
@@ -243,7 +270,7 @@ export function ListePlanVol() {
   };
 
   return (
-    <div className="p-8">
+    <div className="">
       {/* Stats */}
      
 
@@ -384,10 +411,52 @@ export function ListePlanVol() {
                 <span className="ml-2 text-orange-600">({activeFiltersCount} filtre{activeFiltersCount > 1 ? 's' : ''} actif{activeFiltersCount > 1 ? 's' : ''})</span>
               )}
             </p>
-            <Button onClick={exportToCSV} variant="outline" size="sm" disabled={groupedPlansVol.length === 0}>
-              <Download className="w-4 h-4 mr-2" />
-              Exporter CSV
-            </Button>
+            <div className="flex items-center gap-2">
+              {selectedParticipants.size > 0 && (
+                <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <span className="text-sm text-orange-900 font-medium">
+                    {selectedParticipants.size} participant{selectedParticipants.size > 1 ? 's' : ''} sélectionné{selectedParticipants.size > 1 ? 's' : ''}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const selectedData = paginatedGroups.filter((g: any) => selectedParticipants.has(g.participantId));
+                      exportToCSV(selectedData);
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    <Download className="w-3 h-3 mr-1" />
+                    Exporter les sélectionnés
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const selectedData = paginatedGroups.filter((g: any) => selectedParticipants.has(g.participantId));
+                      toast.info(`Envoi d'email pour ${selectedData.length} participant(s)...`);
+                      // TODO: Implémenter l'envoi d'email
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    <Mail className="w-3 h-3 mr-1" />
+                    Envoyer email
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedParticipants(new Set())}
+                    className="h-7 text-xs"
+                  >
+                    Tout désélectionner
+                  </Button>
+                </div>
+              )}
+              <Button onClick={() => exportToCSV()} variant="outline" size="sm" disabled={groupedPlansVol.length === 0}>
+                <Download className="w-4 h-4 mr-2" />
+                Exporter CSV
+              </Button>
+            </div>
           </div>
         </CardContent>
 
@@ -399,6 +468,13 @@ export function ListePlanVol() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={handleSelectAll}
+                      className={someSelected && !allSelected ? "data-[state=checked]:bg-orange-500" : ""}
+                    />
+                  </TableHead>
                   <TableHead onClick={() => handleSort('nom')} className="cursor-pointer select-none">
                     <div className="flex items-center gap-1">
                       Nom
@@ -436,7 +512,7 @@ export function ListePlanVol() {
               <TableBody>
                 {paginatedGroups.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                       Aucun participant trouvé
                     </TableCell>
                   </TableRow>
@@ -446,8 +522,15 @@ export function ListePlanVol() {
                     if (!participant) return null;
                     const organisation = getOrganisationById(participant.organisationId);
                     const isImminentArrival = group.arrivee && isArrivingTomorrow(group.arrivee.date);
+                    const isSelected = selectedParticipants.has(group.participantId);
                     return (
-                      <TableRow key={group.participantId}>
+                      <TableRow key={group.participantId} className={isSelected ? "bg-orange-50" : ""}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => handleSelectItem(group.participantId, checked as boolean)}
+                          />
+                        </TableCell>
                         <TableCell className="text-gray-900">{participant.nom}</TableCell>
                         <TableCell className="text-gray-900">{participant.prenom}</TableCell>
                         <TableCell className="text-gray-600">{organisation?.nom || 'N/A'}</TableCell>

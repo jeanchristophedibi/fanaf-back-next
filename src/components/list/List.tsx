@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Search, Filter, Download, ArrowUpDown, ArrowUp, ArrowDown, Check } from "lucide-react";
+import { Skeleton } from "../ui/skeleton";
 
 export interface Column<T> {
   key: string;
@@ -43,6 +44,7 @@ export interface ListProps<T> {
   onSelectionChange?: (selectedItems: T[]) => void;
   enableSelection?: boolean;
   filterTitle?: string;
+  loading?: boolean;
 }
 
 export function List<T extends Record<string, any>>({
@@ -64,6 +66,7 @@ export function List<T extends Record<string, any>>({
   onSelectionChange,
   enableSelection = false,
   filterTitle = "Filtres et recherche",
+  loading = false,
 }: ListProps<T>) {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
@@ -224,59 +227,74 @@ export function List<T extends Record<string, any>>({
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder={searchPlaceholder}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              {filterComponent}
-            </div>
-
-            {/* Actions en masse */}
-            {enableSelection && selectedItems.length > 0 && buildActions.length > 0 && (
-              <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                <span className="text-sm text-orange-900 font-medium">
-                  {selectedItems.length} élément{selectedItems.length > 1 ? "s" : ""} sélectionné{selectedItems.length > 1 ? "s" : ""}
-                </span>
-                <div className="flex items-center gap-2 ml-auto">
-                  {buildActions.map((action, index) => {
-                    const disabled = action.disabled ? action.disabled(selectedItems) : false;
-                    return (
-                      <Button
-                        key={index}
-                        variant={action.variant || "default"}
-                        size="sm"
-                        onClick={() => action.onClick(selectedItems)}
-                        disabled={disabled || readOnly}
-                      >
-                        {action.icon}
-                        {action.label}
-                      </Button>
-                    );
-                  })}
+            {loading ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
                 </div>
-              </div>
-            )}
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-8 w-28" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder={searchPlaceholder}
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  {filterComponent}
+                </div>
 
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                {filteredData.length} résultat{filteredData.length > 1 ? "s" : ""} trouvé{filteredData.length > 1 ? "s" : ""}
-              </p>
-              <Button
-                onClick={handleExport}
-                variant="outline"
-                size="sm"
-                disabled={filteredData.length === 0 || readOnly || (!onExport && (!exportHeaders || !exportData))}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Exporter CSV
-              </Button>
-            </div>
+                {/* Actions en masse */}
+                {enableSelection && selectedItems.length > 0 && buildActions.length > 0 && (
+                  <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                    <span className="text-sm text-orange-900 font-medium">
+                      {selectedItems.length} élément{selectedItems.length > 1 ? "s" : ""} sélectionné{selectedItems.length > 1 ? "s" : ""}
+                    </span>
+                    <div className="flex items-center gap-2 ml-auto">
+                      {buildActions.map((action, index) => {
+                        const disabled = action.disabled ? action.disabled(selectedItems) : false;
+                        return (
+                          <Button
+                            key={index}
+                            variant={action.variant || "default"}
+                            size="sm"
+                            onClick={() => action.onClick(selectedItems)}
+                            disabled={disabled || readOnly}
+                          >
+                            {action.icon}
+                            {action.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">
+                    {filteredData.length} résultat{filteredData.length > 1 ? "s" : ""} trouvé{filteredData.length > 1 ? "s" : ""}
+                  </p>
+                  <Button
+                    onClick={handleExport}
+                    variant="outline"
+                    size="sm"
+                    disabled={filteredData.length === 0 || readOnly || (!onExport && (!exportHeaders || !exportData))}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Exporter CSV
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Tableau intégré dans la même card */}
@@ -320,7 +338,23 @@ export function List<T extends Record<string, any>>({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedData.length === 0 ? (
+                {loading ? (
+                  // Skeleton loader
+                  Array.from({ length: itemsPerPage }).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      {enableSelection && (
+                        <TableCell>
+                          <Skeleton className="h-4 w-4" />
+                        </TableCell>
+                      )}
+                      {columns.map((column) => (
+                        <TableCell key={column.key}>
+                          <Skeleton className="h-4 w-full" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : paginatedData.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={enableSelection ? columns.length + 1 : columns.length}

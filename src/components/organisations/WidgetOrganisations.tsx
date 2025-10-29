@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { Building2 } from "lucide-react";
+import { Building2, Users, Briefcase, Award } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
+import { motion } from "motion/react";
+import { AnimatedStat } from "../AnimatedStat";
 
 export function WidgetOrganisations() {
   const { organisations } = useDynamicInscriptions({ includeOrganisations: true });
@@ -18,54 +20,82 @@ export function WidgetOrganisations() {
   }, [organisations]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-      <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Card className="border-t-4 border-t-blue-500">
+          <CardContent className="p-6 flex items-center justify-between">
             <div>
-              <p className="text-sm text-purple-700 mb-1">Total organisations</p>
-              <p className="text-3xl text-purple-900">{stats.total}</p>
+              <p className="text-sm text-gray-600 mb-1">Total organisations</p>
+              <AnimatedStat value={stats.total} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Toutes les organisations</p>
             </div>
-            <Building2 className="w-10 h-10 text-purple-600 opacity-50" />
-          </div>
-        </CardContent>
-      </Card>
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-      <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <Card className="border-t-4 border-t-teal-500">
+          <CardContent className="p-6 flex items-center justify-between">
             <div>
-              <p className="text-sm text-teal-700 mb-1">Associations membre</p>
-              <p className="text-3xl text-teal-900">{stats.membre}</p>
+              <p className="text-sm text-gray-600 mb-1">Associations membre</p>
+              <AnimatedStat value={stats.membre} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Membres FANAF</p>
             </div>
-            <Building2 className="w-10 h-10 text-teal-600 opacity-50" />
-          </div>
-        </CardContent>
-      </Card>
+            <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-      <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <Card className="border-t-4 border-t-gray-500">
+          <CardContent className="p-6 flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-700 mb-1">Entreprise</p>
-              <p className="text-3xl text-gray-900">{stats.nonMembre}</p>
+              <p className="text-sm text-gray-600 mb-1">Entreprises</p>
+              <AnimatedStat value={stats.nonMembre} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Non-membres</p>
             </div>
-            <Building2 className="w-10 h-10 text-gray-600 opacity-50" />
-          </div>
-        </CardContent>
-      </Card>
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center">
+              <Briefcase className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-      <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <Card className="border-t-4 border-t-amber-500">
+          <CardContent className="p-6 flex items-center justify-between">
             <div>
-              <p className="text-sm text-amber-700 mb-1">Sponsors</p>
-              <p className="text-3xl text-amber-900">{stats.sponsor}</p>
+              <p className="text-sm text-gray-600 mb-1">Sponsors</p>
+              <AnimatedStat value={stats.sponsor} className="text-3xl text-gray-900" />
+              <p className="text-xs text-gray-500 mt-1">Organisations sponsor</p>
             </div>
-            <Building2 className="w-10 h-10 text-amber-600 opacity-50" />
-          </div>
-        </CardContent>
-      </Card>
+            <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center">
+              <Award className="w-6 h-6 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }

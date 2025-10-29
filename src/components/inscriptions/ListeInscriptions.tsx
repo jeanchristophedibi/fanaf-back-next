@@ -9,7 +9,7 @@ import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { Eye, User, Mail, Phone, Globe, Building, Calendar, QrCode, Package, Download } from 'lucide-react';
+import { Eye, User, Mail, Phone, Globe, Building, Calendar, QrCode, Package, Download, X } from 'lucide-react';
 import { getOrganisationById, type Participant } from '../data/mockData';
 import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { toast } from 'sonner';
@@ -29,6 +29,15 @@ export function ListeInscriptions({
     restrictStatutOptions,
 }: ListeInscriptionsProps = {}) {
     const { participants, organisations } = useDynamicInscriptions({ includeOrganisations: true });
+    const [isLoading, setIsLoading] = useState(true);
+    
+    // Simulation d'un chargement initial
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, []);
     
     // États pour les filtres multi-sélection (avant validation)
     const [tempStatutFilters, setTempStatutFilters] = useState<string[]>([]);
@@ -44,6 +53,16 @@ export function ListeInscriptions({
     
     const [showFilters, setShowFilters] = useState(false);
     const [isDownloadingBadges, setIsDownloadingBadges] = useState(false);
+    // Initialiser à true pour éviter les erreurs d'hydratation (sera mis à jour dans useEffect)
+    const [showBadgeNotification, setShowBadgeNotification] = useState(true);
+    
+    // Initialiser l'état depuis localStorage après le montage pour éviter les erreurs d'hydratation
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const stored = localStorage.getItem('badgeNotificationDismissed');
+            setShowBadgeNotification(stored !== 'true');
+        }
+    }, []);
     
     const statutColors: Record<string, string> = {
         'membre': 'bg-purple-100 text-purple-800',
@@ -51,7 +70,7 @@ export function ListeInscriptions({
         'vip': 'bg-cyan-100 text-cyan-800',
         'speaker': 'bg-yellow-100 text-yellow-800',
     };
-
+    
     const statutInscriptionColors: Record<string, string> = {
         'finalisée': 'bg-emerald-100 text-emerald-800',
         'non-finalisée': 'bg-red-100 text-red-800',
@@ -94,7 +113,7 @@ export function ListeInscriptions({
             setAppliedStatutFilters(defaultStatuts);
             setTempStatutFilters(defaultStatuts);
         } else {
-            setAppliedStatutFilters([]);
+        setAppliedStatutFilters([]);
         }
         setAppliedStatutInscriptionFilters([]);
         setAppliedOrganisationFilters([]);
@@ -108,7 +127,7 @@ export function ListeInscriptions({
             setAppliedStatutFilters(defaultStatuts);
             setTempStatutFilters(defaultStatuts);
         } else {
-            setAppliedStatutFilters(tempStatutFilters);
+        setAppliedStatutFilters(tempStatutFilters);
         }
         setAppliedStatutInscriptionFilters(tempStatutInscriptionFilters);
         setAppliedOrganisationFilters(tempOrganisationFilters);
@@ -116,22 +135,22 @@ export function ListeInscriptions({
         setShowFilters(false);
         toast.success('Filtres appliqués');
     };
-
+    
     // Filtrer les participants selon les filtres appliqués
     const filteredParticipants = useMemo(() => {
         return participants.filter(participant => {
-            const org = getOrganisationById(participant.organisationId);
-            const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
+        const org = getOrganisationById(participant.organisationId);
+        const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
             const matchesStatutInscription = appliedStatutInscriptionFilters.length === 0 || 
                 appliedStatutInscriptionFilters.includes(participant.statutInscription) ||
                 (appliedStatutInscriptionFilters.includes('exonéré') && (participant.statut === 'vip' || participant.statut === 'speaker'));
-            const matchesOrganisation = appliedOrganisationFilters.length === 0 || appliedOrganisationFilters.includes(participant.organisationId);
-            const matchesPays = appliedPaysFilters.length === 0 || appliedPaysFilters.includes(participant.pays);
-            
+        const matchesOrganisation = appliedOrganisationFilters.length === 0 || appliedOrganisationFilters.includes(participant.organisationId);
+        const matchesPays = appliedPaysFilters.length === 0 || appliedPaysFilters.includes(participant.pays);
+        
             return matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays;
         });
     }, [participants, appliedStatutFilters, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
-
+    
     const uniquePays = [...new Set(participants.map(p => p.pays))].sort();
     const badgesGenerables = filteredParticipants.filter(p => p.statutInscription === 'finalisée').length;
     
@@ -238,7 +257,7 @@ export function ListeInscriptions({
             </Dialog>
         );
     };
-
+    
     // Colonnes pour le composant List
     const columns: Column<Participant>[] = [
         { 
@@ -257,7 +276,7 @@ export function ListeInscriptions({
                         <Mail className="w-2.5 h-2.5 text-gray-400" />
                         <span className="text-xs text-gray-500 truncate max-w-[200px]">{p.email}</span>
                     </div>
-                </div>
+      </div>
             )
         },
         { key: 'telephone', header: 'Contact', sortable: true },
@@ -289,7 +308,7 @@ export function ListeInscriptions({
             render: (p) => (
                 <Badge className={`${statutInscriptionColors[getStatutPaiementLabel(p)]} text-xs h-5 px-1.5`}>
                     {getStatutPaiementLabel(p)}
-                </Badge>
+          </Badge>
             )
         },
         {
@@ -307,7 +326,7 @@ export function ListeInscriptions({
                             {p.modePaiement === 'virement' && '🏦'}
                         </span>
                         <span className="text-gray-700 capitalize text-xs">{p.modePaiement}</span>
-                    </div>
+    </div>
                 ) : (
                     <span className="text-gray-400 text-xs">-</span>
                 );
@@ -333,146 +352,146 @@ export function ListeInscriptions({
     // Composant de filtres personnalisé
     const filterComponent = (
         <div className="w-full">
-            {showFilters && (
+    {showFilters && (
                 <div className="border border-gray-200 rounded-lg p-2 mt-2 bg-gray-50">
-                    <div className="grid grid-cols-4 gap-3">
-                        <div>
-                            <Label className="text-xs mb-1.5 block text-gray-900">Statut Participant</Label>
-                            <div className="space-y-1">
+        <div className="grid grid-cols-4 gap-3">
+          <div>
+            <Label className="text-xs mb-1.5 block text-gray-900">Statut Participant</Label>
+            <div className="space-y-1">
                                 {statutOptions.map((statut) => (
-                                    <div key={statut} className="flex items-center space-x-1.5">
-                                        <Checkbox
-                                            id={`statut-${statut}`}
-                                            checked={tempStatutFilters.includes(statut)}
+                <div key={statut} className="flex items-center space-x-1.5">
+                  <Checkbox
+                    id={`statut-${statut}`}
+                    checked={tempStatutFilters.includes(statut)}
                                             disabled={isStatutLocked}
-                                            onCheckedChange={(checked) => {
+                    onCheckedChange={(checked) => {
                                                 if (isStatutLocked) return;
-                                                if (checked) {
-                                                    setTempStatutFilters([...tempStatutFilters, statut]);
-                                                } else {
-                                                    setTempStatutFilters(tempStatutFilters.filter(s => s !== statut));
-                                                }
-                                            }}
-                                            className="h-3 w-3"
-                                        />
-                                        <label
-                                            htmlFor={`statut-${statut}`}
-                                            className="text-xs cursor-pointer capitalize"
-                                        >
-                                            {statut}
-                                        </label>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div>
-                            <Label className="text-xs mb-1.5 block text-gray-900">Statut Inscription</Label>
-                            <div className="space-y-1">
-                                {['finalisée', 'non-finalisée', 'exonéré'].map((statut) => (
-                                    <div key={statut} className="flex items-center space-x-1.5">
-                                        <Checkbox
-                                            id={`statut-inscription-${statut}`}
-                                            checked={tempStatutInscriptionFilters.includes(statut)}
-                                            onCheckedChange={(checked) => {
-                                                if (checked) {
-                                                    setTempStatutInscriptionFilters([...tempStatutInscriptionFilters, statut]);
-                                                } else {
-                                                    setTempStatutInscriptionFilters(tempStatutInscriptionFilters.filter(s => s !== statut));
-                                                }
-                                            }}
-                                            className="h-3 w-3"
-                                        />
-                                        <label
-                                            htmlFor={`statut-inscription-${statut}`}
-                                            className="text-xs cursor-pointer capitalize"
-                                        >
-                                            {statut}
-                                        </label>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div>
-                            <Label className="text-xs mb-1.5 block text-gray-900">Organisation</Label>
-                            <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
-                                {organisations.slice(0, 6).map((org) => (
-                                    <div key={org.id} className="flex items-center space-x-1.5">
-                                        <Checkbox
-                                            id={`org-${org.id}`}
-                                            checked={tempOrganisationFilters.includes(org.id)}
-                                            onCheckedChange={(checked) => {
-                                                if (checked) {
-                                                    setTempOrganisationFilters([...tempOrganisationFilters, org.id]);
-                                                } else {
-                                                    setTempOrganisationFilters(tempOrganisationFilters.filter(o => o !== org.id));
-                                                }
-                                            }}
-                                            className="h-3 w-3"
-                                        />
-                                        <label
-                                            htmlFor={`org-${org.id}`}
-                                            className="text-xs cursor-pointer truncate"
-                                        >
-                                            {org.nom}
-                                        </label>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div>
-                            <Label className="text-xs mb-1.5 block text-gray-900">Pays</Label>
-                            <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
-                                {uniquePays.slice(0, 6).map((pays) => (
-                                    <div key={pays} className="flex items-center space-x-1.5">
-                                        <Checkbox
-                                            id={`pays-${pays}`}
-                                            checked={tempPaysFilters.includes(pays)}
-                                            onCheckedChange={(checked) => {
-                                                if (checked) {
-                                                    setTempPaysFilters([...tempPaysFilters, pays]);
-                                                } else {
-                                                    setTempPaysFilters(tempPaysFilters.filter(p => p !== pays));
-                                                }
-                                            }}
-                                            className="h-3 w-3"
-                                        />
-                                        <label
-                                            htmlFor={`pays-${pays}`}
-                                            className="text-xs cursor-pointer"
-                                        >
-                                            {pays}
-                                        </label>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    <Separator className="my-2" />
-
-                    <div className="flex justify-end gap-1.5">
-                        <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={handleResetFilters}
-                            className="h-7 text-xs"
-                        >
-                            Réinitialiser
-                        </Button>
-                        <Button 
-                            size="sm"
-                            onClick={handleApplyFilters}
-                            className="bg-orange-600 hover:bg-orange-700 h-7 text-xs"
-                        >
-                            Appliquer les filtres
-                        </Button>
-                    </div>
+                      if (checked) {
+                        setTempStatutFilters([...tempStatutFilters, statut]);
+                      } else {
+                        setTempStatutFilters(tempStatutFilters.filter(s => s !== statut));
+                      }
+                    }}
+                    className="h-3 w-3"
+                  />
+                  <label
+                    htmlFor={`statut-${statut}`}
+                    className="text-xs cursor-pointer capitalize"
+                  >
+                    {statut}
+                  </label>
                 </div>
-            )}
-            <Button
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs mb-1.5 block text-gray-900">Statut Inscription</Label>
+            <div className="space-y-1">
+              {['finalisée', 'non-finalisée', 'exonéré'].map((statut) => (
+                <div key={statut} className="flex items-center space-x-1.5">
+                  <Checkbox
+                    id={`statut-inscription-${statut}`}
+                    checked={tempStatutInscriptionFilters.includes(statut)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setTempStatutInscriptionFilters([...tempStatutInscriptionFilters, statut]);
+                      } else {
+                        setTempStatutInscriptionFilters(tempStatutInscriptionFilters.filter(s => s !== statut));
+                      }
+                    }}
+                    className="h-3 w-3"
+                  />
+                  <label
+                    htmlFor={`statut-inscription-${statut}`}
+                    className="text-xs cursor-pointer capitalize"
+                  >
+                    {statut}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs mb-1.5 block text-gray-900">Organisation</Label>
+            <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+              {organisations.slice(0, 6).map((org) => (
+                <div key={org.id} className="flex items-center space-x-1.5">
+                  <Checkbox
+                    id={`org-${org.id}`}
+                    checked={tempOrganisationFilters.includes(org.id)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setTempOrganisationFilters([...tempOrganisationFilters, org.id]);
+                      } else {
+                        setTempOrganisationFilters(tempOrganisationFilters.filter(o => o !== org.id));
+                      }
+                    }}
+                    className="h-3 w-3"
+                  />
+                  <label
+                    htmlFor={`org-${org.id}`}
+                    className="text-xs cursor-pointer truncate"
+                  >
+                    {org.nom}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs mb-1.5 block text-gray-900">Pays</Label>
+            <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+              {uniquePays.slice(0, 6).map((pays) => (
+                <div key={pays} className="flex items-center space-x-1.5">
+                  <Checkbox
+                    id={`pays-${pays}`}
+                    checked={tempPaysFilters.includes(pays)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setTempPaysFilters([...tempPaysFilters, pays]);
+                      } else {
+                        setTempPaysFilters(tempPaysFilters.filter(p => p !== pays));
+                      }
+                    }}
+                    className="h-3 w-3"
+                  />
+                  <label
+                    htmlFor={`pays-${pays}`}
+                    className="text-xs cursor-pointer"
+                  >
+                    {pays}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <Separator className="my-2" />
+
+        <div className="flex justify-end gap-1.5">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleResetFilters}
+            className="h-7 text-xs"
+          >
+            Réinitialiser
+          </Button>
+          <Button 
+            size="sm"
+            onClick={handleApplyFilters}
+            className="bg-orange-600 hover:bg-orange-700 h-7 text-xs"
+          >
+            Appliquer les filtres
+          </Button>
+        </div>
+      </div>
+    )}
+              <Button 
                 variant={showFilters ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowFilters(!showFilters)}
@@ -484,7 +503,7 @@ export function ListeInscriptions({
                     </Badge>
                 )}
                 Filtres
-            </Button>
+              </Button>
         </div>
     );
 
@@ -541,25 +560,40 @@ export function ListeInscriptions({
         }
     ];
 
+    const handleDismissNotification = () => {
+        setShowBadgeNotification(false);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('badgeNotificationDismissed', 'true');
+        }
+    };
+
     return (
         <>
-            {filteredParticipants.length > badgesGenerables && (
+            {filteredParticipants.length > badgesGenerables && showBadgeNotification && (
                 <Card className="border-orange-200 bg-orange-50 pt-5 mb-3">
-                    <CardContent className="p-3">
-                        <div className="flex items-start gap-2">
-                            <QrCode className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
-                            <div>
-                                <p className="text-xs text-orange-900">
-                                    <span className="font-medium">{filteredParticipants.length - badgesGenerables} participant(s)</span> ne peuvent pas encore générer leur badge car leur inscription n'est pas finalisée (paiement en attente).
-                                </p>
-                                <p className="text-xs text-orange-700 mt-1">
-                                    Les badges seront disponibles uniquement après validation du paiement.
-                                </p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+    <CardContent className="p-3">
+      <div className="flex items-start gap-2">
+        <QrCode className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+          <p className="text-xs text-orange-900">
+            <span className="font-medium">{filteredParticipants.length - badgesGenerables} participant(s)</span> ne peuvent pas encore générer leur badge car leur inscription n'est pas finalisée (paiement en attente).
+          </p>
+          <p className="text-xs text-orange-700 mt-1">
+            Les badges seront disponibles uniquement après validation du paiement.
+          </p>
+        </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleDismissNotification}
+                                className="h-6 w-6 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-100 flex-shrink-0"
+                            >
+                                <X className="w-4 h-4" />
+                            </Button>
+      </div>
+    </CardContent>
+  </Card>
+)}
 
             <List
                 data={filteredParticipants}
@@ -577,6 +611,7 @@ export function ListeInscriptions({
                 enableSelection={true}
                 buildActions={buildActions}
                 emptyMessage="Aucun participant trouvé"
+                loading={isLoading}
             />
         </>
     );
