@@ -9,6 +9,7 @@ import { Phone, Mail, Globe, Calendar } from 'lucide-react';
 import { type Participant } from '../data/mockData';
 import { inscriptionsDataService } from '../data/inscriptionsData';
 import { motion } from 'motion/react';
+import { Skeleton } from '../ui/skeleton';
 
 interface WidgetStatsInscriptionsProps {
   stats: {
@@ -21,6 +22,7 @@ interface WidgetStatsInscriptionsProps {
     enAttente: number;
   };
   participants: Participant[];
+  loading?: boolean;
 }
 
 const statutColors: Record<string, string> = {
@@ -30,7 +32,34 @@ const statutColors: Record<string, string> = {
   'speaker': 'bg-yellow-100 text-yellow-800',
 };
 
-export function WidgetStatsInscriptions({ stats, participants }: WidgetStatsInscriptionsProps) {
+export function WidgetStatsInscriptions({ stats, participants, loading = false }: WidgetStatsInscriptionsProps) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <Card className="border-t-4 border-t-green-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-32 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+        <Card className="border-t-4 border-t-orange-500">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-36 mb-2" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="w-12 h-12 rounded-xl" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <motion.div

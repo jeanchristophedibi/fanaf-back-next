@@ -149,6 +149,15 @@ export function List<T extends Record<string, any>>({
     return filtered;
   }, [data, searchTerm, searchKeys, sortConfig, columns]);
 
+  // Calculer si le bouton d'export doit être désactivé
+  const isExportDisabled = useMemo(() => {
+    const hasNoData = filteredData.length === 0;
+    const isReadOnly = readOnly;
+    const missingConfig = !onExport && (!exportHeaders || !exportData);
+    
+    return hasNoData || isReadOnly || missingConfig;
+  }, [filteredData.length, readOnly, onExport, exportHeaders, exportData]);
+
   // Pagination
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = useMemo(() => {
@@ -215,6 +224,19 @@ export function List<T extends Record<string, any>>({
   const allSelected = filteredData.length > 0 && filteredData.every((item) => selectedIds.has(getRowId(item)));
   const someSelected = filteredData.some((item) => selectedIds.has(getRowId(item)));
 
+  // Fonction pour échapper les valeurs CSV (gérer les virgules, guillemets, retours à la ligne)
+  const escapeCSVValue = (value: string | number | null | undefined): string => {
+    if (value === null || value === undefined) return '';
+    const stringValue = String(value);
+    
+    // Si la valeur contient des virgules, guillemets ou retours à la ligne, l'entourer de guillemets
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      // Échapper les guillemets en les doublant
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
   // Export CSV
   const handleExport = () => {
     if (onExport) {
@@ -222,20 +244,38 @@ export function List<T extends Record<string, any>>({
       return;
     }
 
-    if (!exportHeaders || !exportData) return;
+    if (!exportHeaders || !exportData) {
+      console.warn('[List] Export CSV : exportHeaders ou exportData manquants');
+      return;
+    }
 
-    const csvContent = [
-      exportHeaders.join(","),
-      ...filteredData.map(exportData).map((row) => row.join(",")),
-    ].join("\n");
+    try {
+      // Créer le contenu CSV avec échappement correct
+      const csvRows = [
+        exportHeaders.map(escapeCSVValue).join(","),
+        ...filteredData.map(item => {
+          const rowData = exportData(item);
+          return rowData.map(escapeCSVValue).join(",");
+        })
+      ];
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${exportFilename}-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+      const csvContent = csvRows.join("\n");
+      
+      // Ajouter le BOM UTF-8 pour Excel (pour l'encodage correct des caractères spéciaux)
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${exportFilename}-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a); // Nécessaire pour certains navigateurs
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[List] Erreur lors de l\'export CSV:', error);
+    }
   };
 
   return (
@@ -341,7 +381,16 @@ export function List<T extends Record<string, any>>({
                     onClick={handleExport}
                     variant="outline"
                     size="sm"
-                    disabled={filteredData.length === 0 || readOnly || (!onExport && (!exportHeaders || !exportData))}
+                    disabled={isExportDisabled}
+                    title={
+                      filteredData.length === 0 
+                        ? "Aucune donnée à exporter"
+                        : readOnly 
+                        ? "Mode lecture seule"
+                        : (!onExport && (!exportHeaders || !exportData))
+                        ? "Configuration d'export manquante"
+                        : "Exporter les données au format CSV"
+                    }
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Exporter CSV

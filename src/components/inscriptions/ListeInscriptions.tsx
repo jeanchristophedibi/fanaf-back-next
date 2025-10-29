@@ -705,7 +705,7 @@ export function ListeInscriptions({
             {/* Afficher les stats si demandé */}
             {showStats && (
                 <div className="mb-6">
-                    <WidgetStatsInscriptions stats={stats} participants={participants} />
+                    <WidgetStatsInscriptions stats={stats} participants={participants} loading={isLoading} />
                 </div>
             )}
             
