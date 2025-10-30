@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
@@ -10,6 +10,8 @@ import { getOrganisationById, type ModePaiement } from "../../data/mockData";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../ui/alert-dialog";
 import { List, type Column } from "../../list/List";
 import { Label } from "../../ui/label";
+import { toast } from "sonner";
+import paymentService from "@/services/paymentService";
 
 type PaiementEnAttente = {
   id: string;
@@ -36,6 +38,29 @@ export function ListeEnAttente() {
   const [selectedParticipant, setSelectedParticipant] = useState<PaiementEnAttente | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [apiPaiementsEnAttente, setApiPaiementsEnAttente] = useState<PaiementEnAttente[]>([]);
+  const [isLoadingPaiementsEnAttente, setIsLoadingPaiementsEnAttente] = useState(false);
+  useEffect(() => {
+    const fetchPaiementsEnAttente = async () => {
+      setIsLoadingPaiementsEnAttente(true);
+      try {
+        const response = await paymentService.getAll();
+        console.log('response', response);
+        // La réponse peut avoir une structure { data: [...] } ou être directement un tableau
+        const data = Array.isArray(response) ? response : (response.data || []);
+        setApiPaiementsEnAttente(Array.isArray(data) ? data : []);
+      } catch (error) {
+        toast?.error('Impossible de récupérer les paiements en attente');
+        setApiPaiementsEnAttente([]);
+      } finally {
+        setIsLoadingPaiementsEnAttente(false);
+      }
+    };
+
+    fetchPaiementsEnAttente();
+  }, []);
+
+  console.log('apiPaiementsEnAttente', apiPaiementsEnAttente);
 
   // Transformer les participants non-finalisés en paiements en attente
   const paiementsEnAttente = useMemo(() => {
@@ -72,7 +97,11 @@ export function ListeEnAttente() {
 
   // Filtrer les paiements
   const filteredPaiements = useMemo(() => {
-    let filtered = [...paiementsEnAttente];
+    const paiementsList = Array.isArray(apiPaiementsEnAttente) ? apiPaiementsEnAttente : [];
+    
+    let filtered = paiementsList.filter(p => 
+      p.statut === 'non-finalisée'
+    );
 
     if (filterModePaiement !== 'all') {
       filtered = filtered.filter(p => p.modePaiement === filterModePaiement);
@@ -87,7 +116,7 @@ export function ListeEnAttente() {
     }
 
     return filtered;
-  }, [paiementsEnAttente, filterModePaiement, filterStatut]);
+  }, [apiPaiementsEnAttente, filterModePaiement, filterStatut]);
 
   const handleConfirmPayment = (participant: PaiementEnAttente) => {
     setSelectedParticipant(participant);

@@ -1,163 +1,132 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Home, CreditCard, LogOut, ChevronRight, ChevronDown } from 'lucide-react';
-import { useDynamicInscriptions } from '../../../components/hooks/useDynamicInscriptions';
+import React, { useState } from 'react';
+import { Home, FileText, Users, ChevronDown, RefreshCw, CreditCard } from 'lucide-react';
+import { Separator } from '../../../components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
+import { Button } from '../../../components/ui/button';
+import { Logo } from '../../../components/ui/Logo';
+import type { NavItem } from './layout';
 
 interface OperateurCaisseSidebarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+  activeNav: NavItem;
+  onNavChange: (nav: NavItem) => void;
   onSwitchProfile?: () => void;
 }
 
-export function OperateurCaisseSidebar({ activeTab, setActiveTab, onSwitchProfile }: OperateurCaisseSidebarProps) {
-  const { participants } = useDynamicInscriptions();
-  const [isPaiementsExpanded, setIsPaiementsExpanded] = useState(
-    activeTab === 'paiements' || activeTab === 'tous-paiements' || activeTab === 'paiements-groupes'
-  );
+export function Sidebar({ activeNav, onNavChange, onSwitchProfile }: OperateurCaisseSidebarProps) {
+  const [paiementsOpen, setPaiementsOpen] = useState(true);
 
-  // Ouvrir automatiquement le sous-menu si on navigue vers une sous-rubrique
-  useEffect(() => {
-    if (activeTab === 'paiements' || activeTab === 'tous-paiements' || activeTab === 'paiements-groupes') {
-      setIsPaiementsExpanded(true);
-    }
-  }, [activeTab]);
-
-  // Compter les paiements en attente (uniquement membre et non-membre)
-  const paiementsEnAttente = participants.filter(p => 
-    p.statutInscription === 'non-finalisée' && 
-    (p.statut === 'membre' || p.statut === 'non-membre')
-  ).length;
-
-  // Compter les participants finalisés
-  const participantsFinalisés = participants.filter(p => 
-    p.statutInscription === 'finalisée'
-  ).length;
-
-  const paiementsSubItems = [
-    {
-      id: 'paiements',
-      label: 'En attente',
-      badge: paiementsEnAttente > 0 ? paiementsEnAttente : null,
-      badgeColor: 'bg-orange-600',
-    },
-    {
-      id: 'tous-paiements',
-      label: 'Tous les paiements',
-      badge: participantsFinalisés > 0 ? participantsFinalisés : null,
-      badgeColor: 'bg-green-600',
-    },
-    {
-      id: 'paiements-groupes',
-      label: 'Paiement groupé',
-      badge: paiementsEnAttente > 0 ? paiementsEnAttente : null,
-      badgeColor: 'bg-blue-600',
-    },
+  const mainNavItems = [
+    { id: 'home' as NavItem, label: 'Accueil', icon: Home },
+    { id: 'inscriptions' as NavItem, label: 'Liste des inscriptions', icon: FileText },
+    { id: 'participants' as NavItem, label: 'Liste des participants', icon: Users },
+    { id: 'documents' as NavItem, label: 'Documents participants', icon: FileText },
   ];
 
+  const paiementsSubItems = [
+    { id: 'paiements-attente' as NavItem, label: 'Paiements en attente' },
+    { id: 'paiements' as NavItem, label: 'Liste des paiements' },
+  ];
+
+  const isPaiementsActive = activeNav.startsWith('paiements');
+
   return (
-    <div className="w-64 bg-gradient-to-b from-purple-600 to-purple-700 text-white p-6 flex flex-col h-screen">
-      {/* En-tête */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-            <CreditCard className="w-6 h-6 text-purple-600" />
-          </div>
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      <div className="p-6">
+        <div className="space-y-3">
+          <Logo className="h-10 w-auto object-contain" alt="Operateur Caisse" />
           <div>
-            <h1 className="text-xl font-bold">FANAF 2026</h1>
-            <p className="text-purple-100 text-xs">Opérateur caisse</p>
+            <h1 className="text-gray-900">FANAF 2026</h1>
+            <p className="text-xs text-gray-500">Operateur Caisse</p>
           </div>
         </div>
-        <div className="text-xs text-purple-200 mt-3 bg-purple-800/30 p-2 rounded">
-          9-11 février 2026
-        </div>
       </div>
+      
+      <Separator />
+      
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        {mainNavItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeNav === item.id;
+          
+          return (
+            <button
+              key={item.id}
+              onClick={() => onNavChange(item.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                isActive
+                  ? 'bg-orange-50 text-orange-700'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="text-sm">{item.label}</span>
+            </button>
+          );
+        })}
 
-      {/* Navigation */}
-      <nav className="flex-1">
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-all ${
-            activeTab === 'dashboard'
-              ? 'bg-white text-purple-600 shadow-lg'
-              : 'text-white hover:bg-purple-500/30'
-          }`}
-        >
-          <Home className="w-5 h-5" />
-          <span>Tableau de bord</span>
-        </button>
-
-        {/* Section Paiement avec sous-menu */}
-        <div className="space-y-1">
-          <button
-            onClick={() => setIsPaiementsExpanded(!isPaiementsExpanded)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg mb-2 transition-all ${
-              isPaiementsExpanded || activeTab === 'paiements' || activeTab === 'tous-paiements' || activeTab === 'paiements-groupes'
-                ? 'bg-purple-500/30 text-white'
-                : 'text-white hover:bg-purple-500/30'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <CreditCard className="w-5 h-5" />
-              <span>Paiements</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {(paiementsEnAttente > 0 || participantsFinalisés > 0) && (
-                <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
-                  {paiementsEnAttente + participantsFinalisés}
-                </span>
-              )}
-              {isPaiementsExpanded ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </div>
-          </button>
-
-          {/* Sous-menu Paiement */}
-          {isPaiementsExpanded && (
-            <div className="ml-6 space-y-1">
-              {paiementsSubItems.map((subItem) => {
-                const isActive = activeTab === subItem.id;
-
-                return (
-                  <button
-                    key={subItem.id}
-                    onClick={() => setActiveTab(subItem.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all ${
-                      isActive
-                        ? 'bg-white text-purple-600 shadow-lg'
-                        : 'text-purple-100 hover:bg-purple-500/30 hover:text-white'
-                    }`}
-                  >
-                    <span className="text-sm">{subItem.label}</span>
-                    <div className="flex items-center gap-2">
-                      {subItem.badge !== null && (
-                        <span className={`${isActive ? subItem.badgeColor : 'bg-white/20'} text-white text-xs px-2 py-0.5 rounded-full`}>
-                          {subItem.badge}
-                        </span>
-                      )}
-                      {isActive && <ChevronRight className="w-3 h-3" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* Menu déroulant Paiements */}
+        <Collapsible open={paiementsOpen} onOpenChange={setPaiementsOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${
+                isPaiementsActive
+                  ? 'bg-orange-50 text-orange-700'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <CreditCard className="w-5 h-5" />
+                <span className="text-sm">Paiements</span>
+              </div>
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${
+                  paiementsOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1 mt-1">
+            {paiementsSubItems.map((subItem) => {
+              const isActive = activeNav === subItem.id;
+              
+              return (
+                <button
+                  key={subItem.id}
+                  onClick={() => onNavChange(subItem.id)}
+                  className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
+                    isActive
+                      ? 'bg-orange-100 text-orange-700'
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {subItem.label}
+                </button>
+              );
+            })}
+          </CollapsibleContent>
+        </Collapsible>
       </nav>
-
-      {/* Footer */}
-      <div className="mt-auto pt-4 border-t border-purple-500/30">
-        <button
-          onClick={onSwitchProfile}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-white hover:bg-purple-500/30 transition-all"
-        >
-          <LogOut className="w-5 h-5" />
-          <span>Changer de profil</span>
-        </button>
+      
+      <Separator />
+      
+      <div className="p-4 space-y-3">
+        <div className="p-3 bg-gray-50 rounded-lg">
+          <p className="text-xs text-gray-500">Connecté en tant que</p>
+          <p className="text-sm text-gray-900">Operateur Caisse</p>
+        </div>
+        {onSwitchProfile && (
+          <Button 
+            onClick={onSwitchProfile}
+            variant="outline"
+            className="w-full justify-start gap-2 text-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Changer de profil
+          </Button>
+        )}
       </div>
-    </div>
+    </aside>
   );
 }

@@ -34,9 +34,10 @@ import { ReceiptGenerator } from './ReceiptGenerator';
 import JSZip from 'jszip';
 import html2canvas from 'html2canvas';
 import QRCodeReact from 'react-qr-code';
+import participantService from '@/services/participantService';
 
 export function DocumentsParticipantsPage() {
-  const { participants } = useDynamicInscriptions();
+  // const { participants } = useDynamicInscriptions();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [isBadgeOpen, setIsBadgeOpen] = useState(false);
@@ -156,11 +157,32 @@ export function DocumentsParticipantsPage() {
       modePaiement: null,
     };
   };
+  
+  // Récupérer les participants par API
+  // Filtrer les participants avec paiement finalisé (statut_inscription ou localStorage)
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
 
-  // Filtrer les participants avec paiement finalisé (statutInscription ou localStorage)
+  useEffect(() => {
+    const fetchParticipants = async () => {
+      setIsLoadingParticipants(true);
+      try {
+        const response = await participantService.getAll();
+        setParticipants(response.data);
+      } catch (error) {
+        toast?.error('Impossible de récupérer les participants');
+        setParticipants([]);
+      } finally {
+        setIsLoadingParticipants(false);
+      }
+    };
+
+    fetchParticipants();
+  }, []);
+  
   const participantsFinalisés = useMemo(() => {
     let filtered = participants.filter(p => 
-      p.statutInscription === 'finalisée' || finalisedParticipantsIds.has(p.id)
+      p.statut_inscription === 'finalisée' || finalisedParticipantsIds.has(p.id)
     );
 
     // Filtre par recherche
@@ -810,7 +832,7 @@ export function DocumentsParticipantsPage() {
                 return filtered.map((participant, index) => {
                   const organisation = getOrganisationById(participant.organisationId);
                   // Reçu et facture disponibles uniquement après paiement finalisé
-                  const hasReceipt = participant.statutInscription === 'finalisée' && 
+                  const hasReceipt = participant.statut_inscription === 'finalisée' && 
                                     (participant.statut === 'membre' || participant.statut === 'non-membre');
                   const paymentInfo = getPaymentInfo(participant);
                   // Obtenir les compteurs de remises pour ce participant

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins } from 'lucide-react';
+import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, UserCheck } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Button } from '../ui/button';
@@ -22,6 +22,8 @@ interface MenuItem {
   icon: any;
   require?: UserProfile[];
   exclude?: UserProfile[];
+  badge?: number | null;
+  badgeColor?: string;
 }
 
 interface SubMenuItem {
@@ -45,9 +47,9 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'agence':
         return {
           mainNavItems: [
-            { id: 'home', label: 'Accueil', icon: Home },
-            { id: 'check-in', label: 'Check-in', icon: ScanLine },
-            { id: 'comite-organisation', label: 'Comité d\'Organisation', icon: UserCog },
+            { id: 'home', label: 'Accueil', icon: Home, badge: null, badgeColor: null },
+            { id: 'check-in', label: 'Check-in', icon: ScanLine, badge: null, badgeColor: null },
+            { id: 'comite-organisation', label: 'Comité d\'Organisation', icon: UserCog, badge: null, badgeColor: null },
           ],
           showInscriptions: true,
           showOrganisations: true,
@@ -60,8 +62,8 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'admin-fanaf':
         return {
           mainNavItems: [
-            { id: 'home', label: 'Accueil', icon: Home },
-            { id: 'check-in', label: 'Check-in', icon: ScanLine },
+            { id: 'home', label: 'Accueil', icon: Home, badge: null, badgeColor: null },
+            { id: 'check-in', label: 'Check-in', icon: ScanLine, badge: 0, badgeColor: 'bg-green-500' },
           ],
           showInscriptions: true,
           showTresorerie: true,
@@ -74,8 +76,8 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'admin-asaci':
         return {
           mainNavItems: [
-            { id: 'home', label: 'Accueil', icon: Home },
-            { id: 'inscriptions', label: 'Liste des inscriptions', icon: FileText },
+            { id: 'home', label: 'Accueil', icon: Home, badge: null, badgeColor: null },
+            { id: 'inscriptions', label: 'Liste des inscriptions', icon: FileText, badge: 0, badgeColor: 'bg-green-500' },
           ],
           showInscriptions: false,
           showOrganisations: false,
@@ -88,8 +90,8 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'agent-inscription':
         return {
           mainNavItems: [
-            { id: 'home', label: 'Accueil', icon: Home },
-            { id: 'caisse-inscriptions', label: 'Inscriptions Caisse', icon: FileText },
+            { id: 'home', label: 'Accueil', icon: Home, badge: null, badgeColor: null },
+            { id: 'caisse-inscriptions', label: 'Inscriptions Caisse', icon: UserCheck, badge: 0, badgeColor: 'bg-green-500' },
           ],
           showInscriptions: false,
           showOrganisations: false,
@@ -102,7 +104,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'operateur-caisse':
         return {
           mainNavItems: [
-            { id: 'dashboard', label: 'Dashboard', icon: Home },
+            { id: 'dashboard', label: 'Accueil', icon: Home, badge: null, badgeColor: null },
           ],
           showInscriptions: false,
           showOrganisations: false,
@@ -115,8 +117,8 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'operateur-badge':
         return {
           mainNavItems: [
-            { id: 'dashboard', label: 'Dashboard', icon: Home },
-            { id: 'documents', label: 'Documents participants', icon: FileText },
+            { id: 'dashboard', label: 'Accueil', icon: Home, badge: null, badgeColor: 'bg-green-500' },
+            { id: 'documents', label: 'Documents participants', icon: FileText, badge: 0, badgeColor: 'bg-green-500' },
           ],
           showInscriptions: false,
           showOrganisations: false,
@@ -166,8 +168,9 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
   ];
 
   const paiementsSubItems = [
-    { id: 'paiements-attente', label: 'Paiements en attente' },
-    { id: 'paiements', label: 'Liste des paiements' },
+    { id: 'paiements-attente', label: 'En attente', badge: 3, badgeColor: 'bg-orange-600' },
+    { id: 'paiements', label: 'Tous les paiements', badge: 15, badgeColor: 'bg-green-600' },
+    { id: 'paiements-groupes', label: 'Paiement groupé', badge: 2, badgeColor: 'bg-blue-600' },
   ];
 
   const tresorerieSubItems = [
@@ -213,6 +216,11 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             >
               <Icon className="w-5 h-5" />
               <span className="text-sm">{item.label}</span>
+              {item.badge !== null && (
+                <span className={`text-xs text-white px-2 py-0.5 rounded-full ${item.badgeColor || 'bg-green-500'}`}>
+                  {item.badge ?? 0}
+                </span>
+              )}
             </button>
           );
         })}
@@ -429,7 +437,13 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
                         : 'text-gray-600 hover:bg-gray-50'
                     }`}
                   >
-                    {subItem.label}
+                    <span className="text-sm flex items-center gap-2 justify-between w-full">{subItem.label}
+                    {subItem.badge !== null && (
+                      <span className={`text-xs text-white px-2 py-0.5 rounded-full ${subItem.badgeColor || 'bg-green-500'}`}>
+                        {subItem.badge ?? 0}
+                      </span>
+                    )}
+                    </span>
                   </button>
                 );
               })}

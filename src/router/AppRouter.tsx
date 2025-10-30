@@ -5,7 +5,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Dashboard from '../app/dashboard/agence/Dashboard';
 import AdminFanafDashboard from '../app/dashboard/admin-fanaf/Dashboard';
 import AdminAsaciDashboard from '../app/dashboard/admin-asaci/page';
-import OperateurCaisseMain from '../app/dashboard/operateur-caisse/Main';
+import OperateurCaisseMain from '../app/dashboard/operateur-caisse/page';
 import OperateurBadgeMain from '../app/dashboard/operateur-badge/Main';
 import AgentInscriptionMain from '../app/dashboard/agent-inscription/Main';
 import { ProfileSelection } from './ProfileSelection';
