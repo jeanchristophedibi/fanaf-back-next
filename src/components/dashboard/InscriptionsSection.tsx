@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Users, UserCheck, Award, Mic } from 'lucide-react';
 import { AnimatedStat } from '../AnimatedStat';
+import { useRouter } from 'next/navigation';
 
 interface InscriptionsSectionProps {
   statsInscriptions: {
@@ -12,9 +13,29 @@ interface InscriptionsSectionProps {
     enAttenteMembres: number;
     enAttenteNonMembres: number;
   };
+  basePath?: string; // ex: /dashboard/admin-fanaf/inscriptions
 }
 
-export function InscriptionsSection({ statsInscriptions }: InscriptionsSectionProps) {
+export function InscriptionsSection({ statsInscriptions, basePath = '/dashboard/agence/inscriptions' }: InscriptionsSectionProps) {
+  const router = useRouter();
+
+  const go = (suffix: string) => {
+    const href = `${basePath}${suffix}`;
+    router.push(href);
+  };
+
+  const clickableCard = (children: React.ReactNode, onClick: () => void) => (
+    <Card
+      className="card-hover cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+    >
+      {children}
+    </Card>
+  );
+
   return (
     <div className="mb-8 p-6 section-inscriptions rounded-xl animate-slide-up shadow-sm hover:shadow-md transition-shadow duration-300">
       <h2 className="text-gray-900 mb-4 flex items-center gap-2">
@@ -22,76 +43,86 @@ export function InscriptionsSection({ statsInscriptions }: InscriptionsSectionPr
         Inscriptions
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <Card className="card-hover cursor-pointer">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-gray-600">Total</CardTitle>
-            <div className="bg-blue-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
-              <Users className="w-4 h-4 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <AnimatedStat 
-              value={statsInscriptions.membres + statsInscriptions.nonMembres + statsInscriptions.vip + statsInscriptions.speakers}
-              className="text-gray-900"
-            />
-          </CardContent>
-        </Card>
+        {clickableCard((
+          <>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm text-gray-600">Total</CardTitle>
+              <div className="bg-blue-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
+                <Users className="w-4 h-4 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <AnimatedStat 
+                value={statsInscriptions.membres + statsInscriptions.nonMembres + statsInscriptions.vip + statsInscriptions.speakers}
+                className="text-gray-900"
+              />
+            </CardContent>
+          </>
+        ), () => go('/liste'))}
 
-        <Card className="card-hover cursor-pointer">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-gray-600">Membres</CardTitle>
-            <div className="bg-green-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
-              <UserCheck className="w-4 h-4 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <AnimatedStat value={statsInscriptions.membres} className="text-gray-900" />
-            {statsInscriptions.enAttenteMembres > 0 && (
-              <p className="text-xs text-orange-600 mt-1">+{statsInscriptions.enAttenteMembres} en attente</p>
-            )}
-          </CardContent>
-        </Card>
+        {clickableCard((
+          <>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm text-gray-600">Membres</CardTitle>
+              <div className="bg-green-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
+                <UserCheck className="w-4 h-4 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <AnimatedStat value={statsInscriptions.membres} className="text-gray-900" />
+              {statsInscriptions.enAttenteMembres > 0 && (
+                <p className="text-xs text-orange-600 mt-1">+{statsInscriptions.enAttenteMembres} en attente</p>
+              )}
+            </CardContent>
+          </>
+        ), () => go('/membres'))}
 
-        <Card className="card-hover cursor-pointer">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-gray-600">Non-Membres</CardTitle>
-            <div className="bg-gray-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
-              <Users className="w-4 h-4 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <AnimatedStat value={statsInscriptions.nonMembres} className="text-gray-900" />
-            {statsInscriptions.enAttenteNonMembres > 0 && (
-              <p className="text-xs text-orange-600 mt-1">+{statsInscriptions.enAttenteNonMembres} en attente</p>
-            )}
-          </CardContent>
-        </Card>
+        {clickableCard((
+          <>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm text-gray-600">Non-Membres</CardTitle>
+              <div className="bg-gray-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
+                <Users className="w-4 h-4 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <AnimatedStat value={statsInscriptions.nonMembres} className="text-gray-900" />
+              {statsInscriptions.enAttenteNonMembres > 0 && (
+                <p className="text-xs text-orange-600 mt-1">+{statsInscriptions.enAttenteNonMembres} en attente</p>
+              )}
+            </CardContent>
+          </>
+        ), () => go('/non-membres'))}
 
-        <Card className="card-hover cursor-pointer">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-gray-600">VIP</CardTitle>
-            <div className="bg-purple-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
-              <Award className="w-4 h-4 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <AnimatedStat value={statsInscriptions.vip} className="text-gray-900" />
-            <p className="text-xs text-purple-600 mt-1">Exonéré</p>
-          </CardContent>
-        </Card>
+        {clickableCard((
+          <>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm text-gray-600">VIP</CardTitle>
+              <div className="bg-purple-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
+                <Award className="w-4 h-4 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <AnimatedStat value={statsInscriptions.vip} className="text-gray-900" />
+              <p className="text-xs text-purple-600 mt-1">Exonéré</p>
+            </CardContent>
+          </>
+        ), () => go('/vip'))}
 
-        <Card className="card-hover cursor-pointer">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-gray-600">Speakers</CardTitle>
-            <div className="bg-orange-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
-              <Mic className="w-4 h-4 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <AnimatedStat value={statsInscriptions.speakers} className="text-gray-900" />
-            <p className="text-xs text-orange-600 mt-1">Exonéré</p>
-          </CardContent>
-        </Card>
+        {clickableCard((
+          <>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm text-gray-600">Speakers</CardTitle>
+              <div className="bg-orange-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
+                <Mic className="w-4 h-4 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <AnimatedStat value={statsInscriptions.speakers} className="text-gray-900" />
+              <p className="text-xs text-orange-600 mt-1">Exonéré</p>
+            </CardContent>
+          </>
+        ), () => go('/speakers'))}
       </div>
     </div>
   );

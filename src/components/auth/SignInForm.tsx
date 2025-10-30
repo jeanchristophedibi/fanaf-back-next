@@ -75,10 +75,19 @@ function SignInFormContent() {
               try {
                 const response = await fanafApi.passwordLogin(email, password);
                 toast.success('Connexion réussie !');
-                // Rediriger vers la page demandée (qui contient le bon chemin de dashboard)
-                // ou le dashboard admin-fanaf par défaut
-                const redirect = searchParams?.get('redirect') || '/dashboard/admin-fanaf';
-                console.log('[SignInForm] Redirection après connexion vers:', redirect);
+                // Déterminer la redirection selon le rôle utilisateur
+                const role = (response as any)?.user?.role || (response as any)?.data?.user?.role;
+                if (role) {
+                  try {
+                    // Sauvegarder le rôle pour usage futur (middleware / autres redirections)
+                    localStorage.setItem('fanaf_role', role);
+                    document.cookie = `fanaf_role=${role}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+                  } catch (_) {}
+                }
+                const defaultRedirect = role === 'admin_agency' ? '/dashboard/agence' : '/dashboard/admin-fanaf';
+                // Rediriger vers la page demandée (si présente) sinon selon le rôle
+                const redirect = searchParams?.get('redirect') || defaultRedirect;
+                console.log('[SignInForm] Redirection après connexion vers:', redirect, 'role:', role);
                 router.push(redirect);
               } catch (err: any) {
                 console.error('Erreur de connexion détaillée:', err);

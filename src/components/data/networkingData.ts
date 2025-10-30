@@ -33,7 +33,7 @@ export function mapApiNetworkingRequestToRendezVous(apiData: any): RendezVous {
   // Extraire l'heure (peut être 'heure', 'start_time', 'time')
   const heure = apiData.heure || apiData.start_time || apiData.time || '09:00';
 
-  return {
+  const mapped = {
     id: apiData.id || apiData.request_id || '',
     demandeurId: apiData.demandeur_id || apiData.demandeurId || apiData.requester_id || '',
     recepteurId: apiData.recepteur_id || apiData.recepteurId || apiData.receiver_id || '',
@@ -42,7 +42,13 @@ export function mapApiNetworkingRequestToRendezVous(apiData: any): RendezVous {
     heure,
     statut: mapApiStatut(apiData.statut || apiData.status),
     commentaire: apiData.commentaire || apiData.comment || apiData.notes,
-  };
+  } as any;
+
+  // Attacher les objets associés pour l'UI (non typés, conservés en 'any')
+  if (apiData.demandeur) mapped.demandeur = apiData.demandeur;
+  if (apiData.recepteur) mapped.recepteur = apiData.recepteur;
+
+  return mapped as RendezVous;
 }
 
 /**

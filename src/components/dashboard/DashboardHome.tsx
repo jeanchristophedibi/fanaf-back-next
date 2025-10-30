@@ -44,6 +44,9 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
     rendezVous: 0,
   });
 
+  const baseSegment = userProfile === 'agence' ? 'agence' : 'admin-fanaf';
+  const baseInscriptionsPath = `/dashboard/${baseSegment}/inscriptions`;
+
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -184,7 +187,7 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
                 />
               )}
 
-              <InscriptionsSection statsInscriptions={inscriptionsCounts} />
+              <InscriptionsSection statsInscriptions={inscriptionsCounts} basePath={baseInscriptionsPath} />
 
               <OrganisationsSection statsOrganisations={organisationsCounts} />
 

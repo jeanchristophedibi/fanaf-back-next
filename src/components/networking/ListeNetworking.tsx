@@ -64,17 +64,30 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
   // Enrichir les rendez-vous avec des champs de recherche calculés
   const rendezVousWithSearch = useMemo(() => {
     return rendezVous.map(rdv => {
+      const apiDemandeur: any = (rdv as any).demandeur;
+      const apiRecepteur: any = (rdv as any).recepteur;
       const demandeur = getParticipantById(rdv.demandeurId);
       const recepteur = rdv.type === 'participant' ? getParticipantById(rdv.recepteurId) : null;
       const referentSponsor = rdv.type === 'sponsor' ? getReferentSponsor(rdv.recepteurId) : null;
-      
+
+      const demandeurName = apiDemandeur?.name || (demandeur ? `${demandeur.prenom} ${demandeur.nom}` : '');
+      const demandeurEmail = demandeur?.email || '';
+
+      const recepteurName = rdv.type === 'sponsor'
+        ? referentSponsor ? `${referentSponsor.prenom} ${referentSponsor.nom}` : (apiRecepteur?.name || '')
+        : apiRecepteur?.name || (recepteur ? `${recepteur.prenom} ${recepteur.nom}` : '');
+      const recepteurEmail = rdv.type === 'sponsor'
+        ? referentSponsor?.email || ''
+        : recepteur?.email || '';
+      const recepteurOrg = rdv.type === 'sponsor' ? (referentSponsor?.organisationNom || '') : '';
+
       return {
         ...rdv,
-        _searchDemandeur: demandeur ? `${demandeur.prenom} ${demandeur.nom} ${demandeur.email}`.toLowerCase() : '',
-        _searchRecepteur: rdv.type === 'sponsor' && referentSponsor 
-          ? `${referentSponsor.prenom} ${referentSponsor.nom} ${referentSponsor.organisationNom} ${referentSponsor.email}`.toLowerCase()
-          : recepteur ? `${recepteur.prenom} ${recepteur.nom} ${recepteur.email}`.toLowerCase() : '',
-      };
+        _apiDemandeur: apiDemandeur, // pour l'affichage conditionnel
+        _apiRecepteur: apiRecepteur,
+        _searchDemandeur: `${demandeurName} ${demandeurEmail}`.trim().toLowerCase(),
+        _searchRecepteur: `${recepteurName} ${recepteurEmail} ${recepteurOrg}`.trim().toLowerCase(),
+      } as any;
     });
   }, [rendezVous]);
 
@@ -112,15 +125,13 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       }
     };
     const [commentaire, setCommentaire] = useState(rendezVous.commentaire || '');
+    const apiDemandeur: any = (rendezVous as any)._apiDemandeur;
+    const apiRecepteur: any = (rendezVous as any)._apiRecepteur;
     const demandeur = getParticipantById(rendezVous.demandeurId);
-    const demandeurOrganisation = demandeur ? getOrganisationById(demandeur.organisationId) : undefined;
     const recepteur = getParticipantById(rendezVous.recepteurId);
+    const demandeurOrganisation = demandeur ? getOrganisationById(demandeur.organisationId) : undefined;
     const recepteurOrganisation = recepteur ? getOrganisationById(recepteur.organisationId) : undefined;
     const referentSponsor = rendezVous.type === 'sponsor' ? getReferentSponsor(rendezVous.recepteurId) : undefined;
-
-    if (!demandeur) return null;
-    if (rendezVous.type === 'participant' && !recepteur) return null;
-    if (rendezVous.type === 'sponsor' && !referentSponsor) return null;
 
     const handleAction = async (newStatut: StatutRendezVous) => {
       try {
@@ -183,11 +194,24 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
               <div>
                 <Label className="text-gray-700">Demandeur</Label>
                 <div className="mt-1 p-3 bg-gray-50 rounded-md border border-gray-200">
-                  <p className="text-gray-900">{demandeur.prenom} {demandeur.nom}</p>
-                  <p className="text-sm text-gray-600 mt-1">{demandeur.email}</p>
-                  <p className="text-sm text-gray-600">{demandeur.telephone}</p>
-                  {demandeurOrganisation && (
-                    <p className="text-sm text-gray-600 mt-1">Organisation: {demandeurOrganisation.nom}</p>
+                  <p className="text-gray-900">{apiDemandeur?.name || (demandeur ? `${demandeur.prenom} ${demandeur.nom}` : 'N/A')}</p>
+                  {apiDemandeur?.company && (
+                    <p className="text-sm text-gray-600">{apiDemandeur.company}</p>
+                  )}
+                  {apiDemandeur?.job_title && (
+                    <p className="text-sm text-gray-600">{apiDemandeur.job_title}</p>
+                  )}
+                  {apiDemandeur?.country && (
+                    <p className="text-sm text-gray-600">{apiDemandeur.country}</p>
+                  )}
+                  {!apiDemandeur?.name && demandeur && (
+                    <>
+                      <p className="text-sm text-gray-600 mt-1">{demandeur.email}</p>
+                      <p className="text-sm text-gray-600">{demandeur.telephone}</p>
+                      {demandeurOrganisation && (
+                        <p className="text-sm text-gray-600 mt-1">Organisation: {demandeurOrganisation.nom}</p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -204,24 +228,40 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
                   )}
                 </Label>
                 <div className="mt-1 p-3 bg-gray-50 rounded-md border border-gray-200">
-                  {rendezVous.type === 'sponsor' && referentSponsor ? (
+                  {apiRecepteur?.name ? (
                     <>
-                      <p className="text-gray-900">{referentSponsor.prenom} {referentSponsor.nom}</p>
-                      <p className="text-sm text-orange-600">{referentSponsor.fonction}</p>
-                      <p className="text-sm text-gray-600">{referentSponsor.email}</p>
-                      <p className="text-sm text-gray-600">{referentSponsor.telephone}</p>
-                      <p className="text-sm text-gray-600 mt-1">Organisation: {referentSponsor.organisationNom}</p>
-                    </>
-                  ) : recepteur ? (
-                    <>
-                      <p className="text-gray-900">{recepteur.prenom} {recepteur.nom}</p>
-                      <p className="text-sm text-gray-600">{recepteur.email}</p>
-                      <p className="text-sm text-gray-600">{recepteur.telephone}</p>
-                      {recepteurOrganisation && (
-                        <p className="text-sm text-gray-600 mt-1">Organisation: {recepteurOrganisation.nom}</p>
+                      <p className="text-gray-900">{apiRecepteur.name}</p>
+                      {apiRecepteur.job_title && (
+                        <p className="text-sm text-orange-600">{apiRecepteur.job_title}</p>
+                      )}
+                      {apiRecepteur.company && (
+                        <p className="text-sm text-gray-600">{apiRecepteur.company}</p>
+                      )}
+                      {apiRecepteur.country && (
+                        <p className="text-sm text-gray-600">{apiRecepteur.country}</p>
                       )}
                     </>
-                  ) : null}
+                  ) : (
+                    <>
+                      {recepteur && (
+                        <>
+                          <p className="text-gray-900">{recepteur.prenom} {recepteur.nom}</p>
+                          <p className="text-sm text-gray-600">{recepteur.email}</p>
+                          <p className="text-sm text-gray-600">{recepteur.telephone}</p>
+                          {recepteurOrganisation && (
+                            <p className="text-sm text-gray-600 mt-1">Organisation: {recepteurOrganisation.nom}</p>
+                          )}
+                        </>
+                      )}
+                      {!recepteur && referentSponsor && (
+                        <>
+                          <p className="text-gray-900">{referentSponsor.prenom} {referentSponsor.nom}</p>
+                          <p className="text-sm text-orange-600">{referentSponsor.fonction}</p>
+                          <p className="text-sm text-gray-600">{referentSponsor.organisationNom}</p>
+                        </>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -306,12 +346,15 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       header: 'Demandeur',
       sortable: true,
       render: (rdv) => {
+        const apiDemandeur: any = (rdv as any)._apiDemandeur;
         const demandeur = getParticipantById(rdv.demandeurId);
-        if (!demandeur) return <span className="text-gray-400">N/A</span>;
+        if (!apiDemandeur && !demandeur) return <span className="text-gray-400">N/A</span>;
+        const name = apiDemandeur?.name || (demandeur ? `${demandeur.prenom} ${demandeur.nom}` : '');
+        const email = demandeur?.email;
         return (
           <div>
-            <p className="text-gray-900">{demandeur.prenom} {demandeur.nom}</p>
-            <p className="text-xs text-gray-500">{demandeur.email}</p>
+            <p className="text-gray-900">{name}</p>
+            {email && <p className="text-xs text-gray-500">{email}</p>}
           </div>
         );
       },
@@ -322,22 +365,35 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       header: activeFilter === 'sponsor' ? 'Référent Sponsor' : 'Récepteur',
       sortable: true,
       render: (rdv) => {
+        const apiRecepteur: any = (rdv as any)._apiRecepteur;
+        const recepteur = getParticipantById(rdv.recepteurId);
         const referentSponsor = rdv.type === 'sponsor' ? getReferentSponsor(rdv.recepteurId) : undefined;
-        const recepteur = rdv.type === 'participant' ? getParticipantById(rdv.recepteurId) : undefined;
-        
-        if (rdv.type === 'sponsor' && referentSponsor) {
+
+        // Priorité aux données API pour un affichage cohérent côté liste
+        if (apiRecepteur?.name) {
+          return (
+            <div>
+              <p className="text-gray-900">{apiRecepteur.name}</p>
+              {apiRecepteur.company && <p className="text-xs text-gray-500">{apiRecepteur.company}</p>}
+            </div>
+          );
+        }
+        // Fallback local participant
+        if (recepteur) {
+          return (
+            <div>
+              <p className="text-gray-900">{recepteur.prenom} {recepteur.nom}</p>
+              <p className="text-xs text-gray-500">{recepteur.email}</p>
+            </div>
+          );
+        }
+        // Dernier recours: référent sponsor si aucun nom d'utilisateur récepteur disponible
+        if (referentSponsor) {
           return (
             <div>
               <p className="text-gray-900">{referentSponsor.prenom} {referentSponsor.nom}</p>
               <p className="text-xs text-orange-600">{referentSponsor.fonction}</p>
               <p className="text-xs text-gray-500">{referentSponsor.organisationNom}</p>
-            </div>
-          );
-        } else if (recepteur) {
-          return (
-            <div>
-              <p className="text-gray-900">{recepteur.prenom} {recepteur.nom}</p>
-              <p className="text-xs text-gray-500">{recepteur.email}</p>
             </div>
           );
         }
@@ -392,29 +448,25 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
   );
 
   // Export CSV
-  const exportHeaders = ['Type', 'Demandeur', 'Email Demandeur', 'Récepteur', 'Email Récepteur', 'Organisation', 'Date', 'Heure', 'Statut', 'Commentaire'];
+  const exportHeaders = ['Type', 'Demandeur', 'Récepteur', 'Organisation', 'Date', 'Heure', 'Statut', 'Commentaire'];
   
   const exportData = (rdv: RendezVous) => {
+    const apiDemandeur: any = (rdv as any)._apiDemandeur;
+    const apiRecepteur: any = (rdv as any)._apiRecepteur;
     const demandeur = getParticipantById(rdv.demandeurId);
     const recepteur = getParticipantById(rdv.recepteurId);
     const referentSponsor = rdv.type === 'sponsor' ? getReferentSponsor(rdv.recepteurId) : undefined;
-    
-    const recepteurNom = rdv.type === 'sponsor' && referentSponsor 
-      ? `${referentSponsor.prenom} ${referentSponsor.nom}`
-      : `${recepteur?.prenom || ''} ${recepteur?.nom || ''}`;
-    const recepteurEmail = rdv.type === 'sponsor' && referentSponsor 
-      ? referentSponsor.email
-      : recepteur?.email || '';
-    const organisationNom = rdv.type === 'sponsor' && referentSponsor 
-      ? referentSponsor.organisationNom
-      : '';
-    
+
+    const demandeurNom = apiDemandeur?.name || `${demandeur?.prenom || ''} ${demandeur?.nom || ''}`.trim();
+    const recepteurNom = apiRecepteur?.name
+      ? apiRecepteur.name
+      : (recepteur ? `${recepteur.prenom} ${recepteur.nom}` : referentSponsor ? `${referentSponsor.prenom} ${referentSponsor.nom}` : '');
+    const organisationNom = apiRecepteur?.company || (referentSponsor?.organisationNom || '');
+
     return [
       rdv.type,
-      `${demandeur?.prenom || ''} ${demandeur?.nom || ''}`,
-      demandeur?.email || '',
+      demandeurNom,
       recepteurNom,
-      recepteurEmail,
       organisationNom,
       new Date(rdv.date).toLocaleDateString('fr-FR'),
       rdv.heure,
@@ -549,7 +601,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       columns={columns}
       getRowId={(rdv) => rdv.id}
       searchPlaceholder={activeFilter === 'sponsor' ? "Rechercher par nom (demandeur ou référent)..." : "Rechercher par nom (demandeur ou récepteur)..."}
-      searchKeys={['_searchDemandeur', '_searchRecepteur', 'date', 'heure', 'statut']}
+      searchKeys={['_searchDemandeur', '_searchRecepteur', 'date', 'heure', 'statut'] as unknown as (keyof RendezVous)[]}
       filterComponent={filterComponent}
       filterTitle="Rendez-vous"
       exportFilename={`rendez-vous-${activeFilter || 'all'}-fanaf`}
