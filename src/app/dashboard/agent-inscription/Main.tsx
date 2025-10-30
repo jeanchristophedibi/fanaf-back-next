@@ -19,8 +19,6 @@ const AgentInscriptionMain = ({ onSwitchProfile }: AgentInscriptionMainProps = {
         return <AgentInscriptionDashboard />;
       case 'nouvelle':
         return <NouvelleInscriptionPage />;
-      case 'en-cours':
-        return <InscriptionsEnCoursPage />;
       default:
         return <AgentInscriptionDashboard />;
     }

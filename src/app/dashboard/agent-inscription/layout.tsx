@@ -25,7 +25,7 @@ export default function AgentInscriptionLayout({ children }: { children: React.R
         router.push('/dashboard/agent-inscription');
         break;
       case 'caisse-inscriptions':
-        router.push('/dashboard/agent-inscription/inscriptions/en-cours');
+        router.push('/dashboard/agent-inscription/inscriptions');
         break;
       case 'inscriptions-creer':
         router.push('/dashboard/agent-inscription/inscriptions/creer');

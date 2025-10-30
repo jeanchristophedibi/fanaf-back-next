@@ -250,7 +250,7 @@ export const StepRecap: React.FC<StepRecapProps> = ({
             <p className="text-xs text-gray-500">
               Le montant dépend du statut et du nombre de participants.
             </p>
-          </div>
+        </div>
         </SectionCard>
       </div>
 
