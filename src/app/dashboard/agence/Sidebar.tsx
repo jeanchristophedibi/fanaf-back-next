@@ -47,7 +47,7 @@ export function Sidebar({ activeNav, onNavChange, onSwitchProfile }: SidebarProp
     { id: 'networking-liste' as NavItem, label: 'Liste des rendez-vous' },
     { id: 'networking-participant' as NavItem, label: 'Rendez-vous participant' },
     { id: 'networking-sponsor' as NavItem, label: 'Rendez-vous sponsor' },
-    { id: 'networking-historique' as NavItem, label: 'Historique des demandes' },
+    { id: 'networking-historique' as NavItem, label: 'Récap des demandes' },
   ];
 
   const isInscriptionsActive = activeNav.startsWith('inscriptions');

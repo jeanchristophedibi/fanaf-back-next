@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Eye, Clock, User, Send, Inbox, FileText, Download } from 'lucide-react';
 import { getOrganisationById } from './data/mockData';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
+import { useFanafApi } from '../hooks/useFanafApi';
+import { getApiRequestsArray, normalizeStatus, extractRequester, extractReceiver, extractOrganisationName } from './data/networkingRecap';
 import { AnimatedStat } from './AnimatedStat';
 import { HistoriqueRendezVousDialog } from './HistoriqueRendezVousDialog';
 import { List, type Column, type RowAction, type ListAction } from './list/List';
@@ -16,6 +18,7 @@ interface ParticipantWithStats {
   prenom: string;
   email: string;
   organisationId: string;
+  organisationName?: string;
   rendezVousEnvoyes: number;
   rendezVousRecus: number;
   totalRendezVous: number;
@@ -34,17 +37,84 @@ interface ParticipantWithStats {
 
 export function HistoriqueDemandesPage() {
   const { participants, rendezVous: rendezVousData } = useDynamicInscriptions({ includeRendezVous: true });
+  // Networking depuis l'API
+  const { networkingRequests, fetchNetworkingRequests } = useFanafApi({ autoFetch: false });
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [isHistoriqueOpen, setIsHistoriqueOpen] = useState(false);
 
+  useEffect(() => {
+    fetchNetworkingRequests();
+  }, [fetchNetworkingRequests]);
+
   // Calculer les statistiques pour chaque participant avec texte de recherche
   const participantsWithStats = useMemo(() => {
+    // Si des données networking sont disponibles depuis l'API, les utiliser en priorité
+    const apiRequests: any[] = getApiRequestsArray(networkingRequests);
+
+    if (apiRequests.length > 0) {
+      // Construire un index par participant (demandeur et destinataire)
+      const statsByUser: Record<string, ParticipantWithStats> = {};
+
+      const upsertUser = (u: any) => {
+        const id = u?.id?.toString() || u?.user_id?.toString();
+        if (!id) return null;
+        if (!statsByUser[id]) {
+          statsByUser[id] = {
+            id,
+            nom: u?.name || u?.nom || '',
+            prenom: u?.prenom || '',
+            email: u?.email || '',
+            organisationId: u?.organisation_id?.toString?.() || u?.organisationId || '',
+            organisationName: extractOrganisationName(u),
+            rendezVousEnvoyes: 0,
+            rendezVousRecus: 0,
+            totalRendezVous: 0,
+            statsEnvoyes: { acceptee: 0, enAttente: 0, occupee: 0 },
+            statsRecus: { acceptee: 0, enAttente: 0, occupee: 0 },
+          };
+        }
+        return statsByUser[id];
+      };
+
+      apiRequests.forEach((req) => {
+        const requester = extractRequester(req);
+        const receiver = extractReceiver(req);
+        const status = normalizeStatus(req.status || req.statut);
+
+        const reqUser = upsertUser(requester);
+        if (reqUser) {
+          reqUser.rendezVousEnvoyes += 1;
+          reqUser.totalRendezVous += 1;
+          if (status === 'acceptée') reqUser.statsEnvoyes.acceptee += 1;
+          else if (status === 'en-attente') reqUser.statsEnvoyes.enAttente += 1;
+          else if (status === 'occupée') reqUser.statsEnvoyes.occupee += 1;
+        }
+
+        const recUser = upsertUser(receiver);
+        if (recUser) {
+          recUser.rendezVousRecus += 1;
+          recUser.totalRendezVous += 1;
+          if (status === 'acceptée') recUser.statsRecus.acceptee += 1;
+          else if (status === 'en-attente') recUser.statsRecus.enAttente += 1;
+          else if (status === 'occupée') recUser.statsRecus.occupee += 1;
+        }
+      });
+
+      return Object.values(statsByUser).map((p) => {
+        const organisation = p.organisationName ? null : getOrganisationById(p.organisationId);
+        return {
+          ...p,
+          _searchText: `${p.nom} ${p.prenom} ${p.email} ${p.organisationName || organisation?.nom || ''}`.toLowerCase(),
+        } as ParticipantWithStats;
+      });
+    }
+
+    // Fallback: ancienne logique locale
     return participants.map(participant => {
       const rendezVousEnvoyes = rendezVousData.filter(rdv => rdv.demandeurId === participant.id);
       const rendezVousRecus = rendezVousData.filter(rdv => rdv.recepteurId === participant.id);
       const totalRendezVous = rendezVousEnvoyes.length + rendezVousRecus.length;
 
-      // Compter par statut
       const statsEnvoyes = {
         acceptee: rendezVousEnvoyes.filter(rdv => rdv.statut === 'acceptée').length,
         enAttente: rendezVousEnvoyes.filter(rdv => rdv.statut === 'en-attente').length,
@@ -70,14 +140,18 @@ export function HistoriqueDemandesPage() {
         _searchText: searchText,
       } as ParticipantWithStats;
     });
-  }, [participants, rendezVousData]);
+  }, [participants, rendezVousData, networkingRequests]);
 
   // Statistiques globales
   const stats = useMemo(() => {
-    const totalDemandes = rendezVousData.length;
-    const demandesAcceptees = rendezVousData.filter(rdv => rdv.statut === 'acceptée').length;
-    const demandesEnAttente = rendezVousData.filter(rdv => rdv.statut === 'en-attente').length;
-    const demandesOccupees = rendezVousData.filter(rdv => rdv.statut === 'occupée').length;
+    const apiRequests: any[] = getApiRequestsArray(networkingRequests);
+
+    const source = apiRequests.length > 0 ? apiRequests : rendezVousData;
+
+    const totalDemandes = source.length;
+    const demandesAcceptees = source.filter((rdv: any) => normalizeStatus(rdv.status || rdv.statut) === 'acceptée').length;
+    const demandesEnAttente = source.filter((rdv: any) => normalizeStatus(rdv.status || rdv.statut) === 'en-attente').length;
+    const demandesOccupees = source.filter((rdv: any) => normalizeStatus(rdv.status || rdv.statut) === 'occupée').length;
 
     return {
       totalDemandes,
@@ -86,7 +160,7 @@ export function HistoriqueDemandesPage() {
       demandesOccupees,
       participantsActifs: participantsWithStats.filter(p => p.totalRendezVous > 0).length,
     };
-  }, [rendezVousData, participantsWithStats]);
+  }, [rendezVousData, participantsWithStats, networkingRequests]);
 
   const handleViewHistorique = (participantId: string) => {
     setSelectedParticipantId(participantId);
@@ -112,6 +186,9 @@ export function HistoriqueDemandesPage() {
       header: 'Organisation',
       sortable: true,
       render: (p) => {
+        if (p.organisationName) {
+          return <span className="text-gray-600">{p.organisationName}</span>;
+        }
         const organisation = getOrganisationById(p.organisationId);
         return <span className="text-gray-600">{organisation?.nom || 'N/A'}</span>;
       },
@@ -202,18 +279,7 @@ export function HistoriqueDemandesPage() {
     },
   ];
 
-  // Actions par ligne
-  const rowActions: RowAction<ParticipantWithStats>[] = [
-    {
-      label: 'Voir',
-      icon: <Eye className="w-4 h-4" />,
-      onClick: (p) => handleViewHistorique(p.id),
-      variant: 'ghost',
-      className: 'h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50',
-      title: 'Voir l\'historique',
-      disabled: (p) => p.totalRendezVous === 0,
-    },
-  ];
+  // Pas d'actions par ligne dans le récap
 
   // Actions en masse
   const buildActions: ListAction<ParticipantWithStats>[] = [
@@ -350,7 +416,7 @@ export function HistoriqueDemandesPage() {
         getRowId={(p) => p.id}
         searchPlaceholder="Rechercher un participant..."
         searchKeys={['_searchText', 'nom', 'prenom', 'email']}
-        filterTitle="Historique des demandes"
+        filterTitle="Récap des demandes"
         exportFilename={`historique-demandes-fanaf-2026-${new Date().toISOString().split('T')[0]}`}
         exportHeaders={exportHeaders}
         exportData={exportData}
@@ -358,8 +424,6 @@ export function HistoriqueDemandesPage() {
         readOnly={true}
         enableSelection={true}
         buildActions={buildActions}
-        rowActions={rowActions}
-        rowActionsWidth="w-20"
         emptyMessage="Aucun participant trouvé"
       />
 
@@ -372,7 +436,7 @@ export function HistoriqueDemandesPage() {
             setSelectedParticipantId(null);
           }}
           participantId={selectedParticipantId}
-          rendezVousList={rendezVousData}
+          rendezVousList={(getApiRequestsArray(networkingRequests).length > 0 ? getApiRequestsArray(networkingRequests) : rendezVousData) as any}
         />
       )}
     </div>

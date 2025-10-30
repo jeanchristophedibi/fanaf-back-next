@@ -101,7 +101,7 @@ export default function AdminFanafDashboard({ onSwitchProfile }: AdminFanafDashb
       case 'networking-liste': return 'Networking';
       case 'networking-participant': return 'Rendez-vous participants';
       case 'networking-sponsor': return 'Rendez-vous sponsors';
-      case 'networking-historique': return 'Historique des demandes';
+      case 'networking-historique': return 'Récap des demandes';
       default: return 'Tableau de bord';
     }
   };

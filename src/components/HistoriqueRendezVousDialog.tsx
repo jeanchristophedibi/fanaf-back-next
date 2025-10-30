@@ -12,7 +12,7 @@ interface HistoriqueRendezVousDialogProps {
   isOpen: boolean;
   onClose: () => void;
   participantId: string;
-  rendezVousList: RendezVous[];
+  rendezVousList: any[]; // accepte données API networking ou mock RendezVous
   onReturnToDetails?: () => void;
 }
 
@@ -29,23 +29,71 @@ export function HistoriqueRendezVousDialog({
   rendezVousList,
   onReturnToDetails
 }: HistoriqueRendezVousDialogProps) {
-  const participant = getParticipantById(participantId);
-  const participantOrganisation = participant ? getOrganisationById(participant.organisationId) : undefined;
+  // Helpers pour supporter soit le modèle mock, soit la réponse API
+  const getRequester = (rdv: any) => rdv.requester || rdv.user || rdv.demandeur || (rdv.demandeurId ? getParticipantById(rdv.demandeurId) : undefined);
+  const getReceiver = (rdv: any) => rdv.receiver || rdv.target_user || rdv.recepteur || (rdv.recepteurId ? getParticipantById(rdv.recepteurId) : undefined);
+  const getRequesterId = (rdv: any): string | undefined => (getRequester(rdv)?.id || rdv.demandeurId || rdv.user_id)?.toString();
+  const getReceiverId = (rdv: any): string | undefined => (getReceiver(rdv)?.id || rdv.recepteurId || rdv.target_user_id)?.toString();
+  const getStatus = (rdv: any): string => {
+    const v = String(rdv.statut || rdv.status || '').toLowerCase();
+    if (v.includes('accept')) return 'acceptée';
+    if (v.includes('attent')) return 'en-attente';
+    if (v.includes('occup')) return 'occupée';
+    return rdv.statut || rdv.status || '—';
+  };
+  const getDateStr = (rdv: any): string => {
+    const d = rdv.date || rdv.scan_at || rdv.created_at || rdv.updated_at || rdv.datetime;
+    try { return d ? new Date(d).toLocaleDateString('fr-FR') : '—'; } catch { return '—'; }
+  };
+  const getTimeStr = (rdv: any): string => {
+    if (rdv.heure) return rdv.heure;
+    const d = rdv.date || rdv.scan_at || rdv.created_at || rdv.updated_at || rdv.datetime;
+    try { return d ? new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'; } catch { return '—'; }
+  };
 
-  if (!participant) return null;
+  // Construire un fallback participant si absent des mocks
+  const participant = getParticipantById(participantId) as any;
+  let participantOrganisation = participant ? getOrganisationById(participant.organisationId) : undefined;
+  let participantDisplay = participant ? {
+    prenom: participant.prenom,
+    nom: participant.nom,
+    email: participant.email,
+    telephone: participant.telephone,
+    organisation: participantOrganisation?.nom,
+  } : undefined;
+
+  if (!participantDisplay) {
+    const rdvSample = rendezVousList.find((rdv) => getRequesterId(rdv) === participantId || getReceiverId(rdv) === participantId);
+    const userLike = rdvSample ? (getRequesterId(rdvSample) === participantId ? getRequester(rdvSample) : getReceiver(rdvSample)) : undefined;
+    if (userLike) {
+      participantDisplay = {
+        prenom: userLike.prenom || '',
+        nom: userLike.nom || userLike.name || '',
+        email: userLike.email || userLike.contact?.email || '',
+        telephone: userLike.phone || userLike.contact?.phone || '',
+        organisation: userLike.company || userLike.organisation || userLike.organization || userLike.organisation?.name || userLike.organization?.name,
+      };
+    }
+  }
+
+  if (!participantDisplay) return null;
 
   // Rendez-vous envoyés (participant est demandeur)
-  const rendezVousEnvoyes = rendezVousList.filter(rdv => rdv.demandeurId === participantId);
+  const rendezVousEnvoyes = rendezVousList.filter(rdv => getRequesterId(rdv) === participantId);
 
   // Rendez-vous reçus (participant est récepteur)
-  const rendezVousRecus = rendezVousList.filter(rdv => rdv.recepteurId === participantId);
+  const rendezVousRecus = rendezVousList.filter(rdv => getReceiverId(rdv) === participantId);
 
-  const RdvRow: React.FC<{ rdv: RendezVous; isDemandeur: boolean }> = ({ rdv, isDemandeur }) => {
-    const autreParticipant = isDemandeur 
-      ? getParticipantById(rdv.recepteurId)
-      : getParticipantById(rdv.demandeurId);
-    const autreOrganisation = autreParticipant ? getOrganisationById(autreParticipant.organisationId) : undefined;
-    const referentSponsor = rdv.type === 'sponsor' ? getReferentSponsor(rdv.recepteurId) : undefined;
+  const RdvRow: React.FC<{ rdv: any; isDemandeur: boolean }> = ({ rdv, isDemandeur }) => {
+    const requester = getRequester(rdv);
+    const receiver = getReceiver(rdv);
+    const autre = isDemandeur ? receiver : requester;
+    const autreMock = autre?.id ? getParticipantById(autre.id) : undefined;
+    const autreOrganisation = (autre?.company || autre?.organisation || autre?.organization || autreMock)
+      ? (autreMock?.organisationId ? getOrganisationById(autreMock.organisationId) : undefined)
+      : undefined;
+    const receiverIdStr: string = String(getReceiverId(rdv) ?? '');
+    const referentSponsor = rdv.type === 'sponsor' ? getReferentSponsor(receiverIdStr) : undefined;
 
     return (
       <TableRow key={rdv.id}>
@@ -63,20 +111,20 @@ export function HistoriqueRendezVousDialog({
                 <p className="text-xs text-orange-600">{referentSponsor.fonction}</p>
                 <p className="text-xs text-gray-500">{referentSponsor.organisationNom}</p>
               </div>
-            ) : autreParticipant ? (
+            ) : (autre || autreMock) ? (
               <div>
-                <p className="text-gray-900">{autreParticipant.prenom} {autreParticipant.nom}</p>
-                <p className="text-xs text-gray-500">{autreOrganisation?.nom}</p>
+                <p className="text-gray-900">{autre?.prenom || ''} {autre?.nom || autre?.name || autreMock?.nom || ''}</p>
+                <p className="text-xs text-gray-500">{autre?.company || autreOrganisation?.nom || ''}</p>
               </div>
             ) : (
               <span className="text-gray-400">Indisponible</span>
             )
           ) : (
             // Afficher le demandeur
-            autreParticipant ? (
+            (autre || autreMock) ? (
               <div>
-                <p className="text-gray-900">{autreParticipant.prenom} {autreParticipant.nom}</p>
-                <p className="text-xs text-gray-500">{autreOrganisation?.nom}</p>
+                <p className="text-gray-900">{autre?.prenom || ''} {autre?.nom || autre?.name || autreMock?.nom || ''}</p>
+                <p className="text-xs text-gray-500">{autre?.company || autreOrganisation?.nom || ''}</p>
               </div>
             ) : (
               <span className="text-gray-400">Indisponible</span>
@@ -86,22 +134,22 @@ export function HistoriqueRendezVousDialog({
         <TableCell className="text-gray-600">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-400" />
-            {new Date(rdv.date).toLocaleDateString('fr-FR')}
+            {getDateStr(rdv)}
           </div>
         </TableCell>
         <TableCell className="text-gray-600">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-gray-400" />
-            {rdv.heure}
+            {getTimeStr(rdv)}
           </div>
         </TableCell>
         <TableCell>
-          <Badge className={statutRdvColors[rdv.statut]}>
-            {rdv.statut}
+          <Badge className={statutRdvColors[getStatus(rdv)] || 'bg-gray-100 text-gray-700 border-gray-300'}>
+            {getStatus(rdv)}
           </Badge>
         </TableCell>
         <TableCell className="text-sm text-gray-600 max-w-xs truncate">
-          {rdv.commentaire || '-'}
+          {rdv.commentaire || rdv.comment || '-'}
         </TableCell>
       </TableRow>
     );
@@ -125,7 +173,7 @@ export function HistoriqueRendezVousDialog({
             <div className="flex-1">
               <DialogTitle>Historique des rendez-vous</DialogTitle>
               <DialogDescription>
-                Historique complet des demandes de rendez-vous pour {participant.prenom} {participant.nom}
+                Historique complet des demandes de rendez-vous pour {participantDisplay.prenom} {participantDisplay.nom}
               </DialogDescription>
             </div>
           </div>
@@ -138,27 +186,29 @@ export function HistoriqueRendezVousDialog({
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-3">
                   <User className="w-5 h-5 text-orange-600" />
-                  <h3 className="text-gray-900">{participant.prenom} {participant.nom}</h3>
+                  <h3 className="text-gray-900">{participantDisplay.prenom} {participantDisplay.nom}</h3>
                 </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2 text-gray-600">
                     <Mail className="w-4 h-4 text-orange-600 flex-shrink-0" />
                     <span className="font-medium">Email:</span>
-                    <span className="truncate">{participant.email}</span>
+                    <span className="truncate">{participantDisplay.email}</span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-600">
                     <Phone className="w-4 h-4 text-orange-600 flex-shrink-0" />
                     <span className="font-medium">Téléphone:</span>
-                    <span>{participant.telephone}</span>
+                    <span>{participantDisplay.telephone}</span>
                   </div>
-                  {participantOrganisation && (
+                  {(participantDisplay.organisation || participantOrganisation) && (
                     <div className="flex items-center gap-2 text-gray-600">
                       <Building2 className="w-4 h-4 text-orange-600 flex-shrink-0" />
                       <span className="font-medium">Organisation:</span>
-                      <span className="truncate">{participantOrganisation.nom}</span>
-                      <Badge className="ml-2 bg-orange-600 text-white flex-shrink-0">
-                        {participantOrganisation.statut}
-                      </Badge>
+                      <span className="truncate">{participantDisplay.organisation || participantOrganisation?.nom}</span>
+                      {participantOrganisation && (
+                        <Badge className="ml-2 bg-orange-600 text-white flex-shrink-0">
+                          {participantOrganisation.statut}
+                        </Badge>
+                      )}
                     </div>
                   )}
                 </div>

@@ -174,7 +174,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
     { id: 'networking-liste', label: 'Liste des rendez-vous' },
     { id: 'networking-participant', label: 'Rendez-vous participant' },
     { id: 'networking-sponsor', label: 'Rendez-vous sponsor' },
-    { id: 'networking-historique', label: 'Historique des demandes' },
+    { id: 'networking-historique', label: 'Récap des demandes' },
   ];
 
   const paiementsSubItems = [
