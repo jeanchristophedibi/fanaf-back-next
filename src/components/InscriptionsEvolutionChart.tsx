@@ -1,27 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart as ReLineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { TrendingUp, Calendar } from 'lucide-react';
-
-// Données simulées d'évolution des inscriptions
-const evolutionData = [
-  { date: '01 Jan', membres: 5, nonMembres: 3, vip: 1, speakers: 0, total: 9 },
-  { date: '05 Jan', membres: 12, nonMembres: 8, vip: 2, speakers: 1, total: 23 },
-  { date: '10 Jan', membres: 18, nonMembres: 15, vip: 4, speakers: 2, total: 39 },
-  { date: '15 Jan', membres: 25, nonMembres: 22, vip: 6, speakers: 3, total: 56 },
-  { date: '20 Jan', membres: 32, nonMembres: 28, vip: 8, speakers: 4, total: 72 },
-  { date: '25 Jan', membres: 38, nonMembres: 34, vip: 9, speakers: 5, total: 86 },
-  { date: '30 Jan', membres: 45, nonMembres: 40, vip: 10, speakers: 5, total: 100 },
-];
-
-// Données de répartition hebdomadaire
-const weeklyData = [
-  { semaine: 'Sem 1', total: 23, membres: 12, nonMembres: 11 },
-  { semaine: 'Sem 2', total: 16, membres: 9, nonMembres: 7 },
-  { semaine: 'Sem 3', total: 17, membres: 10, nonMembres: 7 },
-  { semaine: 'Sem 4', total: 14, membres: 8, nonMembres: 6 },
-  { semaine: 'Sem 5', total: 30, membres: 17, nonMembres: 13 },
-];
+import { loadInscriptionsEvolutionSeries } from './data/InscriptionsEvolutionData';
+import { loadInscriptionsWeeklySeries } from './data/InscriptionsWeeklyData';
+import { Skeleton } from './ui/skeleton';
 
 // Custom Tooltip pour le graphique d'évolution
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -66,8 +49,87 @@ const WeeklyTooltip = ({ active, payload, label }: any) => {
 };
 
 export function InscriptionsEvolutionChart() {
+  const [loading, setLoading] = useState(true);
+  const [evolutionData, setEvolutionData] = useState<any[]>([]);
+  const [weeklyData, setWeeklyData] = useState<any[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [evo, weekly] = await Promise.all([
+          loadInscriptionsEvolutionSeries({ days: 30 }),
+          loadInscriptionsWeeklySeries({ weeks: 8 }),
+        ]);
+        if (!mounted) return;
+        setEvolutionData(evo);
+        setWeeklyData(weekly);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-[460px] w-full" />
+        <Skeleton className="h-[380px] w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+            {/* Statistiques clés */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-700">Taux de croissance</p>
+                <p className="text-2xl text-green-900 mt-1">+12.5%</p>
+                <p className="text-xs text-green-600 mt-1">par semaine</p>
+              </div>
+              <TrendingUp className="w-10 h-10 text-green-600 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700">Moyenne par jour</p>
+                <p className="text-2xl text-blue-900 mt-1">3.3</p>
+                <p className="text-xs text-blue-600 mt-1">inscriptions</p>
+              </div>
+              <Calendar className="w-10 h-10 text-blue-600 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-orange-700">Semaine record</p>
+                <p className="text-2xl text-orange-900 mt-1">30</p>
+                <p className="text-xs text-orange-600 mt-1">Semaine 5</p>
+              </div>
+              <TrendingUp className="w-10 h-10 text-orange-600 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       {/* Graphique d'évolution cumulée avec Area Chart amélioré */}
       <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-orange-100 overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600" />
@@ -232,47 +294,7 @@ export function InscriptionsEvolutionChart() {
         </CardContent>
       </Card>
 
-      {/* Statistiques clés */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700">Taux de croissance</p>
-                <p className="text-2xl text-green-900 mt-1">+12.5%</p>
-                <p className="text-xs text-green-600 mt-1">par semaine</p>
-              </div>
-              <TrendingUp className="w-10 h-10 text-green-600 opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-700">Moyenne par jour</p>
-                <p className="text-2xl text-blue-900 mt-1">3.3</p>
-                <p className="text-xs text-blue-600 mt-1">inscriptions</p>
-              </div>
-              <Calendar className="w-10 h-10 text-blue-600 opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-orange-700">Semaine record</p>
-                <p className="text-2xl text-orange-900 mt-1">30</p>
-                <p className="text-xs text-orange-600 mt-1">Semaine 5</p>
-              </div>
-              <TrendingUp className="w-10 h-10 text-orange-600 opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

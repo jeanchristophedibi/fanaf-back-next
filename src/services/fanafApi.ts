@@ -133,11 +133,10 @@ class FanafApiService {
     } catch (error) {
       // Si c'est déjà une Error, la propager telle quelle
       if (error instanceof Error) {
-        console.error(`Erreur API [${endpoint}]:`, error.message);
+        // Ne pas re-logger ici pour éviter les doublons (surtout 401/403)
         throw error;
       }
       // Sinon, créer une nouvelle Error
-      console.error(`Erreur API [${endpoint}]:`, error);
       throw new Error(`Erreur inconnue: ${String(error)}`);
     }
   }

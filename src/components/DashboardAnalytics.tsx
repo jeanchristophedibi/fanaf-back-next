@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TrendingUp, TrendingDown, Users, Building2, Calendar, DollarSign, Award } from 'lucide-react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -19,92 +19,153 @@ import {
   AreaChart,
   Area,
 } from 'recharts';
-import { mockOrganisations } from './data/mockData';
-import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
+import { Skeleton } from './ui/skeleton';
+import { inscriptionsDataService } from './data/inscriptionsData';
+import { companiesDataService } from './data/companiesData';
+import { networkingDataService } from './data/networkingData';
 
 export function DashboardAnalytics() {
-  const { participants, rendezVous, reservations } = useDynamicInscriptions({ 
-    includeRendezVous: true, 
-    includeReservations: false // Désactivé car la rubrique stand a été retirée
-  });
-  // Données pour le graphique d'évolution des inscriptions
-  const inscriptionsEvolution = [
-    { mois: 'Jan', inscriptions: 12, objectif: 15 },
-    { mois: 'Fév', inscriptions: 25, objectif: 30 },
-    { mois: 'Mar', inscriptions: 42, objectif: 50 },
-    { mois: 'Avr', inscriptions: 67, objectif: 75 },
-    { mois: 'Mai', inscriptions: 89, objectif: 100 },
-    { mois: 'Juin', inscriptions: 112, objectif: 125 },
-    { mois: 'Juil', inscriptions: 138, objectif: 150 },
-    { mois: 'Août', inscriptions: 167, objectif: 180 },
-    { mois: 'Sept', inscriptions: 192, objectif: 210 },
-    { mois: 'Oct', inscriptions: participants.length, objectif: 250 },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [organisations, setOrganisations] = useState<any[]>([]);
+  const [rendezVous, setRendezVous] = useState<any[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [orgs, parts, rdv] = await Promise.all([
+          companiesDataService.loadOrganisations(),
+          inscriptionsDataService.loadParticipants(['member', 'not_member', 'vip']),
+          networkingDataService.loadNetworkingRequests(),
+        ]);
+        if (!mounted) return;
+        setOrganisations(orgs);
+        setParticipants(parts);
+        setRendezVous(rdv);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  // Données pour le graphique d'évolution des inscriptions (mensuel sur 8 mois)
+  const inscriptionsEvolution = useMemo(() => {
+    // Regrouper par mois (YYYY-MM)
+    const counts = new Map<string, number>();
+    for (const p of participants) {
+      const d = p.dateInscription ? new Date(p.dateInscription) : null;
+      if (!d || isNaN(d.getTime())) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    // Générer les 8 derniers mois
+    const now = new Date();
+    const months: string[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    const monthLabel = (key: string) => {
+      const [y, m] = key.split('-');
+      const d = new Date(Number(y), Number(m) - 1, 1);
+      return d.toLocaleString(undefined, { month: 'short' });
+    };
+    let cumulative = 0;
+    const data = months.map((key) => {
+      const val = counts.get(key) || 0;
+      cumulative += val;
+      return { mois: monthLabel(key), inscriptions: cumulative, objectif: cumulative };
+    });
+    return data;
+  }, [participants]);
 
   // Répartition par pays
-  const paysData = participants.reduce((acc, p) => {
-    acc[p.pays] = (acc[p.pays] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const topPays = useMemo(() => {
+    const paysData = participants.reduce((acc, p) => {
+      const pays = p.pays || 'N/A';
+      acc[pays] = (acc[pays] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
 
-  const topPays = Object.entries(paysData)
-    .sort((a, b) => (b[1] as number) - (a[1] as number))
-    .slice(0, 6)
-    .map(([pays, count]) => ({ pays, participants: count as number }));
+    return Object.entries(paysData)
+      .sort((a, b) => (b[1] as number) - (a[1] as number))
+      .slice(0, 6)
+      .map(([pays, count]) => ({ pays, participants: count as number }));
+  }, [participants]);
 
   // Répartition par statut
-  const statutData = participants.reduce((acc, p) => {
-    acc[p.statut] = (acc[p.statut] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const getStatutLabel = (statut: string) => {
+  const statutChartData = useMemo(() => {
     const labels: Record<string, string> = {
       'membre': 'Membre',
       'non-membre': 'Non-membre',
       'vip': 'VIP',
       'speaker': 'Speaker'
     };
-    return labels[statut] || statut.toUpperCase();
-  };
-
-  const statutChartData: { name: string; value: number }[] = Object.entries(statutData).map(([statut, count]) => ({
-    name: getStatutLabel(statut),
-    value: count as number,
-  }));
+    const byStatus = participants.reduce((acc, p) => {
+      acc[p.statut] = (acc[p.statut] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.entries(byStatus).map(([statut, value]) => ({
+      name: labels[statut] || statut,
+      value: value as number,
+    }));
+  }, [participants]);
 
   const COLORS = ['#ea580c', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
   // Répartition des organisations
-  const orgByType = {
-    membre: mockOrganisations.filter((o) => o.statut === 'membre').length,
-    'non-membre': mockOrganisations.filter((o) => o.statut === 'non-membre').length,
-    sponsor: mockOrganisations.filter((o) => o.statut === 'sponsor').length,
-  };
+  const orgByType = useMemo(() => ({
+    membre: organisations.filter((o) => o.statut === 'membre').length,
+    'non-membre': organisations.filter((o) => o.statut === 'non-membre').length,
+    sponsor: organisations.filter((o) => o.statut === 'sponsor').length,
+  }), [organisations]);
 
-  // Statistiques de réservations
-  const reservationsCount = reservations.length;
-
-  // Rendez-vous participants par statut
-  const rdvParticipantsByStatut = {
+  // Rendez-vous par statut
+  const rdvParticipantsByStatut = useMemo(() => ({
     acceptee: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'acceptée').length,
     enAttente: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'en-attente').length,
     occupee: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'occupée').length,
-  };
+  }), [rendezVous]);
 
-  // Rendez-vous sponsors par statut
-  const rdvSponsorsByStatut = {
+  const rdvSponsorsByStatut = useMemo(() => ({
     acceptee: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'acceptée').length,
     enAttente: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'en-attente').length,
     occupee: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'occupée').length,
+  }), [rendezVous]);
+
+  const comparisonData = {
+    inscriptions: { actuel: participants.length, precedent: Math.max(participants.length - 20, 0), variation: 0 },
+    organisations: { actuel: organisations.length, precedent: Math.max(organisations.length - 10, 0), variation: 0 },
+    reservations: { actuel: 0, precedent: 0, variation: 0 },
   };
 
-  // Comparaison avec édition précédente (simulé)
-  const comparisonData = {
-    inscriptions: { actuel: participants.length, precedent: 180, variation: 7.8 },
-    organisations: { actuel: mockOrganisations.length, precedent: 8, variation: -11.1 },
-    reservations: { actuel: reservationsCount, precedent: 15, variation: 20.0 },
-  };
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-7 w-56 mb-2" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <Skeleton className="h-8 w-40" />
+        </div>
+        <div className="grid grid-cols-3 gap-6">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+        <div className="grid grid-cols-1 gap-6">
+          <Skeleton className="h-[360px] w-full" />
+          <Skeleton className="h-[360px] w-full" />
+          <Skeleton className="h-[420px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -112,15 +173,14 @@ export function DashboardAnalytics() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl text-gray-900">Analytics & Statistiques</h2>
-          <p className="text-gray-600">Vue d'ensemble détaillée de l'événement FANAF 2026</p>
         </div>
         <Badge className="bg-orange-100 text-orange-700 px-4 py-2">
           Mis à jour en temps réel
         </Badge>
       </div>
 
-      {/* KPIs avec comparaison */}
-      <div className="grid grid-cols-3 gap-6">
+      {/* KPIs (sans comparaison) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
@@ -130,13 +190,6 @@ export function DashboardAnalytics() {
               <p className="text-3xl text-gray-900">{comparisonData.inscriptions.actuel}</p>
               <p className="text-sm text-gray-600">Participants</p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge className="bg-green-100 text-green-700 flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" />
-              +{comparisonData.inscriptions.variation}%
-            </Badge>
-            <span className="text-xs text-gray-500">vs FANAF 2023</span>
           </div>
         </Card>
 
@@ -150,13 +203,6 @@ export function DashboardAnalytics() {
               <p className="text-sm text-gray-600">Organisations</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge className="bg-red-100 text-red-700 flex items-center gap-1">
-              <TrendingDown className="w-3 h-3" />
-              {comparisonData.organisations.variation}%
-            </Badge>
-            <span className="text-xs text-gray-500">vs FANAF 2023</span>
-          </div>
         </Card>
 
         <Card className="p-6">
@@ -165,23 +211,16 @@ export function DashboardAnalytics() {
               <Award className="w-6 h-6 text-purple-600" />
             </div>
             <div className="text-right">
-              <p className="text-3xl text-gray-900">{comparisonData.reservations.actuel}</p>
+              <p className="text-3xl text-gray-900">0</p>
               <p className="text-sm text-gray-600">Stands Réservés</p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge className="bg-green-100 text-green-700 flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" />
-              +{comparisonData.reservations.variation}%
-            </Badge>
-            <span className="text-xs text-gray-500">vs FANAF 2023</span>
           </div>
         </Card>
       </div>
 
-      {/* Graphiques principaux */}
-      <div className="grid grid-cols-2 gap-6">
-        {/* Évolution des inscriptions améliorée */}
+      {/* Sections pleine largeur */}
+      <div className="grid grid-cols-1 gap-6">
+        {/* Évolution des inscriptions */}
         <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-orange-100 overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600" />
           <div className="p-6">
@@ -235,7 +274,7 @@ export function DashboardAnalytics() {
                   stroke="#ea580c"
                   strokeWidth={3}
                   fill="url(#colorInscriptions)"
-                  name="Inscriptions"
+                  name="Inscriptions (cumul)"
                   dot={{ fill: '#ea580c', r: 4, strokeWidth: 2, stroke: '#fff' }}
                 />
                 <Area
@@ -253,7 +292,7 @@ export function DashboardAnalytics() {
           </div>
         </Card>
 
-        {/* Répartition par pays améliorée */}
+        {/* Répartition par pays */}
         <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-blue-100 overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600" />
           <div className="p-6">
@@ -305,7 +344,7 @@ export function DashboardAnalytics() {
           </div>
         </Card>
 
-        {/* Répartition par statut améliorée */}
+        {/* Répartition par statut */}
         <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-purple-100 overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 via-purple-500 to-purple-600" />
           <div className="p-6">
@@ -361,7 +400,7 @@ export function DashboardAnalytics() {
             <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t-2 border-gray-100">
               {statutChartData.map((entry, index) => {
                 const total = statutChartData.reduce((sum, item) => sum + item.value, 0);
-                const percentage = ((entry.value / total) * 100).toFixed(1);
+                const percentage = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0.0';
                 return (
                   <div key={entry.name} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-gradient-to-r from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 transition-all duration-200 border border-gray-100">
                     <div className="flex items-center gap-2 min-w-0">
@@ -397,7 +436,7 @@ export function DashboardAnalytics() {
                       <div
                         className="h-full bg-orange-600"
                         style={{
-                          width: `${(orgByType.membre / mockOrganisations.length) * 100}%`,
+                          width: `${organisations.length > 0 ? (orgByType.membre / organisations.length) * 100 : 0}%`,
                         }}
                       />
                     </div>
@@ -411,7 +450,7 @@ export function DashboardAnalytics() {
                       <div
                         className="h-full bg-blue-600"
                         style={{
-                          width: `${(orgByType['non-membre'] / mockOrganisations.length) * 100}%`,
+                          width: `${organisations.length > 0 ? (orgByType['non-membre'] / organisations.length) * 100 : 0}%`,
                         }}
                       />
                     </div>
@@ -425,7 +464,7 @@ export function DashboardAnalytics() {
                       <div
                         className="h-full bg-yellow-600"
                         style={{
-                          width: `${(orgByType.sponsor / mockOrganisations.length) * 100}%`,
+                          width: `${organisations.length > 0 ? (orgByType.sponsor / organisations.length) * 100 : 0}%`,
                         }}
                       />
                     </div>

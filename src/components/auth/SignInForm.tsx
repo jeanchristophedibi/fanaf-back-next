@@ -146,15 +146,6 @@ function SignInFormContent() {
             </Button>
           </form>
 
-          <p className="text-sm text-center text-gray-700 dark:text-gray-400 mt-5">
-            Vous n'avez pas de compte ?{' '}
-            <Link
-              href="/signup"
-              className="text-orange-600 hover:text-orange-700 font-medium"
-            >
-              S'inscrire
-            </Link>
-          </p>
         </div>
       </div>
     </div>
