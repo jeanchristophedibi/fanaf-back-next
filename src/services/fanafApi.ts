@@ -261,14 +261,12 @@ class FanafApiService {
     per_page?: number;
     category?: 'member' | 'not_member' | 'vip';
   }): Promise<PaginatedResponse<any>> {
-    const queryParams = new URLSearchParams();
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
-    if (params?.category) queryParams.append('category', params.category);
-
-    const query = queryParams.toString();
-    const endpoint = `/api/v1/admin/participants${query ? `?${query}` : ''}`;
-    return this.fetchApi<PaginatedResponse<any>>(endpoint);
+    // Unification des données: participants et registrations proviennent de la même source
+    return this.getRegistrations({
+      category: params?.category,
+      per_page: params?.per_page,
+      page: params?.page,
+    });
   }
 
   // ==================== COMPANIES/ORGANISATIONS ====================

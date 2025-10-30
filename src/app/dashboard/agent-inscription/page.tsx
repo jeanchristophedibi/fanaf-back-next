@@ -1,8 +1,13 @@
 'use client';
 
-import AgentInscriptionMain from './Main';
+import React from 'react';
+import AgentInscriptionDashboard from './Dashboard';
 
 export default function AgentInscriptionPage() {
-  return <AgentInscriptionMain />;
+  return (
+    <div className="p-6">
+      <AgentInscriptionDashboard />
+    </div>
+  );
 }
 

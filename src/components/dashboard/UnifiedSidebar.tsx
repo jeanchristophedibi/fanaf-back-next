@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake } from 'lucide-react';
+import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake, UserPlus } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Button } from '../ui/button';
@@ -102,6 +102,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
           mainNavItems: [
             { id: 'home', label: 'Accueil', icon: Home },
             { id: 'caisse-inscriptions', label: 'Inscriptions Caisse', icon: FileText },
+            { id: 'inscriptions-creer', label: 'Nouvelle inscription', icon: UserPlus },
           ],
           showInscriptions: false,
           showOrganisations: false,
