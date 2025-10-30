@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Building2 } from 'lucide-react';
 
@@ -8,9 +9,14 @@ interface OrganisationsSectionProps {
     nonMembres: number;
     sponsors: number;
   };
+  basePath?: string;
 }
 
-export function OrganisationsSection({ statsOrganisations }: OrganisationsSectionProps) {
+export function OrganisationsSection({ statsOrganisations, basePath }: OrganisationsSectionProps) {
+  const router = useRouter();
+  const onNavigate = () => {
+    if (basePath) router.push(basePath);
+  };
   return (
     <div className="mb-8 p-6 section-organisations rounded-xl animate-slide-up shadow-sm hover:shadow-md transition-shadow duration-300" style={{ animationDelay: '200ms' }}>
       <h2 className="text-gray-900 mb-4 flex items-center gap-2">
@@ -18,7 +24,7 @@ export function OrganisationsSection({ statsOrganisations }: OrganisationsSectio
         Organisations
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="card-hover cursor-pointer">
+        <Card className="card-hover cursor-pointer" onClick={onNavigate}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm text-gray-600">Total</CardTitle>
             <div className="bg-blue-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
@@ -30,7 +36,7 @@ export function OrganisationsSection({ statsOrganisations }: OrganisationsSectio
           </CardContent>
         </Card>
 
-        <Card className="card gla-hover cursor-pointer">
+        <Card className="card gla-hover cursor-pointer" onClick={onNavigate}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm text-gray-600">Membres</CardTitle>
             <div className="bg-green-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
@@ -42,7 +48,7 @@ export function OrganisationsSection({ statsOrganisations }: OrganisationsSectio
           </CardContent>
         </Card>
 
-        <Card className="card-hover cursor-pointer">
+        <Card className="card-hover cursor-pointer" onClick={onNavigate}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm text-gray-600">Non-Membres</CardTitle>
             <div className="bg-gray-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
@@ -54,7 +60,7 @@ export function OrganisationsSection({ statsOrganisations }: OrganisationsSectio
           </CardContent>
         </Card>
 
-        <Card className="card-hover cursor-pointer">
+        <Card className="card-hover cursor-pointer" onClick={onNavigate}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm text-gray-600">Sponsors</CardTitle>
             <div className="bg-orange-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">

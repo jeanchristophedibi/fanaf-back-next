@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Calendar, Users, Building2, Handshake } from 'lucide-react';
 
@@ -7,9 +8,14 @@ interface NetworkingSectionProps {
     rdvSponsors: number;
     rdvParticipants: number;
   };
+  basePath?: string;
 }
 
-export function NetworkingSection({ statsNetworking }: NetworkingSectionProps) {
+export function NetworkingSection({ statsNetworking, basePath }: NetworkingSectionProps) {
+  const router = useRouter();
+  const onNavigate = () => {
+    if (basePath) router.push(basePath);
+  };
   return (
     <div className="p-6 section-networking rounded-xl animate-slide-up shadow-sm hover:shadow-md transition-shadow duration-300" style={{ animationDelay: '300ms' }}>
       <h2 className="text-gray-900 mb-4 flex items-center gap-2">
@@ -17,7 +23,7 @@ export function NetworkingSection({ statsNetworking }: NetworkingSectionProps) {
         Networking
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="card-hover cursor-pointer">
+        <Card className="card-hover cursor-pointer" onClick={onNavigate}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm text-gray-600">Total RDV</CardTitle>
             <div className="bg-purple-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
@@ -30,7 +36,7 @@ export function NetworkingSection({ statsNetworking }: NetworkingSectionProps) {
           </CardContent>
         </Card>
 
-        <Card className="card-hover cursor-pointer">
+        <Card className="card-hover cursor-pointer" onClick={onNavigate}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm text-gray-600">RDV Participants</CardTitle>
             <div className="bg-blue-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">
@@ -42,7 +48,7 @@ export function NetworkingSection({ statsNetworking }: NetworkingSectionProps) {
           </CardContent>
         </Card>
 
-        <Card className="card-hover cursor-pointer">
+        <Card className="card-hover cursor-pointer" onClick={onNavigate}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm text-gray-600">RDV Sponsors</CardTitle>
             <div className="bg-orange-500 p-2 rounded-lg transition-transform duration-200 hover:scale-110">

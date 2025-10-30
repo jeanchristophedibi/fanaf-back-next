@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, BarChart3, LineChart, AlertCircle } from 'lucide-react';
+import { Users, BarChart3, LineChart, AlertCircle, CheckCircle, XCircle, ScanLine } from 'lucide-react';
 import { DashboardAnalytics } from '../DashboardAnalytics';
 import { InscriptionsEvolutionChart } from '../InscriptionsEvolutionChart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -10,6 +10,7 @@ import { NetworkingSection } from './NetworkingSection';
 import { loadDashboardCounts } from '../data/DashboardData';
 import { Skeleton } from '../ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { useFanafApi } from '../../hooks/useFanafApi';
 
 interface DashboardHomeProps {
   userProfile?: 'agence' | 'fanaf' | 'agent';
@@ -44,8 +45,13 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
     rendezVous: 0,
   });
 
+  // Check-in counters from API
+  const { badgeScansCounters, fetchBadgeScansCounters } = useFanafApi({ autoFetch: false });
+
   const baseSegment = userProfile === 'agence' ? 'agence' : 'admin-fanaf';
   const baseInscriptionsPath = `/dashboard/${baseSegment}/inscriptions`;
+  const baseOrganisationsPath = `/dashboard/${baseSegment}/organisations`;
+  const baseNetworkingPath = `/dashboard/${baseSegment}/networking`;
 
   useEffect(() => {
     let mounted = true;
@@ -60,6 +66,8 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
         setOrganisationsCounts(counts.organisations);
         setNetworkingCounts(counts.networking);
         setTotals(counts.totals);
+        // Fetch check-in counters in parallel after base data
+        fetchBadgeScansCounters();
       } catch (e: any) {
         if (!mounted) return;
         setError(e?.message || 'Erreur lors du chargement des données');
@@ -180,6 +188,8 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
                 </Card>
               </div>
 
+              
+
               {userProfile === 'agent' && (
                 <AgentMissionsSection 
                   statsInscriptions={inscriptionsCounts}
@@ -189,9 +199,65 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
 
               <InscriptionsSection statsInscriptions={inscriptionsCounts} basePath={baseInscriptionsPath} />
 
-              <OrganisationsSection statsOrganisations={organisationsCounts} />
+              <OrganisationsSection statsOrganisations={organisationsCounts} basePath={baseOrganisationsPath} />
 
-              <NetworkingSection statsNetworking={networkingCounts} />
+              <NetworkingSection statsNetworking={networkingCounts} basePath={baseNetworkingPath} />
+
+              {/* Check-in widgets (full width, last section) */}
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium">Check-in</CardTitle>
+                    <ScanLine className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-3 rounded-lg bg-gray-50">
+                        <p className="text-xs text-gray-500">Total</p>
+                        <p className="text-2xl text-gray-900">{badgeScansCounters?.counts?.total ?? '-'}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-green-50">
+                        <p className="text-xs text-green-700">Succès</p>
+                        <div className="flex items-center gap-1">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <p className="text-xl text-green-900">{badgeScansCounters?.counts?.success ?? '-'}</p>
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-red-50">
+                        <p className="text-xs text-red-700">Échecs</p>
+                        <div className="flex items-center gap-1">
+                          <XCircle className="w-4 h-4 text-red-600" />
+                          <p className="text-xl text-red-900">{badgeScansCounters?.counts?.failed ?? '-'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Derniers scans (succès)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {badgeScansCounters?.groups?.success?.slice(0, 8).map((scan: any) => (
+                        <div key={scan.id} className="flex items-center justify-between text-sm border-b last:border-b-0 py-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                            <span className="text-gray-900 truncate">User #{scan.user_id}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-gray-500">
+                            <span className="hidden sm:inline truncate max-w-[140px]">Reg #{scan.registration_id}</span>
+                            <span className="truncate max-w-[160px]">{new Date(scan.scan_at).toLocaleString('fr-FR')}</span>
+                          </div>
+                        </div>
+                      )) || (
+                        <div className="text-sm text-gray-500">Aucun scan récent</div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </>
           )}
         </TabsContent>
