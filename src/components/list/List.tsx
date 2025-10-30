@@ -237,39 +237,45 @@ export function List<T extends Record<string, any>>({
     return stringValue;
   };
 
-  // Export CSV
+  // Export CSV (respecte filtres/tri, et colonnes visibles; exporte la sélection si présente)
   const handleExport = () => {
+    const dataset = selectedItems.length > 0 ? selectedItems : filteredData;
+
     if (onExport) {
-      onExport(filteredData);
+      onExport(dataset);
       return;
     }
 
-    if (!exportHeaders || !exportData) {
-      console.warn('[List] Export CSV : exportHeaders ou exportData manquants');
-      return;
-    }
+    // Construire automatiquement en se basant sur les colonnes si aucune config fournie
+    const effectiveHeaders = exportHeaders && exportHeaders.length > 0
+      ? exportHeaders
+      : columns.map((c) => c.header);
+
+    const effectiveRowBuilder = exportData
+      ? exportData
+      : (item: T) => columns.map((c) => {
+          const value = item[c.sortKey || c.key];
+          // Eviter d'exporter des objets complexes
+          if (value === null || value === undefined) return '';
+          if (value instanceof Date) return value.toISOString();
+          if (typeof value === 'object') return JSON.stringify(value);
+          return String(value);
+        });
 
     try {
-      // Créer le contenu CSV avec échappement correct
       const csvRows = [
-        exportHeaders.map(escapeCSVValue).join(","),
-        ...filteredData.map(item => {
-          const rowData = exportData(item);
-          return rowData.map(escapeCSVValue).join(",");
-        })
+        effectiveHeaders.map(escapeCSVValue).join(","),
+        ...dataset.map(item => effectiveRowBuilder(item).map(escapeCSVValue).join(","))
       ];
 
       const csvContent = csvRows.join("\n");
-      
-      // Ajouter le BOM UTF-8 pour Excel (pour l'encodage correct des caractères spéciaux)
       const BOM = '\uFEFF';
       const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
-      
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${exportFilename}-${new Date().toISOString().split("T")[0]}.csv`;
-      document.body.appendChild(a); // Nécessaire pour certains navigateurs
+      document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
@@ -402,12 +408,12 @@ export function List<T extends Record<string, any>>({
 
           {/* Tableau intégré dans la même card */}
           <div className="mt-6 border-t pt-6">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[520px] rounded-lg border">
               <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-orange-600 z-10 shadow-sm">
                 <TableRow>
                   {enableSelection && (
-                    <TableHead className="w-12">
+                    <TableHead className="w-12 py-3 text-white">
                       <Checkbox
                         checked={allSelected}
                         onCheckedChange={handleSelectAll}
@@ -416,11 +422,11 @@ export function List<T extends Record<string, any>>({
                     </TableHead>
                   )}
                   {columns.map((column) => (
-                    <TableHead key={column.key} className={column.width}>
+                    <TableHead key={column.key} className={`${column.width || ''} py-3 text-white whitespace-nowrap font-semibold`}>
                       {column.sortable ? (
                         <button
                           onClick={() => handleSort(column.key)}
-                          className="flex items-center gap-1 hover:text-gray-700"
+                          className="flex items-center gap-1 hover:text-white"
                         >
                           {column.header}
                           {sortConfig?.key === column.key ? (
@@ -439,7 +445,7 @@ export function List<T extends Record<string, any>>({
                     </TableHead>
                   ))}
                   {rowActions.length > 0 && (
-                    <TableHead className={`${rowActionsWidth} text-center`}>
+                    <TableHead className={`${rowActionsWidth} text-center py-3 text-white font-semibold`}>
                       Actions
                     </TableHead>
                   )}
@@ -451,17 +457,17 @@ export function List<T extends Record<string, any>>({
                   Array.from({ length: itemsPerPage }).map((_, index) => (
                     <TableRow key={`skeleton-${index}`}>
                       {enableSelection && (
-                        <TableCell>
+                        <TableCell className="py-3">
                           <Skeleton className="h-4 w-4" />
                         </TableCell>
                       )}
                       {columns.map((column) => (
-                        <TableCell key={column.key}>
+                        <TableCell key={column.key} className="py-3">
                           <Skeleton className="h-4 w-full" />
                         </TableCell>
                       ))}
                       {rowActions.length > 0 && (
-                        <TableCell>
+                        <TableCell className="py-3">
                           <Skeleton className="h-8 w-24" />
                         </TableCell>
                       )}
@@ -471,29 +477,29 @@ export function List<T extends Record<string, any>>({
                   <TableRow>
                     <TableCell
                       colSpan={enableSelection ? columns.length + 1 + (rowActions.length > 0 ? 1 : 0) : columns.length + (rowActions.length > 0 ? 1 : 0)}
-                      className="text-center text-gray-500 py-8"
+                      className="text-center text-gray-500 py-12"
                     >
                       {emptyMessage}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedData.map((item) => {
+                  paginatedData.map((item, rowIndex) => {
                     const id = getRowId(item);
                     const isSelected = selectedIds.has(id);
                     return (
-                      <TableRow key={String(id)} className={isSelected ? "bg-orange-50" : ""}>
+                      <TableRow key={String(id)} className={`${isSelected ? "bg-orange-50" : rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-orange-50 transition-colors`}>
                         {enableSelection && (
-                          <TableCell>
+                          <TableCell className="py-3">
                             <Checkbox checked={isSelected} onCheckedChange={(checked) => handleSelectItem(item, checked as boolean)} />
                           </TableCell>
                         )}
                         {columns.map((column) => (
-                          <TableCell key={column.key} className={column.width}>
+                          <TableCell key={column.key} className={`${column.width || ''} py-3 align-middle`}>
                             {column.render ? column.render(item) : String(item[column.key] || "")}
                           </TableCell>
                         ))}
                         {rowActions.length > 0 && (
-                          <TableCell className={`${rowActionsWidth} text-center`}>
+                          <TableCell className={`${rowActionsWidth} text-center py-3`}>
                             <div className="flex justify-center items-center gap-1">
                               {rowActions
                                 .filter((action) => {

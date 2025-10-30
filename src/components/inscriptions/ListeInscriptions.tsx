@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { Eye, User, Mail, Phone, Globe, Building, Calendar, QrCode, Package, Download, X, Loader2 } from 'lucide-react';
 import { type Participant, type Organisation } from '../data/mockData';
 import { inscriptionsDataService } from '../data/inscriptionsData';
+import { documentsDataService } from '../data/documentsData';
 import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { toast } from 'sonner';
 import { List, type Column, type ListAction } from '../list/List';
@@ -37,6 +38,8 @@ export function ListeInscriptions({
     const [organisations, setOrganisations] = useState<Organisation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [apiError, setApiError] = useState<string | null>(null);
+    const [badgeByEmail, setBadgeByEmail] = useState<Record<string, string>>({});
+    const [selectedParticipants, setSelectedParticipants] = useState<Participant[]>([]);
     
     // Charger les données (participants et organisations) depuis l'API
     useEffect(() => {
@@ -71,6 +74,20 @@ export function ListeInscriptions({
                     categoriesToFetch.length > 0 ? categoriesToFetch : undefined
                 );
                 setApiParticipants(loadedParticipants);
+
+                // Charger les documents (badges/liens) et indexer par email
+                try {
+                    const docs = await documentsDataService.loadDocuments();
+                    const map: Record<string, string> = {};
+                    docs.forEach((d) => {
+                        if (d.email && d.badgeUrl) {
+                            map[d.email.toLowerCase()] = d.badgeUrl;
+                        }
+                    });
+                    setBadgeByEmail(map);
+                } catch (e) {
+                    console.warn('[ListeInscriptions] Documents API non disponible:', e);
+                }
             } catch (err: any) {
                 console.error('Erreur lors du chargement des données:', err);
                 setApiError(err.message || 'Erreur lors du chargement des données');
@@ -288,6 +305,26 @@ export function ListeInscriptions({
     
     const uniquePays = [...new Set(participants.map(p => p.pays))].sort();
     const badgesGenerables = filteredParticipants.filter(p => p.statutInscription === 'finalisée').length;
+
+    const getBadgeUrlFor = (p: Participant): string | undefined => {
+        const emailKey = p.email?.toLowerCase();
+        if (emailKey && badgeByEmail[emailKey]) return badgeByEmail[emailKey];
+        return undefined;
+    };
+
+    const downloadFile = (url: string, filename?: string) => {
+        try {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || '';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (e) {
+            console.error('Download error:', e);
+            toast.error('Impossible de télécharger le fichier');
+        }
+    };
     
     // Calculer les stats basées sur les participants chargés (API ou mock)
     const stats = useMemo(() => ({
@@ -492,7 +529,58 @@ export function ListeInscriptions({
         {
             key: 'actions',
             header: 'Actions',
-            render: (p) => <ParticipantDetailsDialog participant={p} />
+            render: (p) => (
+                <div className="flex items-center gap-1">
+                    <ParticipantDetailsDialog participant={p} />
+                    {getBadgeUrlFor(p) ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                        onClick={() => {
+                                            const url = getBadgeUrlFor(p) as string;
+                                            try {
+                                                window.open(url, '_blank', 'noopener');
+                                            } catch (e) {
+                                                console.error('open error:', e);
+                                            }
+                                        }}
+                                        aria-label="Ouvrir le badge dans un nouvel onglet"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    Ouvrir le badge dans un nouvel onglet
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 text-gray-300"
+                                            disabled
+                                        >
+                                            <Download className="w-4 h-4" />
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    Badge indisponible
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                </div>
+            )
         }
     ];
 
@@ -638,11 +726,12 @@ export function ListeInscriptions({
         </div>
       </div>
     )}
+              <div className="flex items-center justify-between mt-2">
               <Button 
                 variant={showFilters ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowFilters(!showFilters)}
-                className="mt-2 h-7 text-xs"
+                className="h-7 text-xs"
             >
                 {activeFiltersCount > 0 && (
                     <Badge variant="secondary" className="mr-1 bg-orange-600 text-white text-xs h-4 px-1">
@@ -651,6 +740,7 @@ export function ListeInscriptions({
                 )}
                 Filtres
               </Button>
+              </div>
         </div>
     );
 
@@ -687,23 +777,29 @@ export function ListeInscriptions({
 
     const buildActions: ListAction<Participant>[] = [
         {
-            label: `Télécharger badges (${badgesGenerables})`,
+            label: `Télécharger badges`,
             icon: <Package className="w-4 h-4" />,
             onClick: async (items) => {
-                const finalisees = items.filter(p => p.statutInscription === 'finalisée');
-                if (finalisees.length === 0) {
-                    toast.error('Aucun participant finalisé sélectionné');
+                const withBadges = items
+                  .map(p => ({ p, url: getBadgeUrlFor(p) }))
+                  .filter(x => !!x.url) as Array<{ p: Participant; url: string }>;
+                if (withBadges.length === 0) {
+                    toast.error('Aucun badge disponible pour la sélection');
                     return;
                 }
                 setIsDownloadingBadges(true);
-                toast.info(`Génération de ${finalisees.length} badge(s)...`);
-                // TODO: Implémenter la génération
-                setTimeout(() => {
+                toast.info(`Téléchargement de ${withBadges.length} badge(s)...`);
+                try {
+                    withBadges.forEach(({ p, url }) => {
+                        const filename = p.reference ? `badge-${p.reference}.pdf` : undefined;
+                        downloadFile(url, url);
+                    });
+                    toast.success(`${withBadges.length} badge(s) téléchargé(s)`);
+                } finally {
                     setIsDownloadingBadges(false);
-                    toast.success(`${finalisees.length} badge(s) généré(s)`);
-                }, 2000);
+                }
             },
-            disabled: (items) => items.filter(p => p.statutInscription === 'finalisée').length === 0 || readOnly,
+            disabled: (items) => items.every(p => !getBadgeUrlFor(p)) || readOnly,
         }
     ];
 
@@ -775,6 +871,8 @@ export function ListeInscriptions({
                 itemsPerPage={10}
                 readOnly={readOnly}
                 enableSelection={true}
+                selectedItems={selectedParticipants}
+                onSelectionChange={setSelectedParticipants}
                 buildActions={buildActions}
                 emptyMessage="Aucun participant trouvé"
                 loading={isLoading}

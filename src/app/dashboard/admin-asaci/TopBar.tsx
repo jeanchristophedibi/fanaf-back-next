@@ -15,9 +15,11 @@ interface TopBarProps {
 export function TopBar({ userEmail }: TopBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState<string>('');
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
+    setIsMounted(true);
     if (userEmail) {
       setEmail(userEmail);
       return;
@@ -64,34 +66,44 @@ export function TopBar({ userEmail }: TopBarProps) {
       </div>
       
       <div className="flex items-center gap-4">
-        <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2 h-10 px-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white">
-                <User className="w-5 h-5" />
-              </div>
-              <span className="text-sm text-gray-700">{email || 'Utilisateur'}</span>
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Mon compte</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleProfile} className="cursor-pointer">
-              <User className="w-4 h-4 mr-2" />
-              Profil
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleSettings} className="cursor-pointer">
-              <Settings className="w-4 h-4 mr-2" />
-              Paramètres
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
-              <LogOut className="w-4 h-4 mr-2" />
-              Déconnexion
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {isMounted ? (
+          <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="gap-2 h-10 px-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white">
+                  <User className="w-5 h-5" />
+                </div>
+                <span className="text-sm text-gray-700">{email || 'Utilisateur'}</span>
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Mon compte</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleProfile} className="cursor-pointer">
+                <User className="w-4 h-4 mr-2" />
+                Profil
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSettings} className="cursor-pointer">
+                <Settings className="w-4 h-4 mr-2" />
+                Paramètres
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
+                <LogOut className="w-4 h-4 mr-2" />
+                Déconnexion
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button variant="ghost" className="gap-2 h-10 px-3" disabled>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white">
+              <User className="w-5 h-5" />
+            </div>
+            <span className="text-sm text-gray-700">{email || 'Utilisateur'}</span>
+            <ChevronDown className="w-4 h-4 text-gray-500" />
+          </Button>
+        )}
       </div>
     </div>
   );

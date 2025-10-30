@@ -444,6 +444,15 @@ class FanafApiService {
     const endpoint = `/api/v1/admin/payments${query ? `?${query}` : ''}`;
     return this.fetchApi<any>(endpoint);
   }
+
+  // ==================== DOCUMENTS (BADGES/INVITATIONS/FACTURES) ====================
+
+  /**
+   * Récupérer les documents par utilisateur (badges, invitations, factures)
+   */
+  async getDocuments(): Promise<any> {
+    return this.fetchApi<any>('/api/v1/admin/documents');
+  }
 }
 
 export const fanafApi = new FanafApiService();

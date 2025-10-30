@@ -78,10 +78,17 @@ function SignInFormContent() {
                 // Déterminer la redirection selon le rôle utilisateur
                 const user = (response as any)?.user || (response as any)?.data?.user;
                 const role = user?.role;
-                const defaultRedirect = role === 'admin_agency' ? '/dashboard/agence' : '/dashboard/admin-fanaf';
+                const defaultRedirect = role === 'admin_agency'
+                  ? '/dashboard/agence'
+                  : '/no-access';
                 // Rediriger vers la page demandée (si présente) sinon selon le rôle
                 const redirect = searchParams?.get('redirect') || defaultRedirect;
                 console.log('[SignInForm] Redirection après connexion vers:', redirect, 'role:', role);
+                if (!role) {
+                  // Déconnecter si aucun rôle reconnu
+                  try { fanafApi.logout(); } catch (_) {}
+                  toast.error("Votre profil n'a pas accès au dashboard");
+                }
                 router.push(redirect);
               } catch (err: any) {
                 console.error('Erreur de connexion détaillée:', err);

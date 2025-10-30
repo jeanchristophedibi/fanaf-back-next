@@ -368,7 +368,7 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
         readOnly={readOnly}
         enableSelection={true}
         buildActions={buildActions}
-        loading={isLoading as any}
+        loading={isLoading}
       />
 
       {/* Dialogue historique rendez-vous */}
