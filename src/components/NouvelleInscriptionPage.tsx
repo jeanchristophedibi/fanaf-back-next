@@ -331,6 +331,60 @@ export const NouvelleInscriptionPage = () => {
     if (etapeActuelle === 5) return finaliserInscription();
   };
 
+  // Raison de désactivation du bouton Suivant par étape
+  const getDisabledReason = (): string | undefined => {
+    if (loading) return undefined; // le chargement gère déjà l'état disabled
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (etapeActuelle === 1) {
+      if (!typeParticipant) return 'Sélectionnez un type de participant';
+    }
+
+    if (etapeActuelle === 2) {
+      if (!participantPrincipal.prenom) return 'Prénom requis';
+      if (!participantPrincipal.nom) return 'Nom requis';
+      if (!participantPrincipal.email) return 'Email requis';
+      if (!emailRegex.test(participantPrincipal.email)) return "Email invalide";
+      if (!participantPrincipal.telephone) return 'Téléphone requis';
+      if (!participantPrincipal.pays) return 'Pays requis';
+      if (!participantPrincipal.numeroIdentite) return 'Numéro de pièce requis';
+    }
+
+    if (etapeActuelle === 3) {
+      if (!typeInscription) return "Sélectionnez un type d'inscription";
+      if (typeInscription === 'groupe') {
+        if (participantsGroupe.length === 0) return 'Ajoutez au moins un autre participant';
+        for (let i = 0; i < participantsGroupe.length; i++) {
+          const p = participantsGroupe[i];
+          if (!p.prenom) return `Prénom du participant #${i + 2} requis`;
+          if (!p.nom) return `Nom du participant #${i + 2} requis`;
+          if (!p.email) return `Email du participant #${i + 2} requis`;
+          if (!emailRegex.test(p.email)) return `Email du participant #${i + 2} invalide`;
+        }
+      }
+    }
+
+    if (etapeActuelle === 4) {
+      if (typeParticipant === 'membre') {
+        if (!organisationSelectionnee) return 'Sélectionnez une organisation membre';
+        if (!organisationData.codeOrganisation) return "Code de l'organisation requis";
+        const orgTrouvee = organisationsMembres.find(org => org.id === organisationSelectionnee);
+        if (orgTrouvee && (orgTrouvee as any).codeOrganisation && (orgTrouvee as any).codeOrganisation !== organisationData.codeOrganisation) {
+          return "Code de l'organisation incorrect";
+        }
+      } else {
+        if (!organisationData.nom) return "Nom de l'organisation requis";
+        if (!organisationData.email) return "Email de l'organisation requis";
+        if (!emailRegex.test(organisationData.email)) return "Email de l'organisation invalide";
+        if (!organisationData.contact) return "Contact de l'organisation requis";
+        if (!organisationData.adresse) return "Adresse de l'organisation requise";
+        if (!organisationData.domaineActivite) return "Domaine d'activité requis";
+      }
+    }
+
+    return undefined;
+  };
+
   const finaliserInscription = async () => {
     setLoading(true);
 
@@ -647,6 +701,10 @@ export const NouvelleInscriptionPage = () => {
                 <StepOrganisation
                   organisationData={organisationData}
                   onChange={(patch: Partial<OrganisationFormData>) => setOrganisationData({ ...organisationData, ...patch })}
+                  isMembre={typeParticipant === 'membre'}
+                  organisationsOptions={organisationsMembres.map(o => ({ id: o.id, nom: o.nom }))}
+                  selectedOrganisationId={organisationSelectionnee}
+                  onSelectOrganisation={handleOrganisationSelect}
                 />
                     )}
               {etapeActuelle === 5 && (
@@ -655,13 +713,24 @@ export const NouvelleInscriptionPage = () => {
                   typeInscription={typeInscription as any}
                   participantsCount={typeInscription === 'groupe' ? 1 + participantsGroupe.length : 1}
                   montantTotal={calculerMontantTotal()}
+                  participantPrincipal={participantPrincipal}
+                  organisationData={organisationData}
+                  participantsGroupe={participantsGroupe}
+                  onGoToEtape={(n) => setEtapeActuelle(n)}
                 />
           )}
         </Card>
       </motion.div>
         </AnimatePresence>
         {/* Footer fixe navigation étapes */}
-        <FooterNav etapeActuelle={etapeActuelle} loading={loading} onPrev={handlePrev} onNext={handleNext} />
+        <FooterNav
+          etapeActuelle={etapeActuelle}
+          loading={loading}
+          onPrev={handlePrev}
+          onNext={handleNext}
+          disabled={!!getDisabledReason()}
+          disabledReason={getDisabledReason()}
+        />
       </div>
     </div>
   );
