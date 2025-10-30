@@ -23,6 +23,7 @@ interface PaginatedResponse<T> {
 
 class FanafApiService {
   private token: string | null = null;
+  private user: any | null = null;
 
   /**
    * Définir le token d'authentification
@@ -33,6 +34,21 @@ class FanafApiService {
       localStorage.setItem('fanaf_token', token);
       // Également sauvegarder dans un cookie pour le middleware
       document.cookie = `fanaf_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+    }
+  }
+
+  /**
+   * Définir l'utilisateur courant et persister ses infos utiles
+   */
+  setUser(user: any) {
+    this.user = user;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('fanaf_user', JSON.stringify(user));
+      } catch (_) {}
+      if (user?.role) {
+        document.cookie = `fanaf_role=${user.role}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+      }
     }
   }
 
@@ -177,12 +193,18 @@ class FanafApiService {
 
     // Gérer différentes structures de réponse possibles
     const token = response.token || response.access_token || response.data?.token || response.data?.access_token;
+    const user = (response as any).user || (response as any).data?.user;
     
     if (token) {
       this.setToken(token);
       console.log('Token sauvegardé avec succès');
     } else {
       console.warn('Aucun token reçu dans la réponse:', response);
+    }
+
+    if (user) {
+      this.setUser(user);
+      console.log('Utilisateur sauvegardé avec succès');
     }
 
     return response;
@@ -193,10 +215,13 @@ class FanafApiService {
    */
   logout() {
     this.token = null;
+    this.user = null;
     if (typeof window !== 'undefined') {
       localStorage.removeItem('fanaf_token');
+      localStorage.removeItem('fanaf_user');
       // Supprimer également le cookie
       document.cookie = 'fanaf_token=; path=/; max-age=0; SameSite=Lax';
+      document.cookie = 'fanaf_role=; path=/; max-age=0; SameSite=Lax';
       console.log('Token supprimé, utilisateur déconnecté');
     }
   }
@@ -207,6 +232,23 @@ class FanafApiService {
   isAuthenticated(): boolean {
     const token = this.getToken();
     return token !== null && token !== '';
+  }
+
+  /**
+   * Récupérer l'utilisateur courant
+   */
+  getCurrentUser(): any | null {
+    if (this.user) return this.user;
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('fanaf_user');
+        if (raw) {
+          this.user = JSON.parse(raw);
+          return this.user;
+        }
+      } catch (_) {}
+    }
+    return null;
   }
 
   // ==================== PARTICIPANTS ====================

@@ -193,6 +193,11 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
   const isPaiementsActive = activeNav.startsWith('paiements');
   const isTresorerieActive = activeNav.startsWith('finance');
 
+  // Éviter l'hydratation SSR: rendre côté client uniquement
+  if (!isMounted) {
+    return null;
+  }
+
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-hidden">
       <div className="p-6">

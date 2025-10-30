@@ -76,14 +76,8 @@ function SignInFormContent() {
                 const response = await fanafApi.passwordLogin(email, password);
                 toast.success('Connexion réussie !');
                 // Déterminer la redirection selon le rôle utilisateur
-                const role = (response as any)?.user?.role || (response as any)?.data?.user?.role;
-                if (role) {
-                  try {
-                    // Sauvegarder le rôle pour usage futur (middleware / autres redirections)
-                    localStorage.setItem('fanaf_role', role);
-                    document.cookie = `fanaf_role=${role}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-                  } catch (_) {}
-                }
+                const user = (response as any)?.user || (response as any)?.data?.user;
+                const role = user?.role;
                 const defaultRedirect = role === 'admin_agency' ? '/dashboard/agence' : '/dashboard/admin-fanaf';
                 // Rediriger vers la page demandée (si présente) sinon selon le rôle
                 const redirect = searchParams?.get('redirect') || defaultRedirect;

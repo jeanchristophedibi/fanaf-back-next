@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../../../components/ui/dropdown-menu';
@@ -9,12 +9,27 @@ import { fanafApi } from '../../../services/fanafApi';
 import { toast } from 'sonner';
 
 interface TopBarProps {
-  userName?: string;
+  userEmail?: string;
 }
 
-export function TopBar({ userName = 'Admin ASACI' }: TopBarProps) {
+export function TopBar({ userEmail }: TopBarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [email, setEmail] = useState<string>('');
   const router = useRouter();
+
+  useEffect(() => {
+    if (userEmail) {
+      setEmail(userEmail);
+      return;
+    }
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('fanaf_user') : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.email) setEmail(parsed.email);
+      }
+    } catch (_) {}
+  }, [userEmail]);
 
   const handleProfile = () => {
     console.log('Profile clicked');
@@ -55,7 +70,7 @@ export function TopBar({ userName = 'Admin ASACI' }: TopBarProps) {
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white">
                 <User className="w-5 h-5" />
               </div>
-              <span className="text-sm text-gray-700">{userName}</span>
+              <span className="text-sm text-gray-700">{email || 'Utilisateur'}</span>
               <ChevronDown className="w-4 h-4 text-gray-500" />
             </Button>
           </DropdownMenuTrigger>
