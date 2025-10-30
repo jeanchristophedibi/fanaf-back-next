@@ -101,7 +101,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
         return {
           mainNavItems: [
             { id: 'home', label: 'Accueil', icon: Home },
-            { id: 'caisse-inscriptions', label: 'Inscriptions Caisse', icon: FileText },
+            { id: 'caisse-inscriptions', label: 'Liste des inscriptions', icon: FileText },
             { id: 'inscriptions-creer', label: 'Nouvelle inscription', icon: UserPlus },
           ],
           showInscriptions: false,

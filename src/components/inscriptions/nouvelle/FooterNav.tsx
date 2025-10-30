@@ -29,7 +29,7 @@ export const FooterNav: React.FC<FooterNavProps> = ({ etapeActuelle, loading, on
             type="button"
             onClick={onNext}
             disabled={!!loading || !!disabled}
-            className={isLast ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 px-6' : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 px-6'}
+            className={isLast ? 'bg-blue-600 hover:bg-blue-700 text-white px-6' : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 px-6'}
             title={disabledReason && !loading ? disabledReason : undefined}
           >
             {isLast ? (

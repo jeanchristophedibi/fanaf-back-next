@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -25,6 +25,8 @@ import { StepOrganisation } from './inscriptions/nouvelle/StepOrganisation';
 import { StepRecap } from './inscriptions/nouvelle/StepRecap';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import html2canvas from 'html2canvas';
+import Router from 'next/router';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface ParticipantFormData {
   nom: string;
@@ -64,6 +66,8 @@ const PAYS_LIST = [
 ];
 
 export const NouvelleInscriptionPage = () => {
+  const appRouter = useRouter();
+  const pathname = usePathname();
   const [etapeActuelle, setEtapeActuelle] = useState(1);
   const [loading, setLoading] = useState(false);
   
@@ -154,6 +158,97 @@ export const NouvelleInscriptionPage = () => {
   const paysFiltres = PAYS_LIST.filter(pays => 
     pays.toLowerCase().includes(paysRecherche.toLowerCase())
   );
+
+  // Déterminer si le formulaire est en cours (pour confirmation de sortie)
+  const isFormDirty = useMemo(() => {
+    if (inscriptionFinalisee) return false;
+    if (etapeActuelle > 1) return true;
+    const hasParticipant = Object.values(participantPrincipal).some((v) => String(v || '').length > 0 && v !== 'passeport');
+    const hasOrg = Object.values(organisationData).some((v) => String(v || '').length > 0);
+    const hasType = !!typeParticipant || !!typeInscription || participantsGroupe.length > 0;
+    return hasParticipant || hasOrg || hasType;
+  }, [inscriptionFinalisee, etapeActuelle, participantPrincipal, organisationData, typeParticipant, typeInscription, participantsGroupe]);
+
+  // Confirmation lors de la fermeture/rafraîchissement/quit
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isFormDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    if (isFormDirty) {
+      window.addEventListener('beforeunload', beforeUnload);
+    }
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload);
+    };
+  }, [isFormDirty]);
+
+  // Intercepter la navigation interne Next.js (App router compatible via next/router events)
+  useEffect(() => {
+    const handleRouteChangeStart = (url: string) => {
+      if (!isFormDirty) return;
+      const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+      if (!ok) {
+        // Annuler la navigation
+        Router.events.emit('routeChangeError');
+        // eslint-disable-next-line no-throw-literal
+        throw 'routeChange aborted by user';
+      }
+    };
+    Router.events.on('routeChangeStart', handleRouteChangeStart);
+    return () => {
+      Router.events.off('routeChangeStart', handleRouteChangeStart);
+    };
+  }, [isFormDirty]);
+
+  // Intercepter les clics sur les liens internes (App Router)
+  useEffect(() => {
+    const onDocumentClick = (e: MouseEvent) => {
+      if (!isFormDirty) return;
+      const target = e.target as Element | null;
+      if (!target) return;
+      // 1) Liens internes
+      const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
+      if (anchor) {
+        const isExternal = anchor.origin !== window.location.origin;
+        if (isExternal || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+        const href = anchor.getAttribute('href');
+        if (!href || href.startsWith('#') || href === window.location.pathname) return;
+        e.preventDefault();
+        const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+        if (ok) {
+          appRouter.push(href);
+        }
+        return;
+      }
+      // 2) Boutons de la sidebar
+      const sidebarButton = target.closest('aside button');
+      if (sidebarButton) {
+        const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+        if (!ok) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+    document.addEventListener('click', onDocumentClick, true);
+    return () => document.removeEventListener('click', onDocumentClick, true);
+  }, [isFormDirty, appRouter]);
+
+  // Intercepter back/forward (popstate) dans l'App Router
+  useEffect(() => {
+    const onPopState = (e: PopStateEvent) => {
+      if (!isFormDirty) return;
+      const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+      if (!ok) {
+        e.preventDefault?.();
+        history.pushState(null, '', pathname || window.location.pathname);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isFormDirty, pathname]);
 
   const validerEtape1 = () => {
     if (!typeParticipant) {
