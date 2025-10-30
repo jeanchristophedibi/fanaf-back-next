@@ -2,24 +2,38 @@
 
 import React from 'react';
 import { Card } from '../../../components/ui/card';
-import { Users, Clock, CheckCircle, TrendingUp, FileText } from 'lucide-react';
+import { Users, CheckCircle, TrendingUp, FileText, Clock } from 'lucide-react';
 import { useDynamicInscriptions } from '../../../components/hooks/useDynamicInscriptions';
 import { AnimatedStat } from '../../../components/AnimatedStat';
+import { WidgetStatsInscriptions } from '../../../components/inscriptions/WidgetStatsInscriptions';
 
 const AgentInscriptionDashboard = () => {
   const { participants } = useDynamicInscriptions();
   
-  // Statistiques
+  // Statistiques globales (utilisées par le widget habituel)
+  const stats = {
+    total: participants.length,
+    membres: participants.filter(p => p.statut === 'membre').length,
+    nonMembres: participants.filter(p => p.statut === 'non-membre').length,
+    vip: participants.filter(p => p.statut === 'vip').length,
+    speakers: participants.filter(p => (p as any).statut === 'speaker').length,
+    finalises: participants.filter(p => p.statutInscription === 'finalisée').length,
+    enAttente: participants.filter(p => p.statutInscription === 'non-finalisée' && p.statut !== 'vip' && (p as any).statut !== 'speaker').length,
+  };
+
+  // Détails utiles pour d'autres widgets/sections
   const inscriptionsEnCours = participants.filter(p => p.statutInscription === 'non-finalisée');
-  const inscriptionsFinalisees = participants.filter(p => p.statutInscription === 'finalisée');
-  
   const membresEnCours = inscriptionsEnCours.filter(p => p.statut === 'membre').length;
   const nonMembresEnCours = inscriptionsEnCours.filter(p => p.statut === 'non-membre').length;
   const vipEnCours = inscriptionsEnCours.filter(p => p.statut === 'vip').length;
 
-  // Inscriptions groupées
-  const inscriptionsGroupees = participants.filter(p => p.groupeId);
-  const nombreGroupes = new Set(inscriptionsGroupees.map(p => p.groupeId)).size;
+  // Inscriptions groupées: repérées par type === 'group'
+  const inscriptionsGroupees = participants.filter((p: any) => p?.type === 'group');
+  // Compter les groupes uniques si un identifiant de groupe existe, sinon compter les entrées
+  const nombreGroupes = (() => {
+    const keys = inscriptionsGroupees.map((p: any) => p?.groupeId || p?.groupId || p?.group || p?.organisationId || p?.reference || p?.id);
+    return new Set(keys.filter(Boolean)).size || inscriptionsGroupees.length;
+  })();
 
   // Inscriptions récentes (dernières 24h)
   const now = new Date();
@@ -36,57 +50,8 @@ const AgentInscriptionDashboard = () => {
         <p className="text-gray-600">Vue d'ensemble des inscriptions</p>
       </div>
 
-      {/* Statistiques principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6 bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-amber-800">En attente de paiement</p>
-              <AnimatedStat value={inscriptionsEnCours.length} className="text-3xl text-amber-900 mt-2" />
-            </div>
-            <div className="w-12 h-12 bg-amber-600 rounded-full flex items-center justify-center">
-              <Clock className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-800">Inscriptions finalisées</p>
-              <AnimatedStat value={inscriptionsFinalisees.length} className="text-3xl text-green-900 mt-2" />
-            </div>
-            <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-800">Inscriptions groupées</p>
-              <AnimatedStat value={nombreGroupes} className="text-3xl text-blue-900 mt-2" />
-              <p className="text-xs text-blue-700 mt-1">{inscriptionsGroupees.length} participants</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-              <Users className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-purple-800">Dernières 24h</p>
-              <AnimatedStat value={inscriptionsRecentes} className="text-3xl text-purple-900 mt-2" />
-            </div>
-            <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </Card>
-      </div>
+      {/* Statistiques principales - widget standard */}
+      <WidgetStatsInscriptions stats={stats as any} participants={participants as any} loading={false} />
 
       {/* Répartition par type */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

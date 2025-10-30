@@ -24,6 +24,7 @@ interface ListeInscriptionsProps {
     defaultStatuts?: Array<'membre' | 'non-membre' | 'vip' | 'speaker'>;
     restrictStatutOptions?: Array<'membre' | 'non-membre' | 'vip' | 'speaker'>;
     showStats?: boolean; // Nouveau prop pour afficher/masquer les stats
+  onlyNonFinalisees?: boolean; // Filtrer uniquement les inscriptions non finalisées
 }
 
 export function ListeInscriptions({ 
@@ -31,7 +32,8 @@ export function ListeInscriptions({
     userProfile = 'agence', 
     defaultStatuts,
     restrictStatutOptions,
-    showStats = false,
+  showStats = false,
+  onlyNonFinalisees = false,
 }: ListeInscriptionsProps = {}) {
     // État pour les données de l'API
     const [apiParticipants, setApiParticipants] = useState<Participant[]>([]);
@@ -271,7 +273,7 @@ export function ListeInscriptions({
             appliedPaysFilters
         });
         
-        const filtered = participants.filter(participant => {
+    const filtered = participants.filter(participant => {
             const org = inscriptionsDataService.getOrganisationById(participant.organisationId);
             const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
             const matchesStatutInscription = appliedStatutInscriptionFilters.length === 0 || 
@@ -279,8 +281,9 @@ export function ListeInscriptions({
                 (appliedStatutInscriptionFilters.includes('exonéré') && (participant.statut === 'vip' || participant.statut === 'speaker'));
             const matchesOrganisation = appliedOrganisationFilters.length === 0 || appliedOrganisationFilters.includes(participant.organisationId);
             const matchesPays = appliedPaysFilters.length === 0 || appliedPaysFilters.includes(participant.pays);
+      const matchesOnlyNonFinalisees = !onlyNonFinalisees || participant.statutInscription === 'non-finalisée';
             
-            return matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays;
+      return matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays && matchesOnlyNonFinalisees;
         });
         
         // Logs de debug pour comprendre pourquoi la liste est vide
@@ -621,31 +624,35 @@ export function ListeInscriptions({
           </div>
 
           <div>
-            <Label className="text-xs mb-1.5 block text-gray-900">Statut Inscription</Label>
-            <div className="space-y-1">
-              {['finalisée', 'non-finalisée', 'exonéré'].map((statut) => (
-                <div key={statut} className="flex items-center space-x-1.5">
-                  <Checkbox
-                    id={`statut-inscription-${statut}`}
-                    checked={tempStatutInscriptionFilters.includes(statut)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setTempStatutInscriptionFilters([...tempStatutInscriptionFilters, statut]);
-                      } else {
-                        setTempStatutInscriptionFilters(tempStatutInscriptionFilters.filter(s => s !== statut));
-                      }
-                    }}
-                    className="h-3 w-3"
-                  />
-                  <label
-                    htmlFor={`statut-inscription-${statut}`}
-                    className="text-xs cursor-pointer capitalize"
-                  >
-                    {statut}
-                  </label>
+            {!onlyNonFinalisees && (
+              <>
+                <Label className="text-xs mb-1.5 block text-gray-900">Statut Inscription</Label>
+                <div className="space-y-1">
+                  {['finalisée', 'non-finalisée', 'exonéré'].map((statut) => (
+                    <div key={statut} className="flex items-center space-x-1.5">
+                      <Checkbox
+                        id={`statut-inscription-${statut}`}
+                        checked={tempStatutInscriptionFilters.includes(statut)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setTempStatutInscriptionFilters([...tempStatutInscriptionFilters, statut]);
+                          } else {
+                            setTempStatutInscriptionFilters(tempStatutInscriptionFilters.filter(s => s !== statut));
+                          }
+                        }}
+                        className="h-3 w-3"
+                      />
+                      <label
+                        htmlFor={`statut-inscription-${statut}`}
+                        className="text-xs cursor-pointer capitalize"
+                      >
+                        {statut}
+                      </label>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
 
           <div>

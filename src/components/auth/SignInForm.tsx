@@ -24,9 +24,21 @@ function SignInFormContent() {
   // Vérifier si l'utilisateur est déjà connecté
   useEffect(() => {
     if (fanafApi.isAuthenticated()) {
-      // Rediriger vers la page demandée (qui contient le bon chemin de dashboard)
-      // ou le dashboard admin-fanaf par défaut
-      const redirect = searchParams?.get('redirect') || '/dashboard/admin-fanaf';
+      // Déterminer la route selon le rôle si déjà connecté
+      const user = fanafApi.getCurrentUser() as any;
+      const role = user?.role || (typeof window !== 'undefined' ? localStorage.getItem('fanaf_role') : null);
+      const roleToPath = (r: string | null | undefined) => {
+        switch (r) {
+          case 'admin_agency': return '/dashboard/agence';
+          case 'admin_fanaf': return '/dashboard/admin-fanaf';
+          case 'admin_asaci': return '/dashboard/admin-asaci';
+          case 'agent_fanaf': return '/dashboard/agent-inscription';
+          case 'operateur_caisse': return '/dashboard/operateur-caisse';
+          case 'operateur_badge': return '/dashboard/operateur-badge';
+          default: return '/no-access';
+        }
+      };
+      const redirect = searchParams?.get('redirect') || roleToPath(role);
       console.log('[SignInForm] Redirection après authentification vers:', redirect);
       router.push(redirect);
     }
@@ -78,9 +90,18 @@ function SignInFormContent() {
                 // Déterminer la redirection selon le rôle utilisateur
                 const user = (response as any)?.user || (response as any)?.data?.user;
                 const role = user?.role;
-                const defaultRedirect = role === 'admin_agency'
-                  ? '/dashboard/agence'
-                  : '/no-access';
+                const roleToPath = (r: string | null | undefined) => {
+                  switch (r) {
+                    case 'admin_agency': return '/dashboard/agence';
+                    case 'admin_fanaf': return '/dashboard/admin-fanaf';
+                    case 'admin_asaci': return '/dashboard/admin-asaci';
+                    case 'agent_fanaf': return '/dashboard/agent-inscription';
+                    case 'operateur_caisse': return '/dashboard/operateur-caisse';
+                    case 'operateur_badge': return '/dashboard/operateur-badge';
+                    default: return '/no-access';
+                  }
+                };
+                const defaultRedirect = roleToPath(role);
                 // Rediriger vers la page demandée (si présente) sinon selon le rôle
                 const redirect = searchParams?.get('redirect') || defaultRedirect;
                 console.log('[SignInForm] Redirection après connexion vers:', redirect, 'role:', role);

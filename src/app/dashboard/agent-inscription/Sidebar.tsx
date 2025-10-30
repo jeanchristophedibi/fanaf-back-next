@@ -1,19 +1,22 @@
 'use client';
 
 import React from 'react';
-import { Home, UserPlus, Clock, FileText, LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Home, UserPlus, Clock, FileText, LogOut, List } from 'lucide-react';
 
 interface AgentInscriptionSidebarProps {
-  currentPage: string;
-  onNavigate: (page: string) => void;
+  currentPage?: string;
+  onNavigate?: (page: string) => void;
   onSwitchProfile?: () => void;
 }
 
 export const AgentInscriptionSidebar = ({ currentPage, onNavigate, onSwitchProfile }: AgentInscriptionSidebarProps) => {
+  const pathname = usePathname();
   const menuItems = [
-    { id: 'accueil', label: 'Accueil', icon: Home },
-    { id: 'nouvelle', label: 'Nouvelle inscription', icon: UserPlus },
-    { id: 'en-cours', label: 'Inscriptions en cours', icon: Clock },
+    { href: '/dashboard/agent-inscription', label: 'Accueil', icon: Home },
+    { href: '/dashboard/agent-inscription/inscriptions/creer', label: 'Nouvelle inscription', icon: UserPlus },
+    { href: '/dashboard/agent-inscription/inscriptions/en-cours', label: 'Inscriptions en cours', icon: Clock },
   ];
 
   return (
@@ -36,12 +39,12 @@ export const AgentInscriptionSidebar = ({ currentPage, onNavigate, onSwitchProfi
         <div className="space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const isActive = currentPage === item.id;
+            const isActive = pathname === item.href || (item.href !== '/dashboard/agent-inscription' && pathname.startsWith(item.href));
 
             return (
-              <button
-                key={item.id}
-                onClick={() => onNavigate(item.id)}
+              <Link
+                key={item.href}
+                href={item.href}
                 className={`
                   w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all
                   ${isActive 
@@ -52,7 +55,7 @@ export const AgentInscriptionSidebar = ({ currentPage, onNavigate, onSwitchProfi
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-amber-600' : 'text-gray-500'}`} />
                 <span className="text-sm">{item.label}</span>
-              </button>
+              </Link>
             );
           })}
         </div>

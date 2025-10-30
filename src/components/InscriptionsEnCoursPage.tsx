@@ -20,6 +20,7 @@ import {
   Clock
 } from 'lucide-react';
 import { Participant } from './data/mockData';
+import { companiesDataService } from './data/companiesData';
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -49,14 +50,12 @@ export const InscriptionsEnCoursPage = () => {
   });
 
   const getOrganisationNom = (organisationId: string) => {
-    const organisations = JSON.parse(localStorage.getItem('mockOrganisations') || '[]');
-    const org = organisations.find((o: any) => o.id === organisationId);
+    const org = companiesDataService.getOrganisationById(organisationId);
     return org?.nom || '-';
   };
 
   const getOrganisation = (organisationId: string) => {
-    const organisations = JSON.parse(localStorage.getItem('mockOrganisations') || '[]');
-    return organisations.find((o: any) => o.id === organisationId);
+    return companiesDataService.getOrganisationById(organisationId);
   };
 
   const getMontant = (statut: string) => {
@@ -317,11 +316,23 @@ export const InscriptionsEnCoursPage = () => {
               <DialogTitle>Facture Proforma - {selectedParticipant.reference}</DialogTitle>
             </DialogHeader>
             <div className="mt-4">
-              <ProformaInvoiceGenerator 
-                participant={selectedParticipant}
-                organisation={getOrganisation(selectedParticipant.organisationId)}
-                numeroFacture={`PRO-${new Date().getFullYear()}-${selectedParticipant.reference.split('-')[2]}`}
-              />
+              {(() => {
+                const org = getOrganisation(selectedParticipant.organisationId);
+                if (!org) {
+                  return (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                      Organisation introuvable pour cette inscription.
+                    </div>
+                  );
+                }
+                return (
+                  <ProformaInvoiceGenerator 
+                    participant={selectedParticipant}
+                    organisation={org}
+                    numeroFacture={`PRO-${new Date().getFullYear()}-${selectedParticipant.reference.split('-')[2]}`}
+                  />
+                );
+              })()}
             </div>
             <div className="flex justify-end gap-4 mt-4">
               <Button

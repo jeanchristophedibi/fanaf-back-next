@@ -150,6 +150,18 @@ export function mapApiRegistrationToParticipant(apiData: any): Participant {
     checkInDate: apiData.check_in_date || apiData.checkInDate || apiData.checked_in_at,
   };
 
+  // Gestion des inscriptions groupées: si type === 'group', renseigner les infos de groupe
+  if (apiType === 'group') {
+    const groupId = apiData.group_id || apiData.groupe_id || apiData.groupId || apiData.groupeId ||
+      apiData.group_reference || apiData.reference || undefined;
+    const groupName = apiData.group_name || apiData.groupe_nom || apiData.groupName || apiData.groupeName ||
+      apiData.company || undefined;
+    if (groupId) participant.groupeId = String(groupId);
+    if (groupName) participant.nomGroupe = String(groupName);
+    // Ajouter un marqueur souple pour les consommateurs qui inspectent p.type
+    (participant as any).type = 'group';
+  }
+
   return participant;
 }
 

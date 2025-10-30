@@ -31,8 +31,8 @@ export function middleware(request: NextRequest) {
     const d3 = deny(pathname.startsWith('/dashboard/admin-asaci') && role !== 'admin_asaci');
     if (d3) return d3;
 
-    // Agent inscription
-    const d4 = deny(pathname.startsWith('/dashboard/agent-inscription') && role !== 'agent_inscription');
+    // Agent inscription (FANAF)
+    const d4 = deny(pathname.startsWith('/dashboard/agent-inscription') && role !== 'agent_fanaf');
     if (d4) return d4;
 
     // Opérateur caisse
