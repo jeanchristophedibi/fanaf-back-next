@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { Card } from '../../../components/ui/card';
 import { WidgetCard } from '../../../components/ui/WidgetCard';
@@ -22,28 +23,35 @@ import { StatsPaiements } from '../../../components/paiements/liste/StatsPaiemen
 
 export default function OperateurCaisseDashboard() {
   const { api } = useFanafApi();
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
+  // Charger les données avec React Query
+  const { data: registrationsData, isLoading: registrationsLoading } = useQuery({
+    queryKey: ['caisseRegistrations'],
+    queryFn: async () => {
       try {
-        setLoading(true);
-        const [regsRes, payRes] = await Promise.all([
-          api.getRegistrations({ per_page: 200, page: 1 }),
-          api.getPayments({ per_page: 200, page: 1 })
-        ]);
-        if (!mounted) return;
+        const regsRes = await api.getRegistrations({ per_page: 200, page: 1 });
         const regsAny: any = regsRes as any;
         const regsArray = Array.isArray(regsAny?.data)
           ? regsAny.data
           : Array.isArray(regsAny)
             ? regsAny
             : [];
-        setParticipants(regsArray);
+        return regsArray;
+      } catch (_) {
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
+  const { data: paymentsData = [], isLoading: paymentsLoading } = useQuery({
+    queryKey: ['caissePayments'],
+    queryFn: async () => {
+      try {
+        const payRes = await api.getPayments({ per_page: 200, page: 1 });
         const payAny: any = payRes as any;
         const payArray = Array.isArray(payAny?.data?.data)
           ? payAny.data.data
@@ -52,15 +60,20 @@ export default function OperateurCaisseDashboard() {
             : Array.isArray(payAny)
               ? payAny
               : [];
-        setPayments(payArray);
-      } catch (e) {
-        // Fallback silencieux: laisser les tableaux vides
-      } finally {
-        if (mounted) setLoading(false);
+        return payArray;
+      } catch (_) {
+        return [];
       }
-    })();
-    return () => { mounted = false; };
-  }, [api]);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const participants = registrationsData || [];
+  const payments = paymentsData;
+  const loading = registrationsLoading || paymentsLoading;
 
   // Calcul des statistiques (API-first, fallback au minimum)
   const stats = useMemo(() => {

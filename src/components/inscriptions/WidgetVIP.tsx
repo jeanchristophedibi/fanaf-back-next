@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "../ui/card";
 import { Award } from "lucide-react";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
@@ -11,32 +11,40 @@ import { Skeleton } from "../ui/skeleton";
 
 export function WidgetVIP() {
   const { participants: allParticipants } = useDynamicInscriptions();
-  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
+  // Charger les participants VIP avec React Query
+  const { data: apiParticipants = [], isLoading } = useQuery({
+    queryKey: ['widgetVIP'],
+    queryFn: async () => {
       try {
         const loaded = await inscriptionsDataService.loadParticipants(['vip']);
-        setApiParticipants(loaded.filter((p) => p.statut === 'vip'));
+        return loaded.filter((p) => p.statut === 'vip');
       } catch (e) {
         console.error('Erreur chargement VIP:', e);
-      } finally {
-        setIsLoading(false);
+        return [];
       }
-    };
-    load();
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
   const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'vip');
 
-  const stats = useMemo(() => {
-    const vip = participants.filter(p => p.statut === 'vip');
-    const finalises = vip.filter(p => p.statutInscription === 'finalisée').length;
-    const enAttente = vip.filter(p => p.statutInscription === 'non-finalisée').length;
-    return { total: vip.length, finalises, enAttente };
-  }, [participants]);
+  const statsQuery = useQuery({
+    queryKey: ['widgetVIP', 'stats', participants],
+    queryFn: () => {
+      const vip = participants.filter(p => p.statut === 'vip');
+      const finalises = vip.filter(p => p.statutInscription === 'finalisée').length;
+      const enAttente = vip.filter(p => p.statutInscription === 'non-finalisée').length;
+      return { total: vip.length, finalises, enAttente };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { total: 0, finalises: 0, enAttente: 0 };
 
   if (isLoading) {
     return (

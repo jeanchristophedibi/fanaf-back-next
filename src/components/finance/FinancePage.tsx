@@ -1,13 +1,13 @@
 "use client";
 
 import React from 'react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Coins, TrendingUp, Users, Download, Building2, Eye, Receipt, Wallet, CreditCard, Banknote, Smartphone, Target, TrendingDown, Activity, ArrowUpRight, ArrowDownRight, Percent, FileText } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Progress } from '../ui/progress';
 import {
   BarChart,
@@ -20,16 +20,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  Area,
-  AreaChart,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
+  ResponsiveContainer
 } from 'recharts';
 import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { fanafApi } from '../../services/fanafApi';
@@ -64,11 +55,6 @@ export function FinancePage() {
   const { participants } = useDynamicInscriptions();
   const [showEnAttenteDialog, setShowEnAttenteDialog] = useState(false);
   const [selectedCanal, setSelectedCanal] = useState<'general' | CanalEncaissement>('general');
-  
-  // États pour les données API
-  const [apiPayments, setApiPayments] = useState<any[]>([]);
-  const [isLoadingPayments, setIsLoadingPayments] = useState(true);
-  const [paymentsError, setPaymentsError] = useState<string | null>(null);
 
   // Prix des inscriptions
   const PRIX = {
@@ -79,12 +65,10 @@ export function FinancePage() {
   // Objectif de revenus (exemple)
   const OBJECTIF_REVENUS = 50000000; // 50 millions FCFA
 
-  // Charger les paiements depuis l'API
-  useEffect(() => {
-    const loadAllPayments = async () => {
-      setIsLoadingPayments(true);
-      setPaymentsError(null);
-      
+  // Charger tous les paiements depuis l'API avec React Query
+  const { data: apiPayments = [], isLoading: isLoadingPayments, error: paymentsQueryError } = useQuery({
+    queryKey: ['financeAllPayments'],
+    queryFn: async () => {
       try {
         let allPayments: any[] = [];
         let currentPage = 1;
@@ -109,60 +93,76 @@ export function FinancePage() {
           currentPage++;
         }
         
-        setApiPayments(allPayments);
+        return allPayments;
       } catch (err: any) {
         console.error('Erreur lors du chargement des paiements:', err);
-        setPaymentsError(err.message || 'Erreur lors du chargement des paiements');
         // Ne pas afficher d'erreur toast, on utilisera le fallback
-      } finally {
-        setIsLoadingPayments(false);
+        return [];
       }
-    };
-    
-    loadAllPayments();
-  }, []);
+    },
+    staleTime: 60 * 1000, // 1 minute pour les données financières
+    gcTime: 10 * 60 * 1000, // 10 minutes en cache
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  // Créer un mapping participant_id -> statut depuis les participants
-  const participantStatutMap = useMemo(() => {
-    const map = new Map<string, 'membre' | 'non-membre' | 'vip' | 'speaker'>();
-    participants.forEach(p => {
-      // Essayer de trouver le participant par email ou référence
-      // Filtrer les statuts valides (exclure 'referent' par exemple)
-      if (p.statut === 'membre' || p.statut === 'non-membre' || p.statut === 'vip' || p.statut === 'speaker') {
-        if (p.email) map.set(p.email.toLowerCase(), p.statut);
-        if (p.reference) map.set(p.reference, p.statut);
-      }
-    });
-    return map;
-  }, [participants]);
+  const paymentsError = paymentsQueryError ? (paymentsQueryError as Error).message : null;
 
-  // Mapper les paiements API avec le statut du participant
-  const enrichedPayments = useMemo(() => {
-    if (apiPayments.length === 0) return [];
-    
-    return apiPayments.map(payment => {
-      // Déterminer le statut du participant
-      let statut: 'membre' | 'non-membre' | 'vip' | 'speaker' = 'membre';
-      const userEmail = payment.user?.email?.toLowerCase();
-      if (userEmail && participantStatutMap.has(userEmail)) {
-        statut = participantStatutMap.get(userEmail)!;
-      } else if (payment.user?.category) {
-        // Utiliser la catégorie de l'API si disponible
-        const category = payment.user.category;
-        if (category === 'vip') statut = 'vip';
-        else if (category === 'not_member') statut = 'non-membre';
-        else if (category === 'member') statut = 'membre';
-      }
+  // Query pour créer un mapping participant_id -> statut depuis les participants
+  const participantStatutMapQuery = useQuery({
+    queryKey: ['financePage', 'participantStatutMap', participants],
+    queryFn: () => {
+      const map = new Map<string, 'membre' | 'non-membre' | 'vip' | 'speaker'>();
+      participants.forEach(p => {
+        // Essayer de trouver le participant par email ou référence
+        // Filtrer les statuts valides (exclure 'referent' par exemple)
+        if (p.statut === 'membre' || p.statut === 'non-membre' || p.statut === 'vip' || p.statut === 'speaker') {
+          if (p.email) map.set(p.email.toLowerCase(), p.statut);
+          if (p.reference) map.set(p.reference, p.statut);
+        }
+      });
+      return map;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const participantStatutMap = participantStatutMapQuery.data ?? new Map();
+
+  // Query pour mapper les paiements API avec le statut du participant
+  const enrichedPaymentsQuery = useQuery({
+    queryKey: ['financePage', 'enrichedPayments', apiPayments, participantStatutMap],
+    queryFn: () => {
+      if (apiPayments.length === 0) return [];
       
-      return {
-        ...payment,
-        statut,
-        modePaiement: mapPaymentMethod(payment.payment_method || 'cash'),
-        canalEncaissement: mapPaymentProvider(payment.payment_provider || 'asapay'),
-        isCompleted: isPaymentCompleted(payment.state || ''),
-      };
-    });
-  }, [apiPayments, participantStatutMap]);
+      return apiPayments.map(payment => {
+        // Déterminer le statut du participant
+        let statut: 'membre' | 'non-membre' | 'vip' | 'speaker' = 'membre';
+        const userEmail = payment.user?.email?.toLowerCase();
+        if (userEmail && participantStatutMap.has(userEmail)) {
+          statut = participantStatutMap.get(userEmail)!;
+        } else if (payment.user?.category) {
+          // Utiliser la catégorie de l'API si disponible
+          const category = payment.user.category;
+          if (category === 'vip') statut = 'vip';
+          else if (category === 'not_member') statut = 'non-membre';
+          else if (category === 'member') statut = 'membre';
+        }
+        
+        return {
+          ...payment,
+          statut,
+          modePaiement: mapPaymentMethod(payment.payment_method || 'cash'),
+          canalEncaissement: mapPaymentProvider(payment.payment_provider || 'asapay'),
+          isCompleted: isPaymentCompleted(payment.state || ''),
+        };
+      });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const enrichedPayments = enrichedPaymentsQuery.data ?? [];
 
   // Calculer les statistiques financières par canal
   const calculateStatsByCanal = (canal?: CanalEncaissement) => {
@@ -279,10 +279,96 @@ export function FinancePage() {
     return stats;
   };
 
-  // Statistiques par canal
-  const statsGeneral = useMemo(() => calculateStatsByCanal(), [enrichedPayments, participants]);
-  const statsExterne = useMemo(() => calculateStatsByCanal('externe'), [enrichedPayments, participants]);
-  const statsAsapay = useMemo(() => calculateStatsByCanal('asapay'), [enrichedPayments, participants]);
+  // Query pour les statistiques par canal
+  const statsGeneralQuery = useQuery({
+    queryKey: ['financePage', 'statsGeneral', enrichedPayments, participants],
+    queryFn: () => calculateStatsByCanal(),
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const statsGeneral = statsGeneralQuery.data ?? {
+    totalMembres: 0,
+    totalNonMembres: 0,
+    totalVIP: 0,
+    totalSpeakers: 0,
+    revenuMembres: 0,
+    revenuNonMembres: 0,
+    revenuTotal: 0,
+    aEncaisserMembres: 0,
+    aEncaisserNonMembres: 0,
+    aEncaisserTotal: 0,
+    enAttenteMembres: 0,
+    enAttenteNonMembres: 0,
+    paiementsParMode: {
+      'espèce': 0,
+      'carte bancaire': 0,
+      'orange money': 0,
+      'wave': 0,
+      'virement': 0,
+      'chèque': 0,
+    },
+  };
+
+  const statsExterneQuery = useQuery({
+    queryKey: ['financePage', 'statsExterne', enrichedPayments, participants],
+    queryFn: () => calculateStatsByCanal('externe'),
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const statsExterne = statsExterneQuery.data ?? {
+    totalMembres: 0,
+    totalNonMembres: 0,
+    totalVIP: 0,
+    totalSpeakers: 0,
+    revenuMembres: 0,
+    revenuNonMembres: 0,
+    revenuTotal: 0,
+    aEncaisserMembres: 0,
+    aEncaisserNonMembres: 0,
+    aEncaisserTotal: 0,
+    enAttenteMembres: 0,
+    enAttenteNonMembres: 0,
+    paiementsParMode: {
+      'espèce': 0,
+      'carte bancaire': 0,
+      'orange money': 0,
+      'wave': 0,
+      'virement': 0,
+      'chèque': 0,
+    },
+  };
+
+  const statsAsapayQuery = useQuery({
+    queryKey: ['financePage', 'statsAsapay', enrichedPayments, participants],
+    queryFn: () => calculateStatsByCanal('asapay'),
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const statsAsapay = statsAsapayQuery.data ?? {
+    totalMembres: 0,
+    totalNonMembres: 0,
+    totalVIP: 0,
+    totalSpeakers: 0,
+    revenuMembres: 0,
+    revenuNonMembres: 0,
+    revenuTotal: 0,
+    aEncaisserMembres: 0,
+    aEncaisserNonMembres: 0,
+    aEncaisserTotal: 0,
+    enAttenteMembres: 0,
+    enAttenteNonMembres: 0,
+    paiementsParMode: {
+      'espèce': 0,
+      'carte bancaire': 0,
+      'orange money': 0,
+      'wave': 0,
+      'virement': 0,
+      'chèque': 0,
+    },
+  };
 
   // Formater les montants en FCFA
   const formatCurrency = (amount: number) => {

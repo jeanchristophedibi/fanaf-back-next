@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -29,8 +30,7 @@ import { toast } from 'sonner';
 
 export function TousPaiementsPage() {
   const { api } = useFanafApi();
-  const [apiPayments, setApiPayments] = useState<any[]>([]);
-  const [apiLoading, setApiLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -58,12 +58,11 @@ export function TousPaiementsPage() {
     return stored ? JSON.parse(stored) : {};
   });
 
-  // Charger paiements depuis l'API (fallback vers participants mocks si vide)
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
+  // Charger paiements depuis l'API avec React Query
+  const { data: apiPayments = [], isLoading: apiLoading } = useQuery({
+    queryKey: ['tousPaiements'],
+    queryFn: async () => {
       try {
-        setApiLoading(true);
         const payRes = await api.getPayments({ per_page: 200, page: 1 });
         const payAny: any = payRes as any;
         const payArray = Array.isArray(payAny?.data?.data)
@@ -73,162 +72,215 @@ export function TousPaiementsPage() {
             : Array.isArray(payAny)
               ? payAny
               : [];
-        if (mounted) setApiPayments(payArray);
+        return payArray;
       } catch (_) {
-        if (mounted) setApiPayments([]);
-      } finally {
-        if (mounted) setApiLoading(false);
+        return [];
       }
-    })();
-    return () => { mounted = false; };
-  }, [api]);
+    },
+    staleTime: 30 * 1000, // 30 secondes
+    gcTime: 5 * 60 * 1000, // 5 minutes en cache
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  const participantsPayes = useMemo(() => {
-    if (apiPayments.length > 0) {
-      // Adapter la structure pour l'affichage commun
-      return apiPayments.map((p: any) => {
-        return {
-          id: p.id || p.payment_id || p.reference,
-          reference: p.reference || p.payment_reference || p.id,
-          prenom: p.user?.first_name || p.prenom || '',
-          nom: p.user?.last_name || p.nom || '',
-          email: p.user?.email || p.email || '',
-          telephone: p.user?.phone || p.user?.telephone || p.phone || p.telephone || '',
-          organisationId: p.company_id || p.organisationId,
-          statut: (p.category || p.statut || '').toLowerCase(),
-          dateInscription: p.paid_at || p.created_at || new Date().toISOString(),
-          modePaiement: p.payment_method || p.modePaiement,
-          caissier: p.cashier_name || p.caissier,
-        };
-      });
-    }
-    // Retourner un tableau vide si pas de paiements depuis l'API
-    return [];
-  }, [apiPayments, finalisedParticipants]);
+  // Query pour adapter les paiements API pour l'affichage
+  const participantsPayesQuery = useQuery({
+    queryKey: ['tousPaiements', 'participantsPayes', apiPayments, finalisedParticipants],
+    queryFn: () => {
+      if (apiPayments.length > 0) {
+        // Adapter la structure pour l'affichage commun
+        return apiPayments.map((p: any) => {
+          return {
+            id: p.id || p.payment_id || p.reference,
+            reference: p.reference || p.payment_reference || p.id,
+            prenom: p.user?.first_name || p.prenom || '',
+            nom: p.user?.last_name || p.nom || '',
+            email: p.user?.email || p.email || '',
+            telephone: p.user?.phone || p.user?.telephone || p.phone || p.telephone || '',
+            organisationId: p.company_id || p.organisationId,
+            statut: (p.category || p.statut || '').toLowerCase(),
+            dateInscription: p.paid_at || p.created_at || new Date().toISOString(),
+            modePaiement: p.payment_method || p.modePaiement,
+            caissier: p.cashier_name || p.caissier,
+          };
+        });
+      }
+      // Retourner un tableau vide si pas de paiements depuis l'API
+      return [];
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Obtenir les listes uniques pour les filtres
-  const uniqueOrganisations = useMemo(() => {
-    const orgs = new Set<string>();
-    participantsPayes.forEach(p => {
-      const org = getOrganisationById(p.organisationId);
-      if (org) orgs.add(org.nom);
-    });
-    return Array.from(orgs).sort();
-  }, [participantsPayes]);
+  const participantsPayes = participantsPayesQuery.data ?? [];
 
-  const uniqueModesPaiement = useMemo(() => {
-    const modes = new Set<string>();
-    participantsPayes.forEach(p => {
-      const paymentInfo = finalisedPayments[p.id];
-      const mode = paymentInfo?.modePaiement || p.modePaiement;
-      if (mode) modes.add(mode);
-    });
-    return Array.from(modes).sort();
-  }, [participantsPayes, finalisedPayments]);
-
-  const uniqueCaissiers = useMemo(() => {
-    const caissiers = new Set<string>();
-    participantsPayes.forEach(p => {
-      const paymentInfo = finalisedPayments[p.id];
-      const caissier = paymentInfo?.caissier || p.caissier;
-      if (caissier) caissiers.add(caissier);
-    });
-    return Array.from(caissiers).sort();
-  }, [participantsPayes, finalisedPayments]);
-
-  // Filtrer par recherche et filtres avancés
-  const filteredParticipants = useMemo(() => {
-    let filtered = [...participantsPayes];
-    
-    // Filtre par recherche
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(p => {
+  // Query pour obtenir les listes uniques pour les filtres
+  const uniqueOrganisationsQuery = useQuery({
+    queryKey: ['tousPaiements', 'uniqueOrganisations', participantsPayes],
+    queryFn: () => {
+      const orgs = new Set<string>();
+      participantsPayes.forEach((p: any) => {
         const org = getOrganisationById(p.organisationId);
-        return (
-          p.nom.toLowerCase().includes(searchLower) ||
-          p.prenom.toLowerCase().includes(searchLower) ||
-          p.reference.toLowerCase().includes(searchLower) ||
-          p.email.toLowerCase().includes(searchLower) ||
-          p.telephone.includes(searchLower) ||
-          org?.nom.toLowerCase().includes(searchLower) ||
-          ''
-        );
+        if (org) orgs.add(org.nom);
       });
-    }
+      return Array.from(orgs).sort();
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-    // Filtre par organisation
-    if (selectedOrganisation !== 'all') {
-      filtered = filtered.filter(p => {
-        const org = getOrganisationById(p.organisationId);
-        return org?.nom === selectedOrganisation;
-      });
-    }
+  const uniqueOrganisations = uniqueOrganisationsQuery.data ?? [];
 
-    // Filtre par mode de paiement
-    if (selectedModePaiement !== 'all') {
-      filtered = filtered.filter(p => {
+  const uniqueModesPaiementQuery = useQuery({
+    queryKey: ['tousPaiements', 'uniqueModesPaiement', participantsPayes, finalisedPayments],
+    queryFn: () => {
+      const modes = new Set<string>();
+      participantsPayes.forEach((p: any) => {
         const paymentInfo = finalisedPayments[p.id];
         const mode = paymentInfo?.modePaiement || p.modePaiement;
-        return mode === selectedModePaiement;
+        if (mode) modes.add(mode);
       });
-    }
+      return Array.from(modes).sort();
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-    // Filtre par statut
-    if (selectedStatut !== 'all') {
-      filtered = filtered.filter(p => p.statut === selectedStatut);
-    }
+  const uniqueModesPaiement = uniqueModesPaiementQuery.data ?? [];
 
-    // Filtre par caissier
-    if (selectedCaissier !== 'all') {
-      filtered = filtered.filter(p => {
+  const uniqueCaissiersQuery = useQuery({
+    queryKey: ['tousPaiements', 'uniqueCaissiers', participantsPayes, finalisedPayments],
+    queryFn: () => {
+      const caissiers = new Set<string>();
+      participantsPayes.forEach((p: any) => {
         const paymentInfo = finalisedPayments[p.id];
         const caissier = paymentInfo?.caissier || p.caissier;
-        return caissier === selectedCaissier;
+        if (caissier) caissiers.add(caissier);
       });
-    }
+      return Array.from(caissiers).sort();
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-    // Filtre par date de paiement
-    if (dateDebut) {
-      const dateDebutMs = new Date(dateDebut).getTime();
-      filtered = filtered.filter(p => {
-        const paymentInfo = finalisedPayments[p.id];
-        const datePaiement = paymentInfo?.datePaiement ? new Date(paymentInfo.datePaiement).getTime() : new Date(p.dateInscription).getTime();
-        return datePaiement >= dateDebutMs;
-      });
-    }
+  const uniqueCaissiers = uniqueCaissiersQuery.data ?? [];
 
-    if (dateFin) {
-      const dateFinMs = new Date(dateFin).setHours(23, 59, 59, 999);
-      filtered = filtered.filter(p => {
-        const paymentInfo = finalisedPayments[p.id];
-        const datePaiement = paymentInfo?.datePaiement ? new Date(paymentInfo.datePaiement).getTime() : new Date(p.dateInscription).getTime();
-        return datePaiement <= dateFinMs;
-      });
-    }
+  // Query pour filtrer par recherche et filtres avancés
+  const filteredParticipantsQuery = useQuery({
+    queryKey: ['tousPaiements', 'filteredParticipants', participantsPayes, searchTerm, selectedOrganisation, selectedModePaiement, selectedStatut, selectedCaissier, dateDebut, dateFin, finalisedPayments],
+    queryFn: () => {
+      let filtered = [...participantsPayes];
+      
+      // Filtre par recherche
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase().trim();
+        filtered = filtered.filter(p => {
+          const org = getOrganisationById(p.organisationId);
+          return (
+            p.nom.toLowerCase().includes(searchLower) ||
+            p.prenom.toLowerCase().includes(searchLower) ||
+            p.reference.toLowerCase().includes(searchLower) ||
+            p.email.toLowerCase().includes(searchLower) ||
+            p.telephone.includes(searchLower) ||
+            org?.nom.toLowerCase().includes(searchLower) ||
+            ''
+          );
+        });
+      }
 
-    return filtered;
-  }, [participantsPayes, searchTerm, selectedOrganisation, selectedModePaiement, selectedStatut, selectedCaissier, dateDebut, dateFin, finalisedPayments]);
+      // Filtre par organisation
+      if (selectedOrganisation !== 'all') {
+        filtered = filtered.filter(p => {
+          const org = getOrganisationById(p.organisationId);
+          return org?.nom === selectedOrganisation;
+        });
+      }
+
+      // Filtre par mode de paiement
+      if (selectedModePaiement !== 'all') {
+        filtered = filtered.filter(p => {
+          const paymentInfo = finalisedPayments[p.id];
+          const mode = paymentInfo?.modePaiement || p.modePaiement;
+          return mode === selectedModePaiement;
+        });
+      }
+
+      // Filtre par statut
+      if (selectedStatut !== 'all') {
+        filtered = filtered.filter(p => p.statut === selectedStatut);
+      }
+
+      // Filtre par caissier
+      if (selectedCaissier !== 'all') {
+        filtered = filtered.filter(p => {
+          const paymentInfo = finalisedPayments[p.id];
+          const caissier = paymentInfo?.caissier || p.caissier;
+          return caissier === selectedCaissier;
+        });
+      }
+
+      // Filtre par date de paiement
+      if (dateDebut) {
+        const dateDebutMs = new Date(dateDebut).getTime();
+        filtered = filtered.filter(p => {
+          const paymentInfo = finalisedPayments[p.id];
+          const datePaiement = paymentInfo?.datePaiement ? new Date(paymentInfo.datePaiement).getTime() : new Date(p.dateInscription).getTime();
+          return datePaiement >= dateDebutMs;
+        });
+      }
+
+      if (dateFin) {
+        const dateFinMs = new Date(dateFin).setHours(23, 59, 59, 999);
+        filtered = filtered.filter(p => {
+          const paymentInfo = finalisedPayments[p.id];
+          const datePaiement = paymentInfo?.datePaiement ? new Date(paymentInfo.datePaiement).getTime() : new Date(p.dateInscription).getTime();
+          return datePaiement <= dateFinMs;
+        });
+      }
+
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredParticipants = filteredParticipantsQuery.data ?? [];
 
   // Pagination
   const totalPages = Math.ceil(filteredParticipants.length / itemsPerPage);
-  const paginatedParticipants = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredParticipants.slice(startIndex, endIndex);
-  }, [filteredParticipants, currentPage]);
 
-  // Compter les filtres actifs
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (selectedOrganisation !== 'all') count++;
-    if (selectedModePaiement !== 'all') count++;
-    if (selectedStatut !== 'all') count++;
-    if (selectedCaissier !== 'all') count++;
-    if (dateDebut) count++;
-    if (dateFin) count++;
-    return count;
-  }, [selectedOrganisation, selectedModePaiement, selectedStatut, selectedCaissier, dateDebut, dateFin]);
+  // Query pour paginer
+  const paginatedParticipantsQuery = useQuery({
+    queryKey: ['tousPaiements', 'paginatedParticipants', filteredParticipants, currentPage, itemsPerPage],
+    queryFn: () => {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return filteredParticipants.slice(startIndex, endIndex);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const paginatedParticipants = paginatedParticipantsQuery.data ?? [];
+
+  // Query pour compter les filtres actifs
+  const activeFiltersCountQuery = useQuery({
+    queryKey: ['tousPaiements', 'activeFiltersCount', selectedOrganisation, selectedModePaiement, selectedStatut, selectedCaissier, dateDebut, dateFin],
+    queryFn: () => {
+      let count = 0;
+      if (selectedOrganisation !== 'all') count++;
+      if (selectedModePaiement !== 'all') count++;
+      if (selectedStatut !== 'all') count++;
+      if (selectedCaissier !== 'all') count++;
+      if (dateDebut) count++;
+      if (dateFin) count++;
+      return count;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const activeFiltersCount = activeFiltersCountQuery.data ?? 0;
 
   // Réinitialiser tous les filtres
   const handleResetFilters = () => {
@@ -241,33 +293,43 @@ export function TousPaiementsPage() {
     setSearchTerm('');
   };
 
-  // Réinitialiser la page quand la recherche ou les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedOrganisation, selectedModePaiement, selectedStatut, selectedCaissier, dateDebut, dateFin]);
+  // Query pour réinitialiser la page quand la recherche ou les filtres changent
+  useQuery({
+    queryKey: ['tousPaiements', 'resetPage', searchTerm, selectedOrganisation, selectedModePaiement, selectedStatut, selectedCaissier, dateDebut, dateFin],
+    queryFn: () => {
+      queryClient.setQueryData(['tousPaiements', 'currentPage'], 1);
+      setCurrentPage(1);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Écouter les changements de localStorage
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const storedIds = localStorage.getItem('finalisedParticipantsIds');
-      const storedPayments = localStorage.getItem('finalisedPayments');
+  // Query pour écouter les changements de localStorage
+  useQuery({
+    queryKey: ['tousPaiements', 'localStorage', finalisedParticipants, finalisedPayments],
+    queryFn: () => {
+      if (typeof window === 'undefined') return false;
+      const handleStorageChange = () => {
+        const storedIds = localStorage.getItem('finalisedParticipantsIds');
+        const storedPayments = localStorage.getItem('finalisedPayments');
+        
+        if (storedIds) {
+          setFinalisedParticipants(new Set(JSON.parse(storedIds)));
+        }
+        if (storedPayments) {
+          setFinalisedPayments(JSON.parse(storedPayments));
+        }
+      };
+
+      window.addEventListener('storage', handleStorageChange);
+      window.addEventListener('paymentFinalized', handleStorageChange);
       
-      if (storedIds) {
-        setFinalisedParticipants(new Set(JSON.parse(storedIds)));
-      }
-      if (storedPayments) {
-        setFinalisedPayments(JSON.parse(storedPayments));
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('paymentFinalized', handleStorageChange);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('paymentFinalized', handleStorageChange);
-    };
-  }, []);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
   // Obtenir la date de paiement
   const getDatePaiement = (participant: any) => {

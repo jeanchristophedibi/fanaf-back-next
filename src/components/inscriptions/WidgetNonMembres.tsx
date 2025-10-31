@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "../ui/card";
 import { Users } from "lucide-react";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
@@ -11,38 +11,45 @@ import { Skeleton } from "../ui/skeleton";
 
 export function WidgetNonMembres() {
   const { participants: allParticipants } = useDynamicInscriptions();
-  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Charger les participants depuis l'API
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
+
+  // Charger les participants non-membres avec React Query
+  const { data: apiParticipants = [], isLoading } = useQuery({
+    queryKey: ['widgetNonMembres'],
+    queryFn: async () => {
       try {
         const loadedParticipants = await inscriptionsDataService.loadParticipants(['not_member']);
-        setApiParticipants(loadedParticipants.filter(p => p.statut === 'non-membre'));
+        return loadedParticipants.filter(p => p.statut === 'non-membre');
       } catch (err) {
         console.error('Erreur lors du chargement des non-membres:', err);
-      } finally {
-        setIsLoading(false);
+        return [];
       }
-    };
-    loadData(); 
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
   
   const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'non-membre');
 
-  const stats = useMemo(() => {
-    const nonMembres = participants.filter(p => p.statut === 'non-membre');
-    const finalises = nonMembres.filter(p => p.statutInscription === 'finalisée').length;
-    const enAttente = nonMembres.filter(p => p.statutInscription === 'non-finalisée').length;
-    
-    return {
-      total: nonMembres.length,
-      finalises,
-      enAttente
-    };
-  }, [participants]);
+  const statsQuery = useQuery({
+    queryKey: ['widgetNonMembres', 'stats', participants],
+    queryFn: () => {
+      const nonMembres = participants.filter(p => p.statut === 'non-membre');
+      const finalises = nonMembres.filter(p => p.statutInscription === 'finalisée').length;
+      const enAttente = nonMembres.filter(p => p.statutInscription === 'non-finalisée').length;
+      
+      return {
+        total: nonMembres.length,
+        finalises,
+        enAttente
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { total: 0, finalises: 0, enAttente: 0 };
 
   if (isLoading) {
     return (

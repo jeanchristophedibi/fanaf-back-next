@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
@@ -95,44 +96,50 @@ export function DocumentsParticipantsPage() {
     return { badge: badgeCount, kit: kitCount };
   };
 
-  // Écouter les changements du localStorage pour mettre à jour en temps réel
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const stored = localStorage.getItem('finalisedParticipantsIds');
-      setFinalisedParticipantsIds(stored ? new Set(JSON.parse(stored)) : new Set());
-    };
+  // Query pour écouter les changements du localStorage pour mettre à jour en temps réel
+  useQuery({
+    queryKey: ['documentsParticipants', 'localStorage', finalisedParticipantsIds],
+    queryFn: () => {
+      if (typeof window === 'undefined') return false;
+      const handleStorageChange = () => {
+        const stored = localStorage.getItem('finalisedParticipantsIds');
+        setFinalisedParticipantsIds(stored ? new Set(JSON.parse(stored)) : new Set());
+      };
 
-    // Écouter l'événement personnalisé de finalisation de paiement
-    const handlePaymentFinalized = () => {
-      handleStorageChange();
-    };
+      // Écouter l'événement personnalisé de finalisation de paiement
+      const handlePaymentFinalized = () => {
+        handleStorageChange();
+      };
 
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('paymentFinalized', handlePaymentFinalized);
+      window.addEventListener('storage', handleStorageChange);
+      window.addEventListener('paymentFinalized', handlePaymentFinalized);
 
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('paymentFinalized', handlePaymentFinalized);
-    };
-  }, []);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
   // État pour forcer le re-render des compteurs
   const [remisesUpdateTrigger, setRemisesUpdateTrigger] = useState(0);
 
-  // Écouter les changements de remises pour forcer la mise à jour
-  useEffect(() => {
-    const handleRemiseUpdate = () => {
-      setRemisesUpdateTrigger(prev => prev + 1);
-    };
+  // Query pour écouter les changements de remises pour forcer la mise à jour
+  useQuery({
+    queryKey: ['documentsParticipants', 'remisesUpdate', remisesUpdateTrigger],
+    queryFn: () => {
+      if (typeof window === 'undefined') return false;
+      const handleRemiseUpdate = () => {
+        setRemisesUpdateTrigger(prev => prev + 1);
+      };
 
-    window.addEventListener('remiseDocumentUpdated', handleRemiseUpdate);
-    window.addEventListener('storage', handleRemiseUpdate);
+      window.addEventListener('remiseDocumentUpdated', handleRemiseUpdate);
+      window.addEventListener('storage', handleRemiseUpdate);
 
-    return () => {
-      window.removeEventListener('remiseDocumentUpdated', handleRemiseUpdate);
-      window.removeEventListener('storage', handleRemiseUpdate);
-    };
-  }, []);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
   // Fonction helper pour obtenir les infos de paiement (depuis participant ou localStorage)
   const getPaymentInfo = (participant: Participant) => {
@@ -161,43 +168,45 @@ export function DocumentsParticipantsPage() {
     };
   };
 
-  // Filtrer les participants avec paiement finalisé (statutInscription ou localStorage)
-  const participantsFinalisés = useMemo(() => {
-    let filtered = participants.filter(p => 
-      p.statutInscription === 'finalisée' || finalisedParticipantsIds.has(p.id)
-    );
+  // Query pour filtrer les participants avec paiement finalisé (statutInscription ou localStorage)
+  const participantsFinalisésQuery = useQuery({
+    queryKey: ['documentsParticipants', 'filtered', participants, finalisedParticipantsIds, searchTerm, filtreModePaiement, filtreOrganisation, filtrePeriode, dateDebut, dateFin],
+    queryFn: () => {
+      let filtered = participants.filter(p => 
+        p.statutInscription === 'finalisée' || finalisedParticipantsIds.has(p.id)
+      );
 
-    // Filtre par recherche
-    if (searchTerm) {
-      filtered = filtered.filter(p => {
-        const org = getOrganisationById(p.organisationId);
-        return (
-          p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          org?.nom.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-    }
+      // Filtre par recherche
+      if (searchTerm) {
+        filtered = filtered.filter(p => {
+          const org = getOrganisationById(p.organisationId);
+          return (
+            p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            org?.nom.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
+      }
 
-    // Filtre par mode de paiement
-    if (filtreModePaiement !== 'all') {
-      filtered = filtered.filter(p => {
-        const paymentInfo = getPaymentInfo(p);
-        return paymentInfo.modePaiement === filtreModePaiement;
-      });
-    }
+      // Filtre par mode de paiement
+      if (filtreModePaiement !== 'all') {
+        filtered = filtered.filter(p => {
+          const paymentInfo = getPaymentInfo(p);
+          return paymentInfo.modePaiement === filtreModePaiement;
+        });
+      }
 
-    // Filtre par organisation
-    if (filtreOrganisation !== 'all') {
-      filtered = filtered.filter(p => p.organisationId === filtreOrganisation);
-    }
+      // Filtre par organisation
+      if (filtreOrganisation !== 'all') {
+        filtered = filtered.filter(p => p.organisationId === filtreOrganisation);
+      }
 
-    // Filtre par période de paiement
-    if (filtrePeriode !== 'all') {
-      const now = new Date();
-      filtered = filtered.filter(p => {
+      // Filtre par période de paiement
+      if (filtrePeriode !== 'all') {
+        const now = new Date();
+        filtered = filtered.filter(p => {
         const paymentInfo = getPaymentInfo(p);
         const datePaiement = paymentInfo.datePaiement ? new Date(paymentInfo.datePaiement) : null;
         if (!datePaiement) return false;
@@ -230,8 +239,13 @@ export function DocumentsParticipantsPage() {
       });
     }
 
-    return filtered;
-  }, [participants, searchTerm, filtreModePaiement, filtreOrganisation, filtrePeriode, dateDebut, dateFin, finalisedParticipantsIds]);
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const participantsFinalisés = participantsFinalisésQuery.data ?? [];
 
   const handleDownloadDocument = (participant: Participant, type: 'badge' | 'recu' | 'lettre' | 'facture') => {
     const docNames = {

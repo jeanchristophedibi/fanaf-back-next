@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Users, BarChart3, LineChart, AlertCircle, CheckCircle, XCircle, ScanLine } from 'lucide-react';
 import { DashboardAnalytics } from '../DashboardAnalytics';
 import { InscriptionsEvolutionChart } from '../InscriptionsEvolutionChart';
@@ -19,32 +20,6 @@ interface DashboardHomeProps {
 
 export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {}) {
   const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [inscriptionsCounts, setInscriptionsCounts] = useState({
-    membres: 0,
-    nonMembres: 0,
-    vip: 0,
-    speakers: 0,
-    enAttenteMembres: 0,
-    enAttenteNonMembres: 0,
-  });
-  const [organisationsCounts, setOrganisationsCounts] = useState({
-    membres: 0,
-    nonMembres: 0,
-    sponsors: 0,
-  });
-  const [networkingCounts, setNetworkingCounts] = useState({
-    rdvSponsors: 0,
-    rdvParticipants: 0,
-  });
-  const [totals, setTotals] = useState({
-    participants: 0,
-    organisations: 0,
-    rendezVous: 0,
-  });
 
   // Check-in counters from API
   const { badgeScansCounters, fetchBadgeScansCounters } = useFanafApi({ autoFetch: false });
@@ -54,34 +29,47 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
   const baseOrganisationsPath = `/dashboard/${baseSegment}/organisations`;
   const baseNetworkingPath = `/dashboard/${baseSegment}/networking`;
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { counts, data } = await loadDashboardCounts();
-        if (!mounted) return;
-        setParticipants(data.participants);
-        setInscriptionsCounts(counts.inscriptions);
-        setOrganisationsCounts(counts.organisations);
-        setNetworkingCounts(counts.networking);
-        setTotals(counts.totals);
-        // Fetch check-in counters in parallel after base data (ignore errors silently)
-        fetchBadgeScansCounters().catch((err) => {
-          // Ignorer les erreurs de badge scans counters (API peut ne pas être disponible)
-          console.warn('[DashboardHome] Impossible de charger les badges scans counters:', err?.message || err);
-        });
-      } catch (e: any) {
-        if (!mounted) return;
-        setError(e?.message || 'Erreur lors du chargement des données');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, []);
+  // Charger les données du dashboard avec React Query
+  const { data: dashboardData, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['dashboardCounts', userProfile],
+    queryFn: async () => {
+      const { counts, data } = await loadDashboardCounts();
+      // Fetch check-in counters in parallel (ignore errors silently)
+      fetchBadgeScansCounters().catch((err) => {
+        console.warn('[DashboardHome] Impossible de charger les badges scans counters:', err?.message || err);
+      });
+      return { counts, data };
+    },
+    staleTime: 30 * 1000, // 30 secondes
+    gcTime: 5 * 60 * 1000, // 5 minutes en cache
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const participants = dashboardData?.data.participants || [];
+  const inscriptionsCounts = dashboardData?.counts.inscriptions || {
+    membres: 0,
+    nonMembres: 0,
+    vip: 0,
+    speakers: 0,
+    enAttenteMembres: 0,
+    enAttenteNonMembres: 0,
+  };
+  const organisationsCounts = dashboardData?.counts.organisations || {
+    membres: 0,
+    nonMembres: 0,
+    sponsors: 0,
+  };
+  const networkingCounts = dashboardData?.counts.networking || {
+    rdvSponsors: 0,
+    rdvParticipants: 0,
+  };
+  const totals = dashboardData?.counts.totals || {
+    participants: 0,
+    organisations: 0,
+    rendezVous: 0,
+  };
+  const error = queryError ? (queryError as Error).message || 'Erreur lors du chargement des données' : null;
 
   return (
     <div className="p-8 animate-page-enter">

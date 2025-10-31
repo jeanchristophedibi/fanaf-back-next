@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Coins, TrendingUp, Users, Wallet, Building2, CreditCard } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -26,58 +26,78 @@ export function FinanceWidget({ canal, showDetails = false }: FinanceWidgetProps
   // Objectif de revenus
   const OBJECTIF_REVENUS = 50000000; // 50 millions FCFA
 
-  // Calculer les statistiques financières
-  const stats = useMemo(() => {
-    const statsData = {
-      totalMembres: 0,
-      totalNonMembres: 0,
-      totalVIP: 0,
-      totalSpeakers: 0,
-      revenuMembres: 0,
-      revenuNonMembres: 0,
-      revenuTotal: 0,
-      aEncaisserMembres: 0,
-      aEncaisserNonMembres: 0,
-      aEncaisserTotal: 0,
-      enAttenteMembres: 0,
-      enAttenteNonMembres: 0,
-    };
+  // Query pour calculer les statistiques financières
+  const statsQuery = useQuery({
+    queryKey: ['financeWidget', 'stats', participants, canal],
+    queryFn: () => {
+      const statsData = {
+        totalMembres: 0,
+        totalNonMembres: 0,
+        totalVIP: 0,
+        totalSpeakers: 0,
+        revenuMembres: 0,
+        revenuNonMembres: 0,
+        revenuTotal: 0,
+        aEncaisserMembres: 0,
+        aEncaisserNonMembres: 0,
+        aEncaisserTotal: 0,
+        enAttenteMembres: 0,
+        enAttenteNonMembres: 0,
+      };
 
-    participants.forEach((participant) => {
-      // Filtrer par canal si spécifié
-      if (canal && participant.canalEncaissement !== canal) {
-        return;
-      }
-
-      // Comptabiliser selon le statut
-      if (participant.statut === 'vip') {
-        statsData.totalVIP++;
-      } else if (participant.statut === 'speaker') {
-        statsData.totalSpeakers++;
-      } else if (participant.statut === 'membre') {
-        if (participant.statutInscription === 'finalisée') {
-          statsData.totalMembres++;
-          statsData.revenuMembres += PRIX.membre;
-        } else {
-          statsData.enAttenteMembres++;
-          statsData.aEncaisserMembres += PRIX.membre;
+      participants.forEach((participant) => {
+        // Filtrer par canal si spécifié
+        if (canal && participant.canalEncaissement !== canal) {
+          return;
         }
-      } else if (participant.statut === 'non-membre') {
-        if (participant.statutInscription === 'finalisée') {
-          statsData.totalNonMembres++;
-          statsData.revenuNonMembres += PRIX.nonMembre;
-        } else {
-          statsData.enAttenteNonMembres++;
-          statsData.aEncaisserNonMembres += PRIX.nonMembre;
+
+        // Comptabiliser selon le statut
+        if (participant.statut === 'vip') {
+          statsData.totalVIP++;
+        } else if (participant.statut === 'speaker') {
+          statsData.totalSpeakers++;
+        } else if (participant.statut === 'membre') {
+          if (participant.statutInscription === 'finalisée') {
+            statsData.totalMembres++;
+            statsData.revenuMembres += PRIX.membre;
+          } else {
+            statsData.enAttenteMembres++;
+            statsData.aEncaisserMembres += PRIX.membre;
+          }
+        } else if (participant.statut === 'non-membre') {
+          if (participant.statutInscription === 'finalisée') {
+            statsData.totalNonMembres++;
+            statsData.revenuNonMembres += PRIX.nonMembre;
+          } else {
+            statsData.enAttenteNonMembres++;
+            statsData.aEncaisserNonMembres += PRIX.nonMembre;
+          }
         }
-      }
-    });
+      });
 
-    statsData.revenuTotal = statsData.revenuMembres + statsData.revenuNonMembres;
-    statsData.aEncaisserTotal = statsData.aEncaisserMembres + statsData.aEncaisserNonMembres;
+      statsData.revenuTotal = statsData.revenuMembres + statsData.revenuNonMembres;
+      statsData.aEncaisserTotal = statsData.aEncaisserMembres + statsData.aEncaisserNonMembres;
 
-    return statsData;
-  }, [participants, canal]);
+      return statsData;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? {
+    totalMembres: 0,
+    totalNonMembres: 0,
+    totalVIP: 0,
+    totalSpeakers: 0,
+    revenuMembres: 0,
+    revenuNonMembres: 0,
+    revenuTotal: 0,
+    aEncaisserMembres: 0,
+    aEncaisserNonMembres: 0,
+    aEncaisserTotal: 0,
+    enAttenteMembres: 0,
+    enAttenteNonMembres: 0,
+  };
 
   // Formater les montants en FCFA
   const formatCurrency = (amount: number) => {

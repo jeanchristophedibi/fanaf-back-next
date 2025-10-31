@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -30,50 +31,58 @@ export function ReservationsPage({ subSection, filter, readOnly = false }: Reser
   const activeFilter = filter || subSection;
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredReservations = useMemo(() => {
-    let filtered = [...reservations];
+  // Query pour filtrer les réservations
+  const filteredReservationsQuery = useQuery({
+    queryKey: ['reservationsPage', 'filteredReservations', reservations, searchTerm, subSection, activeFilter],
+    queryFn: () => {
+      let filtered = [...reservations];
 
-    // Filtre par sous-section (dimension)
-    if (activeFilter === '9m2') {
-      filtered = filtered.filter(r => r.dimension === '9m²');
-    } else if (activeFilter === '12m2') {
-      filtered = filtered.filter(r => r.dimension === '12m²');
-    }
+      // Filtre par sous-section (dimension)
+      if (activeFilter === '9m2') {
+        filtered = filtered.filter(r => r.dimension === '9m²');
+      } else if (activeFilter === '12m2') {
+        filtered = filtered.filter(r => r.dimension === '12m²');
+      }
 
-    // Filtre par recherche
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(r => {
-        const participant = getParticipantById(r.participantId);
-        if (!participant) return false;
-        const organisation = getOrganisationById(participant.organisationId);
-        
-        // Recherche dans le numéro de stand
-        if (r.numeroStand.toLowerCase().includes(searchLower)) return true;
-        
-        // Recherche dans le nom
-        if (participant.nom.toLowerCase().includes(searchLower)) return true;
-        
-        // Recherche dans le prénom
-        if (participant.prenom.toLowerCase().includes(searchLower)) return true;
-        
-        // Recherche dans nom complet (prénom + nom ou nom + prénom)
-        const nomComplet1 = `${participant.prenom} ${participant.nom}`.toLowerCase();
-        const nomComplet2 = `${participant.nom} ${participant.prenom}`.toLowerCase();
-        if (nomComplet1.includes(searchLower) || nomComplet2.includes(searchLower)) return true;
-        
-        // Recherche dans l'email
-        if (participant.email.toLowerCase().includes(searchLower)) return true;
-        
-        // Recherche dans l'organisation
-        if (organisation?.nom.toLowerCase().includes(searchLower)) return true;
-        
-        return false;
-      });
-    }
+      // Filtre par recherche
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase().trim();
+        filtered = filtered.filter(r => {
+          const participant = getParticipantById(r.participantId);
+          if (!participant) return false;
+          const organisation = getOrganisationById(participant.organisationId);
+          
+          // Recherche dans le numéro de stand
+          if (r.numeroStand.toLowerCase().includes(searchLower)) return true;
+          
+          // Recherche dans le nom
+          if (participant.nom.toLowerCase().includes(searchLower)) return true;
+          
+          // Recherche dans le prénom
+          if (participant.prenom.toLowerCase().includes(searchLower)) return true;
+          
+          // Recherche dans nom complet (prénom + nom ou nom + prénom)
+          const nomComplet1 = `${participant.prenom} ${participant.nom}`.toLowerCase();
+          const nomComplet2 = `${participant.nom} ${participant.prenom}`.toLowerCase();
+          if (nomComplet1.includes(searchLower) || nomComplet2.includes(searchLower)) return true;
+          
+          // Recherche dans l'email
+          if (participant.email.toLowerCase().includes(searchLower)) return true;
+          
+          // Recherche dans l'organisation
+          if (organisation?.nom.toLowerCase().includes(searchLower)) return true;
+          
+          return false;
+        });
+      }
 
-    return filtered;
-  }, [reservations, searchTerm, subSection]);
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredReservations = filteredReservationsQuery.data ?? [];
 
   const getTitle = () => {
     switch (subSection) {
@@ -95,17 +104,24 @@ export function ReservationsPage({ subSection, filter, readOnly = false }: Reser
     return reservations.length;
   };
 
-  // Statistiques pour la vue "liste"
-  const stats = useMemo(() => {
-    const stands9m2 = reservations.filter(r => r.dimension === '9m²');
-    const stands12m2 = reservations.filter(r => r.dimension === '12m²');
-    
-    return {
-      stands9m2: stands9m2.length,
-      stands12m2: stands12m2.length,
-      total: reservations.length
-    };
-  }, [reservations]);
+  // Query pour les statistiques de la vue "liste"
+  const statsQuery = useQuery({
+    queryKey: ['reservationsPage', 'stats', reservations],
+    queryFn: () => {
+      const stands9m2 = reservations.filter(r => r.dimension === '9m²');
+      const stands12m2 = reservations.filter(r => r.dimension === '12m²');
+      
+      return {
+        stands9m2: stands9m2.length,
+        stands12m2: stands12m2.length,
+        total: reservations.length
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { stands9m2: 0, stands12m2: 0, total: 0 };
 
   const exportToCSV = () => {
     const headers = ['N° Stand', 'Participant', 'Email', 'Organisation', 'Dimension', 'Date Réservation'];

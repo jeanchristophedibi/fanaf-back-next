@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Building2, Users, Briefcase, Award } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
@@ -10,14 +10,21 @@ import { AnimatedStat } from "../AnimatedStat";
 export function WidgetOrganisations() {
   const { organisations } = useDynamicInscriptions({ includeOrganisations: true });
 
-  // Statistiques pour la vue "liste"
-  const stats = useMemo(() => {
-    const membre = organisations.filter(o => o.statut === 'membre').length;
-    const nonMembre = organisations.filter(o => o.statut === 'non-membre').length;
-    const sponsor = organisations.filter(o => o.statut === 'sponsor').length;
-    
-    return { membre, nonMembre, sponsor, total: organisations.length };
-  }, [organisations]);
+  // Query pour les statistiques
+  const statsQuery = useQuery({
+    queryKey: ['widgetOrganisations', 'stats', organisations],
+    queryFn: () => {
+      const membre = organisations.filter(o => o.statut === 'membre').length;
+      const nonMembre = organisations.filter(o => o.statut === 'non-membre').length;
+      const sponsor = organisations.filter(o => o.statut === 'sponsor').length;
+      
+      return { membre, nonMembre, sponsor, total: organisations.length };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { membre: 0, nonMembre: 0, sponsor: 0, total: 0 };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

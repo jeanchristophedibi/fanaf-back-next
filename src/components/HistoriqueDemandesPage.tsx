@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Eye, Clock, User, Send, Inbox, FileText, Download } from 'lucide-react';import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
@@ -42,14 +43,33 @@ export function HistoriqueDemandesPage() {
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [isHistoriqueOpen, setIsHistoriqueOpen] = useState(false);
 
-  useEffect(() => {
-    fetchNetworkingRequests();
-  }, [fetchNetworkingRequests]);
+  // Charger les networking requests avec React Query
+  const { data: networkingRequestsData = [] } = useQuery({
+    queryKey: ['historiqueNetworkingRequests'],
+    queryFn: async () => {
+      try {
+        await fetchNetworkingRequests();
+        return networkingRequests;
+      } catch (error) {
+        console.error('Erreur lors du chargement des networking requests:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  // Calculer les statistiques pour chaque participant avec texte de recherche
-  const participantsWithStats = useMemo(() => {
+  // Utiliser les données de la query si disponibles, sinon utiliser celles de useFanafApi
+  const effectiveNetworkingRequests = networkingRequestsData.length > 0 ? networkingRequestsData : networkingRequests;
+
+  // Query pour calculer les statistiques pour chaque participant avec texte de recherche
+  const participantsWithStatsQuery = useQuery({
+    queryKey: ['historiqueDemandes', 'participantsWithStats', effectiveNetworkingRequests, participants, rendezVousData],
+    queryFn: () => {
     // Si des données networking sont disponibles depuis l'API, les utiliser en priorité
-    const apiRequests: any[] = getApiRequestsArray(networkingRequests);
+    const apiRequests: any[] = getApiRequestsArray(effectiveNetworkingRequests);
 
     if (apiRequests.length > 0) {
       // Construire un index par participant (demandeur et destinataire)
@@ -140,10 +160,17 @@ export function HistoriqueDemandesPage() {
         _searchText: searchText,
       } as ParticipantWithStats;
     });
-  }, [participants, rendezVousData, networkingRequests]);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Statistiques globales
-  const stats = useMemo(() => {
+  const participantsWithStats = participantsWithStatsQuery.data ?? [];
+
+  // Query pour les statistiques globales
+  const statsQuery = useQuery({
+    queryKey: ['historiqueDemandes', 'stats', rendezVousData, participantsWithStats, effectiveNetworkingRequests],
+    queryFn: () => {
     const apiRequests: any[] = getApiRequestsArray(networkingRequests);
 
     const source = apiRequests.length > 0 ? apiRequests : rendezVousData;
@@ -160,7 +187,18 @@ export function HistoriqueDemandesPage() {
       demandesOccupees,
       participantsActifs: participantsWithStats.filter(p => p.totalRendezVous > 0).length,
     };
-  }, [rendezVousData, participantsWithStats, networkingRequests]);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? {
+    totalDemandes: 0,
+    demandesAcceptees: 0,
+    demandesEnAttente: 0,
+    demandesOccupees: 0,
+    participantsActifs: 0,
+  };
 
   const handleViewHistorique = (participantId: string) => {
     setSelectedParticipantId(participantId);

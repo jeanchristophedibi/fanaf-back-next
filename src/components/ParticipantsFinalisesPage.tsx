@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
@@ -32,61 +33,99 @@ const statutColors: Record<string, string> = {
 
 export function ParticipantsFinalisesPage() {
   const { participants } = useDynamicInscriptions();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [isBadgeDialogOpen, setIsBadgeDialogOpen] = useState(false);
   const itemsPerPage = 10;
 
-  // Filtrer uniquement les participants avec paiement finalisé
-  const participantsFiltered = useMemo(() => {
-    return participants.filter(p => {
-      // Inclure UNIQUEMENT les participants avec inscription finalisée (paiement effectué)
-      return p.statutInscription === 'finalisée';
-    });
-  }, [participants]);
+  // Query pour filtrer uniquement les participants avec paiement finalisé
+  const participantsFilteredQuery = useQuery({
+    queryKey: ['participantsFinalises', 'filtered', participants],
+    queryFn: () => {
+      return participants.filter(p => {
+        // Inclure UNIQUEMENT les participants avec inscription finalisée (paiement effectué)
+        return p.statutInscription === 'finalisée';
+      });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Recherche
-  const searchedParticipants = useMemo(() => {
-    if (!searchTerm) return participantsFiltered;
-    
-    const term = searchTerm.toLowerCase();
-    return participantsFiltered.filter(p => 
-      p.nom.toLowerCase().includes(term) ||
-      p.prenom.toLowerCase().includes(term) ||
-      p.email.toLowerCase().includes(term) ||
-      p.reference.toLowerCase().includes(term) ||
-      getOrganisationById(p.organisationId)?.nom.toLowerCase().includes(term)
-    );
-  }, [participantsFiltered, searchTerm]);
+  const participantsFiltered = participantsFilteredQuery.data ?? [];
+
+  // Query pour la recherche
+  const searchedParticipantsQuery = useQuery({
+    queryKey: ['participantsFinalises', 'searched', participantsFiltered, searchTerm],
+    queryFn: () => {
+      if (!searchTerm) return participantsFiltered;
+      
+      const term = searchTerm.toLowerCase();
+      return participantsFiltered.filter(p => 
+        p.nom.toLowerCase().includes(term) ||
+        p.prenom.toLowerCase().includes(term) ||
+        p.email.toLowerCase().includes(term) ||
+        p.reference.toLowerCase().includes(term) ||
+        getOrganisationById(p.organisationId)?.nom.toLowerCase().includes(term)
+      );
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const searchedParticipants = searchedParticipantsQuery.data ?? [];
+
+  // Query pour réinitialiser la page quand la recherche change
+  useQuery({
+    queryKey: ['participantsFinalises', 'resetPage', searchTerm],
+    queryFn: () => {
+      queryClient.setQueryData(['participantsFinalises', 'currentPage'], 1);
+      setCurrentPage(1);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
   // Pagination
   const totalPages = Math.ceil(searchedParticipants.length / itemsPerPage);
-  const paginatedParticipants = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return searchedParticipants.slice(startIndex, endIndex);
-  }, [searchedParticipants, currentPage]);
+  
+  // Query pour paginer les participants
+  const paginatedParticipantsQuery = useQuery({
+    queryKey: ['participantsFinalises', 'paginated', searchedParticipants, currentPage, itemsPerPage],
+    queryFn: () => {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return searchedParticipants.slice(startIndex, endIndex);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Reset page when search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
+  const paginatedParticipants = paginatedParticipantsQuery.data ?? [];
 
-  // Statistiques
-  const stats = useMemo(() => {
-    const membres = participantsFiltered.filter(p => p.statut === 'membre').length;
-    const nonMembres = participantsFiltered.filter(p => p.statut === 'non-membre').length;
-    const vips = participantsFiltered.filter(p => p.statut === 'vip').length;
-    const speakers = participantsFiltered.filter(p => p.statut === 'speaker').length;
-    
-    return {
-      total: participantsFiltered.length,
-      membres,
-      nonMembres,
-      vipsEtSpeakers: vips + speakers,
-    };
-  }, [participantsFiltered]);
+  // Query pour les statistiques
+  const statsQuery = useQuery({
+    queryKey: ['participantsFinalises', 'stats', participantsFiltered],
+    queryFn: () => {
+      const membres = participantsFiltered.filter(p => p.statut === 'membre').length;
+      const nonMembres = participantsFiltered.filter(p => p.statut === 'non-membre').length;
+      const vips = participantsFiltered.filter(p => p.statut === 'vip').length;
+      const speakers = participantsFiltered.filter(p => p.statut === 'speaker').length;
+      
+      return {
+        total: participantsFiltered.length,
+        membres,
+        nonMembres,
+        vipsEtSpeakers: vips + speakers,
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { total: 0, membres: 0, nonMembres: 0, vipsEtSpeakers: 0 };
 
   const handleViewBadge = (participant: Participant) => {
     setSelectedParticipant(participant);

@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from './ui/card';
 import { Clock, User, Building, DollarSign } from 'lucide-react';
 import { useFanafApi } from '../hooks/useFanafApi';
@@ -13,8 +14,7 @@ import { CaissePendingTable } from './paiements/caisse/CaissePendingTable';
 
 export function CaissePaiementsPage() {
   const { api } = useFanafApi();
-  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
-  const [apiLoading, setApiLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
@@ -29,12 +29,11 @@ export function CaissePaiementsPage() {
   });
   const itemsPerPage = 10;
 
-  // Charger depuis l'API (registrations), fallback vers si vide/erreur
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
+  // Charger depuis l'API (registrations) avec React Query
+  const { data: apiParticipants = [], isLoading: apiLoading } = useQuery({
+    queryKey: ['caisseRegistrations'],
+    queryFn: async () => {
       try {
-        setApiLoading(true);
         const regsRes = await api.getRegistrations({ per_page: 200, page: 1 });
         const regsAny: any = regsRes as any;
         const regsArray = Array.isArray(regsAny?.data)
@@ -42,108 +41,162 @@ export function CaissePaiementsPage() {
           : Array.isArray(regsAny)
             ? regsAny
             : [];
-        if (mounted) setApiParticipants(regsArray);
+        return regsArray;
       } catch (_) {
-        if (mounted) setApiParticipants([]);
-      } finally {
-        if (mounted) setApiLoading(false);
+        return [];
       }
-    })();
-    return () => { mounted = false; };
-  }, [api]);
+    },
+    staleTime: 30 * 1000, // 30 secondes
+    gcTime: 5 * 60 * 1000, // 5 minutes en cache
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
   const participantsSource = apiParticipants;
 
-  // Filtrer uniquement les inscriptions en attente (non finalisées) et qui ne sont pas exonérées
-  // Exclure aussi les participants qui ont été finalisés localement
-  const paiementsEnAttente = useMemo(() => {
-    const getStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
-    const getCategory = (p: any) => (p.statut || p.category || '').toLowerCase();
-    const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
+  // Query pour filtrer uniquement les inscriptions en attente (non finalisées) et qui ne sont pas exonérées
+  const paiementsEnAttenteQuery = useQuery({
+    queryKey: ['caissePaiements', 'paiementsEnAttente', participantsSource, finalisedParticipants],
+    queryFn: () => {
+      const getStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
+      const getCategory = (p: any) => (p.statut || p.category || '').toLowerCase();
+      const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
 
-    return (participantsSource || []).filter((p: any) => 
-      (getStatus(p) === 'non-finalisée' || getStatus(p) === 'pending' || getStatus(p) === 'en_attente' || !getStatus(p)) &&
-      getCategory(p) !== 'vip' &&
-      getCategory(p) !== 'speaker' &&
-      !finalisedParticipants.has(getId(p))
-    ).map((p: any) => {
-      // Uniformiser quelques champs utilisés à l'affichage
-      return {
-        ...p,
-        id: getId(p),
-        statut: getCategory(p) || p.statut,
-        statutInscription: getStatus(p) || p.statutInscription,
-      };
-    });
-  }, [participantsSource, finalisedParticipants]);
+      return (participantsSource || []).filter((p: any) => 
+        (getStatus(p) === 'non-finalisée' || getStatus(p) === 'pending' || getStatus(p) === 'en_attente' || !getStatus(p)) &&
+        getCategory(p) !== 'vip' &&
+        getCategory(p) !== 'speaker' &&
+        !finalisedParticipants.has(getId(p))
+      ).map((p: any) => {
+        // Uniformiser quelques champs utilisés à l'affichage
+        return {
+          ...p,
+          id: getId(p),
+          statut: getCategory(p) || p.statut,
+          statutInscription: getStatus(p) || p.statutInscription,
+        };
+      });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Filtrer par recherche
-  const filteredPaiements = useMemo(() => {
-    if (!searchTerm) return paiementsEnAttente;
-    
-    const searchLower = searchTerm.toLowerCase().trim();
-    return paiementsEnAttente.filter(p => {
-      const org = getOrganisationById(p.organisationId);
-      return (
-        p.nom.toLowerCase().includes(searchLower) ||
-        p.prenom.toLowerCase().includes(searchLower) ||
-        p.reference.toLowerCase().includes(searchLower) ||
-        p.email.toLowerCase().includes(searchLower) ||
-        p.telephone.includes(searchLower) ||
-        org?.nom.toLowerCase().includes(searchLower) ||
-        ''
-      );
-    });
-  }, [paiementsEnAttente, searchTerm]);
+  const paiementsEnAttente = paiementsEnAttenteQuery.data ?? [];
+
+  // Query pour filtrer par recherche
+  const filteredPaiementsQuery = useQuery({
+    queryKey: ['caissePaiements', 'filteredPaiements', paiementsEnAttente, searchTerm],
+    queryFn: () => {
+      if (!searchTerm) return paiementsEnAttente;
+      
+      const searchLower = searchTerm.toLowerCase().trim();
+      return paiementsEnAttente.filter((p: any) => {
+        const org = getOrganisationById(p.organisationId);
+        return (
+          p.nom.toLowerCase().includes(searchLower) ||
+          p.prenom.toLowerCase().includes(searchLower) ||
+          p.reference.toLowerCase().includes(searchLower) ||
+          p.email.toLowerCase().includes(searchLower) ||
+          p.telephone.includes(searchLower) ||
+          org?.nom.toLowerCase().includes(searchLower) ||
+          ''
+        );
+      });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredPaiements = filteredPaiementsQuery.data ?? [];
 
   // Pagination
   const totalPages = Math.ceil(filteredPaiements.length / itemsPerPage);
-  const paginatedPaiements = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredPaiements.slice(startIndex, endIndex);
-  }, [filteredPaiements, currentPage]);
 
-  // Réinitialiser la page quand la recherche change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
+  // Query pour paginer
+  const paginatedPaiementsQuery = useQuery({
+    queryKey: ['caissePaiements', 'paginatedPaiements', filteredPaiements, currentPage, itemsPerPage],
+    queryFn: () => {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return filteredPaiements.slice(startIndex, endIndex);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Écouter les changements de localStorage (synchronisation entre onglets)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'finalisedParticipantsIds' && e.newValue) {
-        const newFinalisedIds = new Set<string>(JSON.parse(e.newValue));
-        setFinalisedParticipants(newFinalisedIds);
+  const paginatedPaiements = paginatedPaiementsQuery.data ?? [];
+
+  // Query pour réinitialiser la page quand la recherche change
+  useQuery({
+    queryKey: ['caissePaiements', 'resetPage', searchTerm],
+    queryFn: () => {
+      queryClient.setQueryData(['caissePaiements', 'currentPage'], 1);
+      setCurrentPage(1);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Query pour écouter les changements de localStorage (synchronisation entre onglets)
+  useQuery({
+    queryKey: ['caissePaiements', 'localStorage', finalisedParticipants, caissierName],
+    queryFn: () => {
+      if (typeof window === 'undefined') return false;
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'finalisedParticipantsIds' && e.newValue) {
+          const newFinalisedIds = new Set<string>(JSON.parse(e.newValue));
+          setFinalisedParticipants(newFinalisedIds);
+        }
+        if (e.key === 'caissierName' && e.newValue !== null) {
+          setCaissierName(e.newValue);
+        }
+      };
+
+      window.addEventListener('storage', handleStorageChange);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Query pour écouter l'événement personnalisé de finalisation de paiement
+  useQuery({
+    queryKey: ['caissePaiements', 'paymentFinalized', queryClient],
+    queryFn: () => {
+      if (typeof window === 'undefined') return false;
+      const handlePaymentFinalized = () => {
+        // Recharger les participants finalisés depuis localStorage
+        const stored = localStorage.getItem('finalisedParticipantsIds');
+        if (stored) {
+          setFinalisedParticipants(new Set(JSON.parse(stored)));
+        }
+        // Invalider la query React Query pour forcer le rechargement
+        queryClient.invalidateQueries({ queryKey: ['caisseRegistrations'] });
+      };
+
+      window.addEventListener('paymentFinalized', handlePaymentFinalized);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Query pour charger le nom du caissier depuis localStorage
+  useQuery({
+    queryKey: ['caissePaiements', 'caissierName'],
+    queryFn: () => {
+      if (typeof window === 'undefined') return '';
+      const storedName = localStorage.getItem('caissierName');
+      if (storedName) {
+        setCaissierName(storedName);
+        return storedName;
       }
-      if (e.key === 'caissierName' && e.newValue !== null) {
-        setCaissierName(e.newValue);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Écouter l'événement personnalisé de finalisation de paiement
-  useEffect(() => {
-    const handlePaymentFinalized = () => {
-      // Recharger les participants finalisés depuis localStorage
-      const stored = localStorage.getItem('finalisedParticipantsIds');
-      if (stored) {
-        setFinalisedParticipants(new Set(JSON.parse(stored)));
-      }
-    };
-
-    window.addEventListener('paymentFinalized', handlePaymentFinalized);
-    return () => window.removeEventListener('paymentFinalized', handlePaymentFinalized);
-  }, []);
-
-  // Charger le nom du caissier depuis localStorage
-  useEffect(() => {
-    const storedName = localStorage.getItem('caissierName');
-    if (storedName) setCaissierName(storedName);
-  }, []);
+      return '';
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
   // Calculer le montant selon le statut
   const getMontant = (participant: Participant) => {
@@ -182,6 +235,9 @@ export function CaissePaiementsPage() {
     };
     localStorage.setItem('finalisedPayments', JSON.stringify(finalisedPayments));
 
+    // Invalider la query React Query pour forcer le rechargement
+    queryClient.invalidateQueries({ queryKey: ['caisseRegistrations'] });
+
     // Dispatcher un événement personnalisé pour notifier les autres composants
     window.dispatchEvent(new CustomEvent('paymentFinalized', { 
       detail: { participantId: selectedParticipant.id } 
@@ -202,22 +258,29 @@ export function CaissePaiementsPage() {
     setSelectedParticipant(null);
   };
 
-  // Statistiques pour le caissier
-  const stats = useMemo(() => {
-    const total = paiementsEnAttente.length;
-    const membresEnAttente = paiementsEnAttente.filter(p => p.statut === 'membre').length;
-    const nonMembresEnAttente = paiementsEnAttente.filter(p => p.statut === 'non-membre').length;
-    const montantAttenduMembres = membresEnAttente * 350000;
-    const montantAttenduNonMembres = nonMembresEnAttente * 400000;
-    const montantTotal = montantAttenduMembres + montantAttenduNonMembres;
+  // Query pour les statistiques du caissier
+  const statsQuery = useQuery({
+    queryKey: ['caissePaiements', 'stats', paiementsEnAttente],
+    queryFn: () => {
+      const total = paiementsEnAttente.length;
+      const membresEnAttente = paiementsEnAttente.filter((p: any) => p.statut === 'membre').length;
+      const nonMembresEnAttente = paiementsEnAttente.filter((p: any) => p.statut === 'non-membre').length;
+      const montantAttenduMembres = membresEnAttente * 350000;
+      const montantAttenduNonMembres = nonMembresEnAttente * 400000;
+      const montantTotal = montantAttenduMembres + montantAttenduNonMembres;
 
-    return {
-      total,
-      membresEnAttente,
-      nonMembresEnAttente,
-      montantTotal,
-    };
-  }, [paiementsEnAttente]);
+      return {
+        total,
+        membresEnAttente,
+        nonMembresEnAttente,
+        montantTotal,
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { total: 0, membresEnAttente: 0, nonMembresEnAttente: 0, montantTotal: 0 };
 
   return (
     <div className="p-8 animate-page-enter">

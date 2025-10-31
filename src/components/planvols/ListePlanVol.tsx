@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
@@ -29,35 +30,57 @@ interface GroupedPlanVol {
 }
 
 export function ListePlanVol() {
-  const [plansVol, setPlansVol] = useState<any[]>([]);
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [organisations, setOrganisations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Charger les données depuis l'API
-  useEffect(() => {
-    const loadData = async () => {
+  // Charger les données avec React Query
+  const { data: plansVol = [], isLoading: plansLoading } = useQuery({
+    queryKey: ['flightPlans'],
+    queryFn: async () => {
       try {
-        setLoading(true);
-        // Charger les plans de vol, participants et organisations
-        const [plans, part, orgs] = await Promise.all([
-          planVolDataService.loadFlightPlans(),
-          inscriptionsDataService.loadParticipants(),
-          companiesDataService.loadOrganisations(),
-        ]);
-        setPlansVol(plans);
-        setParticipants(part);
-        setOrganisations(orgs);
+        return await planVolDataService.loadFlightPlans();
       } catch (error) {
-        console.error('Erreur lors du chargement des données:', error);
+        console.error('Erreur lors du chargement des plans de vol:', error);
         toast.error('Erreur lors du chargement des plans de vol');
-      } finally {
-        setLoading(false);
+        return [];
       }
-    };
-    
-    loadData();
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const { data: participants = [], isLoading: participantsLoading } = useQuery({
+    queryKey: ['planVolParticipants'],
+    queryFn: async () => {
+      try {
+        return await inscriptionsDataService.loadParticipants();
+      } catch (error) {
+        console.error('Erreur lors du chargement des participants:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const { data: organisations = [], isLoading: organisationsLoading } = useQuery({
+    queryKey: ['planVolOrganisations'],
+    queryFn: async () => {
+      try {
+        return await companiesDataService.loadOrganisations();
+      } catch (error) {
+        console.error('Erreur lors du chargement des organisations:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const loading = plansLoading || participantsLoading || organisationsLoading;
 
   // Fonction helper pour obtenir un participant par ID
   const getParticipantById = (id: string) => {
@@ -85,15 +108,23 @@ export function ListePlanVol() {
   // Sélection
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
 
-  const uniquePaysVol = useMemo(() => {
-    const allPlansVol = [...planVolDataService.getFlightPlansByType('arrivee'), ...planVolDataService.getFlightPlansByType('depart')];
-    const paysSet = new Set<string>();
-    allPlansVol.forEach(pv => {
-      const participant = getParticipantById(pv.participantId);
-      if (participant) paysSet.add(participant.pays);
-    });
-    return Array.from(paysSet).sort();
-  }, []);
+  // Query pour obtenir la liste unique des pays
+  const uniquePaysVolQuery = useQuery({
+    queryKey: ['listePlanVol', 'uniquePays', participants],
+    queryFn: () => {
+      const allPlansVol = [...planVolDataService.getFlightPlansByType('arrivee'), ...planVolDataService.getFlightPlansByType('depart')];
+      const paysSet = new Set<string>();
+      allPlansVol.forEach(pv => {
+        const participant = getParticipantById(pv.participantId);
+        if (participant) paysSet.add(participant.pays);
+      });
+      return Array.from(paysSet).sort();
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const uniquePaysVol = uniquePaysVolQuery.data ?? [];
 
   const activeFiltersCount = appliedTypeVolFilters.length + appliedOrganisationFilters.length + (appliedDateDebut ? 1 : 0) + (appliedDateFin ? 1 : 0) + appliedPaysVolFilters.length;
 
@@ -121,8 +152,10 @@ export function ListePlanVol() {
     toast.success('Filtres réinitialisés');
   };
 
-  // Groupement et filtrage des plans de vol
-  const groupedPlansVol = useMemo(() => {
+  // Query pour le groupement et filtrage des plans de vol
+  const groupedPlansVolQuery = useQuery({
+    queryKey: ['listePlanVol', 'grouped', appliedTypeVolFilters, appliedOrganisationFilters, appliedPaysVolFilters, appliedDateDebut, appliedDateFin, plansVol, participants, organisations],
+    queryFn: () => {
     let allPlansVol = [...planVolDataService.getFlightPlansByType('arrivee'), ...planVolDataService.getFlightPlansByType('depart')];
 
     // Filtres par type de vol
@@ -217,7 +250,12 @@ export function ListePlanVol() {
     });
 
     return grouped;
-  }, [appliedTypeVolFilters, appliedOrganisationFilters, appliedPaysVolFilters, appliedDateDebut, appliedDateFin, plansVol, participants, organisations]);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const groupedPlansVol = groupedPlansVolQuery.data ?? [];
 
   const isArrivingTomorrow = (dateString: string) => {
     const today = new Date();

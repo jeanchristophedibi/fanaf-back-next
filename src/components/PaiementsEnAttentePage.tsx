@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
@@ -25,7 +26,7 @@ import {
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { type Participant, type ModePaiement } from './data/types';
-import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+import { getOrganisationById } from './data/helpers';
 
 
 export function PaiementsEnAttentePage() {
@@ -41,34 +42,41 @@ export function PaiementsEnAttentePage() {
   const [datePaiement, setDatePaiement] = useState(new Date().toISOString().split('T')[0]);
   const [montantRecu, setMontantRecu] = useState('');
 
-  // Filtrer les paiements en attente (uniquement membre et non-membre)
-  const paiementsEnAttente = useMemo(() => {
-    let filtered = participants.filter(p => 
-      p.statutInscription === 'non-finalisée' && 
-      (p.statut === 'membre' || p.statut === 'non-membre')
-    );
+  // Query pour filtrer les paiements en attente (uniquement membre et non-membre)
+  const paiementsEnAttenteQuery = useQuery({
+    queryKey: ['paiementsEnAttentePage', 'filtered', participants, searchTerm, filterStatut],
+    queryFn: () => {
+      let filtered = participants.filter(p => 
+        p.statutInscription === 'non-finalisée' && 
+        (p.statut === 'membre' || p.statut === 'non-membre')
+      );
 
-    // Filtre par recherche
-    if (searchTerm) {
-      filtered = filtered.filter(p => {
-        const org = getOrganisationById(p.organisationId);
-        return (
-          p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          org?.nom.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-    }
+      // Filtre par recherche
+      if (searchTerm) {
+        filtered = filtered.filter(p => {
+          const org = getOrganisationById(p.organisationId);
+          return (
+            p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            org?.nom.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
+      }
 
-    // Filtre par statut
-    if (filterStatut !== 'all') {
-      filtered = filtered.filter(p => p.statut === filterStatut);
-    }
+      // Filtre par statut
+      if (filterStatut !== 'all') {
+        filtered = filtered.filter(p => p.statut === filterStatut);
+      }
 
-    return filtered;
-  }, [participants, searchTerm, filterStatut]);
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const paiementsEnAttente = paiementsEnAttenteQuery.data ?? [];
 
   const handleOpenPaymentDialog = (participant: Participant) => {
     setSelectedParticipant(participant);

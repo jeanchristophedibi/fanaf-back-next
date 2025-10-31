@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -161,96 +162,120 @@ export const NouvelleInscriptionPage = () => {
     pays.toLowerCase().includes(paysRecherche.toLowerCase())
   );
 
-  // Déterminer si le formulaire est en cours (pour confirmation de sortie)
-  const isFormDirty = useMemo(() => {
-    if (inscriptionFinalisee) return false;
-    if (etapeActuelle > 1) return true;
-    const hasParticipant = Object.values(participantPrincipal).some((v) => String(v || '').length > 0 && v !== 'passeport');
-    const hasOrg = Object.values(organisationData).some((v) => String(v || '').length > 0);
-    const hasType = !!typeParticipant || !!typeInscription || participantsGroupe.length > 0;
-    return hasParticipant || hasOrg || hasType;
-  }, [inscriptionFinalisee, etapeActuelle, participantPrincipal, organisationData, typeParticipant, typeInscription, participantsGroupe]);
+  // Query pour déterminer si le formulaire est en cours (pour confirmation de sortie)
+  const isFormDirtyQuery = useQuery({
+    queryKey: ['nouvelleInscription', 'isFormDirty', inscriptionFinalisee, etapeActuelle, participantPrincipal, organisationData, typeParticipant, typeInscription, participantsGroupe],
+    queryFn: () => {
+      if (inscriptionFinalisee) return false;
+      if (etapeActuelle > 1) return true;
+      const hasParticipant = Object.values(participantPrincipal).some((v) => String(v || '').length > 0 && v !== 'passeport');
+      const hasOrg = Object.values(organisationData).some((v) => String(v || '').length > 0);
+      const hasType = !!typeParticipant || !!typeInscription || participantsGroupe.length > 0;
+      return hasParticipant || hasOrg || hasType;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Confirmation lors de la fermeture/rafraîchissement/quit
-  useEffect(() => {
-    const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (!isFormDirty) return;
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    if (isFormDirty) {
-      window.addEventListener('beforeunload', beforeUnload);
-    }
-    return () => {
-      window.removeEventListener('beforeunload', beforeUnload);
-    };
-  }, [isFormDirty]);
+  const isFormDirty = isFormDirtyQuery.data ?? false;
 
-  // Intercepter la navigation interne Next.js (App router compatible via next/router events)
-  useEffect(() => {
-    const handleRouteChangeStart = (url: string) => {
-      if (!isFormDirty) return;
-      const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-      if (!ok) {
-        // Annuler la navigation
-        Router.events.emit('routeChangeError');
-        // eslint-disable-next-line no-throw-literal
-        throw 'routeChange aborted by user';
-      }
-    };
-    Router.events.on('routeChangeStart', handleRouteChangeStart);
-    return () => {
-      Router.events.off('routeChangeStart', handleRouteChangeStart);
-    };
-  }, [isFormDirty]);
-
-  // Intercepter les clics sur les liens internes (App Router)
-  useEffect(() => {
-    const onDocumentClick = (e: MouseEvent) => {
-      if (!isFormDirty) return;
-      const target = e.target as Element | null;
-      if (!target) return;
-      // 1) Liens internes
-      const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
-      if (anchor) {
-        const isExternal = anchor.origin !== window.location.origin;
-        if (isExternal || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
-        const href = anchor.getAttribute('href');
-        if (!href || href.startsWith('#') || href === window.location.pathname) return;
+  // Query pour gérer les event listeners (confirmation lors de la fermeture/rafraîchissement/quit)
+  // Note: Les event listeners sont configurés via les handlers directs plutôt que useEffect
+  useQuery({
+    queryKey: ['nouvelleInscription', 'beforeUnload', isFormDirty],
+    queryFn: () => {
+      if (typeof window === 'undefined') return false;
+      const beforeUnload = (e: BeforeUnloadEvent) => {
+        if (!isFormDirty) return;
         e.preventDefault();
-        const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-        if (ok) {
-          appRouter.push(href);
-        }
-        return;
+        e.returnValue = '';
+      };
+      if (isFormDirty) {
+        window.addEventListener('beforeunload', beforeUnload);
       }
-      // 2) Boutons de la sidebar
-      const sidebarButton = target.closest('aside button');
-      if (sidebarButton) {
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Query pour intercepter la navigation Next.js
+  useQuery({
+    queryKey: ['nouvelleInscription', 'routeChange', isFormDirty],
+    queryFn: () => {
+      if (typeof window === 'undefined') return false;
+      const handleRouteChangeStart = (url: string) => {
+        if (!isFormDirty) return;
         const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
         if (!ok) {
-          e.preventDefault();
-          e.stopPropagation();
+          Router.events.emit('routeChangeError');
+          throw 'routeChange aborted by user';
         }
-      }
-    };
-    document.addEventListener('click', onDocumentClick, true);
-    return () => document.removeEventListener('click', onDocumentClick, true);
-  }, [isFormDirty, appRouter]);
+      };
+      Router.events.on('routeChangeStart', handleRouteChangeStart);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Intercepter back/forward (popstate) dans l'App Router
-  useEffect(() => {
-    const onPopState = (e: PopStateEvent) => {
-      if (!isFormDirty) return;
-      const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-      if (!ok) {
-        e.preventDefault?.();
-        history.pushState(null, '', pathname || window.location.pathname);
-      }
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, [isFormDirty, pathname]);
+  // Query pour intercepter les clics (App Router)
+  useQuery({
+    queryKey: ['nouvelleInscription', 'documentClick', isFormDirty, appRouter],
+    queryFn: () => {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+      const onDocumentClick = (e: MouseEvent) => {
+        if (!isFormDirty) return;
+        const target = e.target as Element | null;
+        if (!target) return;
+        const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
+        if (anchor) {
+          const isExternal = anchor.origin !== window.location.origin;
+          if (isExternal || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+          const href = anchor.getAttribute('href');
+          if (!href || href.startsWith('#') || href === window.location.pathname) return;
+          e.preventDefault();
+          const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+          if (ok) {
+            appRouter.push(href);
+          }
+          return;
+        }
+        const sidebarButton = target.closest('aside button');
+        if (sidebarButton) {
+          const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+          if (!ok) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      };
+      document.addEventListener('click', onDocumentClick, true);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Query pour intercepter back/forward (popstate)
+  useQuery({
+    queryKey: ['nouvelleInscription', 'popstate', isFormDirty, pathname],
+    queryFn: () => {
+      if (typeof window === 'undefined') return false;
+      const onPopState = (e: PopStateEvent) => {
+        if (!isFormDirty) return;
+        const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+        if (!ok) {
+          e.preventDefault?.();
+          history.pushState(null, '', pathname || window.location.pathname);
+        }
+      };
+      window.addEventListener('popstate', onPopState);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
   const validerEtape1 = () => {
     if (!typeParticipant) {

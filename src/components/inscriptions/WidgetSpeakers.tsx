@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "../ui/card";
 import { Mic } from "lucide-react";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
@@ -11,33 +11,41 @@ import { Skeleton } from "../ui/skeleton";
 
 export function WidgetSpeakers() {
   const { participants: allParticipants } = useDynamicInscriptions();
-  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
+  // Charger les participants speakers avec React Query
+  const { data: apiParticipants = [], isLoading } = useQuery({
+    queryKey: ['widgetSpeakers'],
+    queryFn: async () => {
       try {
         // Charger toutes les inscriptions puis filtrer les speakers
         const loaded = await inscriptionsDataService.loadParticipants(undefined);
-        setApiParticipants(loaded.filter((p) => p.statut === 'speaker'));
+        return loaded.filter((p) => p.statut === 'speaker');
       } catch (e) {
         console.error('Erreur chargement Speakers:', e);
-      } finally {
-        setIsLoading(false);
+        return [];
       }
-    };
-    load();
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
   const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'speaker');
 
-  const stats = useMemo(() => {
-    const speakers = participants.filter(p => p.statut === 'speaker');
-    const finalises = speakers.filter(p => p.statutInscription === 'finalisée').length;
-    const enAttente = speakers.filter(p => p.statutInscription === 'non-finalisée').length;
-    return { total: speakers.length, finalises, enAttente };
-  }, [participants]);
+  const statsQuery = useQuery({
+    queryKey: ['widgetSpeakers', 'stats', participants],
+    queryFn: () => {
+      const speakers = participants.filter(p => p.statut === 'speaker');
+      const finalises = speakers.filter(p => p.statutInscription === 'finalisée').length;
+      const enAttente = speakers.filter(p => p.statutInscription === 'non-finalisée').length;
+      return { total: speakers.length, finalises, enAttente };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { total: 0, finalises: 0, enAttente: 0 };
 
   if (isLoading) {
     return (

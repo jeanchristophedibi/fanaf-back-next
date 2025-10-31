@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { fanafApi } from '../services/fanafApi';
 
@@ -9,34 +9,39 @@ import { fanafApi } from '../services/fanafApi';
  */
 export function useAuth() {
   const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    // Vérifier si l'utilisateur est connecté
-    const checkAuth = () => {
-      const authenticated = fanafApi.isAuthenticated();
-      setIsAuthenticated(authenticated);
-      setLoading(false);
-    };
+  // Query pour vérifier l'état d'authentification
+  const authQuery = useQuery({
+    queryKey: ['auth', 'isAuthenticated'],
+    queryFn: () => fanafApi.isAuthenticated(),
+    staleTime: 0,
+    gcTime: 0,
+  });
 
-    checkAuth();
-  }, []);
-
-  const logout = () => {
-    try {
+  // Mutation pour la déconnexion
+  const logoutMutation = useMutation({
+    mutationFn: () => {
       fanafApi.logout();
-      setIsAuthenticated(false);
+      return Promise.resolve();
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(['auth', 'isAuthenticated'], false);
       router.push('/login');
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('Erreur lors de la déconnexion:', error);
       throw error;
-    }
+    },
+  });
+
+  const logout = () => {
+    logoutMutation.mutate();
   };
 
   return {
-    isAuthenticated,
-    loading,
+    isAuthenticated: authQuery.data ?? null,
+    loading: authQuery.isLoading,
     logout,
   };
 }

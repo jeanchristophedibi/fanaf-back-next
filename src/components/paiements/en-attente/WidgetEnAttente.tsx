@@ -8,35 +8,44 @@ import { AlertCircle } from "lucide-react";
 import { AnimatedStat } from "../../AnimatedStat";
 import { type ModePaiement } from '../../data/types';
 import { getOrganisationById } from '../../data/helpers';
-import { useState, useMemo, useEffect } from "react";
+import { useQuery } from '@tanstack/react-query';
 
 
 export function WidgetEnAttente() {
   const { participants } = useDynamicInscriptions();
   
-  // Calculer les statistiques pour les paiements en attente
-  const stats = participants.reduce((acc, participant) => {
-    if (participant.statutInscription === 'non-finalisée') {
-      acc.total++;
-      
-      // Compter par mode de paiement
-      const mode = participant.modePaiement || 'espèce';
-      
-      if (mode === 'espèce') {
-        acc.cash++;
-      } else if (mode === 'virement') {
-        acc.virement++;
-      } else if (mode === 'chèque') {
-        acc.cheque++;
-      }
-    }
-    return acc;
-  }, {
-    total: 0,
-    cash: 0,
-    virement: 0,
-    cheque: 0
+  // Query pour calculer les statistiques pour les paiements en attente
+  const statsQuery = useQuery({
+    queryKey: ['widgetEnAttente', 'stats', participants],
+    queryFn: () => {
+      return participants.reduce((acc, participant) => {
+        if (participant.statutInscription === 'non-finalisée') {
+          acc.total++;
+          
+          // Compter par mode de paiement
+          const mode = participant.modePaiement || 'espèce';
+          
+          if (mode === 'espèce') {
+            acc.cash++;
+          } else if (mode === 'virement') {
+            acc.virement++;
+          } else if (mode === 'chèque') {
+            acc.cheque++;
+          }
+        }
+        return acc;
+      }, {
+        total: 0,
+        cash: 0,
+        virement: 0,
+        cheque: 0
+      });
+    },
+    enabled: true,
+    staleTime: 0,
   });
+
+  const stats = statsQuery.data ?? { total: 0, cash: 0, virement: 0, cheque: 0 };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
@@ -38,57 +39,71 @@ export function ListeEnAttente() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  // Transformer les participants non-finalisés en paiements en attente
-  const paiementsEnAttente = useMemo(() => {
-    return participants
-      .filter(p => p.statutInscription === 'non-finalisée')
-      .filter(p => p.statut === 'membre' || p.statut === 'non-membre')
-      .map(p => {
-        const organisation = getOrganisationById(p.organisationId);
-        
-        let tarif = 0;
-        if (p.statut === 'non-membre') {
-          tarif = 400000;
-        } else if (p.statut === 'membre') {
-          tarif = 350000;
-        }
+  // Query pour transformer les participants non-finalisés en paiements en attente
+  const paiementsEnAttenteQuery = useQuery({
+    queryKey: ['listeEnAttente', 'paiements', participants],
+    queryFn: () => {
+      return participants
+        .filter(p => p.statutInscription === 'non-finalisée')
+        .filter(p => p.statut === 'membre' || p.statut === 'non-membre')
+        .map(p => {
+          const organisation = getOrganisationById(p.organisationId);
+          
+          let tarif = 0;
+          if (p.statut === 'non-membre') {
+            tarif = 400000;
+          } else if (p.statut === 'membre') {
+            tarif = 350000;
+          }
 
-        return {
-          id: p.id,
-          reference: p.reference,
-          participantNom: `${p.prenom} ${p.nom}`,
-          participantEmail: p.email,
-          organisationNom: organisation?.nom || 'N/A',
-          statut: p.statut,
-          montant: tarif,
-          modePaiement: p.modePaiement || 'espèce',
-          canalEncaissement: p.canalEncaissement || 'externe',
-          dateInscription: p.dateInscription,
-          datePaiement: p.datePaiement || p.dateInscription,
-          administrateurEncaissement: p.caissier || 'N/A',
-          pays: p.pays,
-        } as PaiementEnAttente;
-      });
-  }, [participants]);
+          return {
+            id: p.id,
+            reference: p.reference,
+            participantNom: `${p.prenom} ${p.nom}`,
+            participantEmail: p.email,
+            organisationNom: organisation?.nom || 'N/A',
+            statut: p.statut,
+            montant: tarif,
+            modePaiement: p.modePaiement || 'espèce',
+            canalEncaissement: p.canalEncaissement || 'externe',
+            dateInscription: p.dateInscription,
+            datePaiement: p.datePaiement || p.dateInscription,
+            administrateurEncaissement: p.caissier || 'N/A',
+            pays: p.pays,
+          } as PaiementEnAttente;
+        });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Filtrer les paiements
-  const filteredPaiements = useMemo(() => {
-    let filtered = [...paiementsEnAttente];
+  const paiementsEnAttente = paiementsEnAttenteQuery.data ?? [];
 
-    if (filterModePaiement !== 'all') {
-      filtered = filtered.filter(p => p.modePaiement === filterModePaiement);
-    }
+  // Query pour filtrer les paiements
+  const filteredPaiementsQuery = useQuery({
+    queryKey: ['listeEnAttente', 'filtered', paiementsEnAttente, filterModePaiement, filterStatut],
+    queryFn: () => {
+      let filtered = [...paiementsEnAttente];
 
-    if (filterStatut !== 'all') {
-      if (filterStatut === 'membre') {
-        filtered = filtered.filter(p => p.statut === 'membre');
-      } else if (filterStatut === 'non-membre') {
-        filtered = filtered.filter(p => p.statut === 'non-membre');
+      if (filterModePaiement !== 'all') {
+        filtered = filtered.filter(p => p.modePaiement === filterModePaiement);
       }
-    }
 
-    return filtered;
-  }, [paiementsEnAttente, filterModePaiement, filterStatut]);
+      if (filterStatut !== 'all') {
+        if (filterStatut === 'membre') {
+          filtered = filtered.filter(p => p.statut === 'membre');
+        } else if (filterStatut === 'non-membre') {
+          filtered = filtered.filter(p => p.statut === 'non-membre');
+        }
+      }
+
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredPaiements = filteredPaiementsQuery.data ?? [];
 
   const handleConfirmPayment = (participant: PaiementEnAttente) => {
     setSelectedParticipant(participant);

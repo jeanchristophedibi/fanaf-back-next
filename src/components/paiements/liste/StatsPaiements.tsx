@@ -5,7 +5,7 @@ import { Coins, Building2, TrendingUp } from "lucide-react";
 import { fanafApi } from "../../../services/fanafApi";
 import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { motion } from "motion/react";
-import { useMemo, useEffect, useState } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { getOrganisationById } from '../../data/helpers';
 import { Skeleton } from "../../ui/skeleton";
 
@@ -15,19 +15,13 @@ const mapPaymentProvider = (provider: string): 'externe' | 'asapay' => {
 };
 
 export function StatsPaiements() {
-  const [apiPaiements, setApiPaiements] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiError, setApiError] = useState<string | null>(null);
-  
   // Fallback vers les données mock si l'API échoue
   const { participants } = useDynamicInscriptions();
 
-  // Charger les paiements depuis l'API
-  useEffect(() => {
-    const loadPayments = async () => {
-      setIsLoading(true);
-      setApiError(null);
-      
+  // Charger les paiements depuis l'API avec React Query
+  const { data: apiPaiements = [], isLoading } = useQuery({
+    queryKey: ['statsPaiements'],
+    queryFn: async () => {
       try {
         // Charger tous les paiements (on prendra la première page pour les stats)
         const response = await fanafApi.getPayments({
@@ -36,83 +30,97 @@ export function StatsPaiements() {
         });
         
         const paymentsData = response?.data?.data || response?.data || [];
-        setApiPaiements(paymentsData);
+        return paymentsData;
       } catch (err: any) {
         console.error('Erreur lors du chargement des statistiques de paiements:', err);
-        setApiError(err.message || 'Erreur lors du chargement des statistiques');
         // Ne pas afficher d'erreur toast pour les stats, on utilise le fallback
-      } finally {
-        setIsLoading(false);
+        return [];
       }
-    };
-    
-    loadPayments();
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
   
-  // Calculer les statistiques pour les paiements
-  const stats = useMemo(() => {
-    // Si on a des données API, les utiliser
-    if (apiPaiements.length > 0) {
-      return apiPaiements.reduce((acc, payment) => {
-        acc.totalPaiements++;
-        acc.totalMontant += payment.amount || 0;
-        
-        const canal = mapPaymentProvider(payment.payment_provider || 'asapay');
-        if (canal === 'externe') {
-          acc.paiementsExterne++;
-          acc.montantExterne += payment.amount || 0;
-        } else if (canal === 'asapay') {
-          acc.paiementsAsapay++;
-          acc.montantAsapay += payment.amount || 0;
-        }
-        
-        return acc;
-      }, {
-        totalPaiements: 0,
-        totalMontant: 0,
-        paiementsExterne: 0,
-        montantExterne: 0,
-        paiementsAsapay: 0,
-        montantAsapay: 0
-      });
-    }
-    
-    // Sinon, fallback vers les données mock
-    return participants
-      .filter(p => p.statutInscription === 'finalisée')
-      .reduce((acc, participant) => {
-        acc.totalPaiements++;
-        
-        const organisation = getOrganisationById(participant.organisationId);
-        let tarif = 0;
-        if (participant.statut === 'non-membre') {
-          tarif = 400000;
-        } else if (participant.statut === 'membre') {
-          tarif = 350000;
-        }
-        
-        acc.totalMontant += tarif;
-        
-        // Canal d'encaissement
-        const canal = participant.canalEncaissement || 'externe';
-        if (canal === 'externe') {
-          acc.paiementsExterne++;
-          acc.montantExterne += tarif;
-        } else if (canal === 'asapay') {
-          acc.paiementsAsapay++;
-          acc.montantAsapay += tarif;
-        }
-        
-        return acc;
-      }, {
-        totalPaiements: 0,
-        totalMontant: 0,
-        paiementsExterne: 0,
-        montantExterne: 0,
-        paiementsAsapay: 0,
-        montantAsapay: 0
-      });
-  }, [apiPaiements, participants]);
+  // Query pour calculer les statistiques pour les paiements
+  const statsQuery = useQuery({
+    queryKey: ['statsPaiements', 'stats', apiPaiements, participants],
+    queryFn: () => {
+      // Si on a des données API, les utiliser
+      if (apiPaiements.length > 0) {
+        return apiPaiements.reduce((acc: any, payment: any) => {
+          acc.totalPaiements++;
+          acc.totalMontant += payment.amount || 0;
+          
+          const canal = mapPaymentProvider(payment.payment_provider || 'asapay');
+          if (canal === 'externe') {
+            acc.paiementsExterne++;
+            acc.montantExterne += payment.amount || 0;
+          } else if (canal === 'asapay') {
+            acc.paiementsAsapay++;
+            acc.montantAsapay += payment.amount || 0;
+          }
+          
+          return acc;
+        }, {
+          totalPaiements: 0,
+          totalMontant: 0,
+          paiementsExterne: 0,
+          montantExterne: 0,
+          paiementsAsapay: 0,
+          montantAsapay: 0
+        });
+      }
+      
+      // Sinon, fallback vers les données mock
+      return participants
+        .filter(p => p.statutInscription === 'finalisée')
+        .reduce((acc: any, participant: any) => {
+          acc.totalPaiements++;
+          
+          const organisation = getOrganisationById(participant.organisationId);
+          let tarif = 0;
+          if (participant.statut === 'non-membre') {
+            tarif = 400000;
+          } else if (participant.statut === 'membre') {
+            tarif = 350000;
+          }
+          
+          acc.totalMontant += tarif;
+          
+          // Canal d'encaissement
+          const canal = participant.canalEncaissement || 'externe';
+          if (canal === 'externe') {
+            acc.paiementsExterne++;
+            acc.montantExterne += tarif;
+          } else if (canal === 'asapay') {
+            acc.paiementsAsapay++;
+            acc.montantAsapay += tarif;
+          }
+          
+          return acc;
+        }, {
+          totalPaiements: 0,
+          totalMontant: 0,
+          paiementsExterne: 0,
+          montantExterne: 0,
+          paiementsAsapay: 0,
+          montantAsapay: 0
+        });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? {
+    totalPaiements: 0,
+    totalMontant: 0,
+    paiementsExterne: 0,
+    montantExterne: 0,
+    paiementsAsapay: 0,
+    montantAsapay: 0
+  };
 
   if (isLoading) {
     return (

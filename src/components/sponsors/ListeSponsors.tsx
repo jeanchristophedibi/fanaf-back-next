@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -15,47 +16,69 @@ interface ListeSponsorsProps {
 }
 
 export function ListeSponsors({ readOnly = false }: ListeSponsorsProps) {
-  // Sponsors depuis le service centralisé sponsorsDataService
-  const [sponsors, setSponsors] = useState<Organisation[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
   const [typeFilter, setTypeFilter] = useState<string>('tous');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
-  // Charger les sponsors via le service au montage
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
+  // Charger les sponsors avec React Query
+  const { data: sponsors = [], isLoading } = useQuery({
+    queryKey: ['listeSponsors'],
+    queryFn: async () => {
       try {
-        setIsLoading(true);
-        const sponsorsData = await sponsorsDataService.loadSponsors();
-        if (mounted) setSponsors(sponsorsData);
-      } finally {
-        if (mounted) setIsLoading(false);
+        return await sponsorsDataService.loadSponsors();
+      } catch (error) {
+        console.error('Erreur lors du chargement des sponsors:', error);
+        return [];
       }
-    })();
-    return () => { mounted = false; };
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  const filteredSponsors = useMemo(() => {
-    let filtered = [...sponsors];
+  // Query pour filtrer les sponsors
+  const filteredSponsorsQuery = useQuery({
+    queryKey: ['listeSponsors', 'filtered', sponsors, typeFilter],
+    queryFn: () => {
+      let filtered = [...sponsors];
 
-    if (typeFilter !== 'tous') {
-      filtered = filtered.filter(s => s.secteurActivite === typeFilter);
-    }
-    return filtered;
-  }, [sponsors, typeFilter]);
+      if (typeFilter !== 'tous') {
+        filtered = filtered.filter(s => s.secteurActivite === typeFilter);
+      }
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [typeFilter]);
+  const filteredSponsors = filteredSponsorsQuery.data ?? [];
 
-  // Récupérer la liste unique des types de sponsors (ARGENT, GOLD, etc.)
-  const sponsorTypes = useMemo(() => {
-    const types = new Set(sponsors.map(s => s.secteurActivite).filter(Boolean));
-    return Array.from(types).sort();
-  }, [sponsors]);
+  // Query pour réinitialiser la page quand les filtres changent
+  useQuery({
+    queryKey: ['listeSponsors', 'resetPage', typeFilter],
+    queryFn: () => {
+      queryClient.setQueryData(['listeSponsors', 'currentPage'], 1);
+      setCurrentPage(1);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Query pour récupérer la liste unique des types de sponsors
+  const sponsorTypesQuery = useQuery({
+    queryKey: ['listeSponsors', 'types', sponsors],
+    queryFn: () => {
+      const types = new Set(sponsors.map(s => s.secteurActivite).filter(Boolean));
+      return Array.from(types).sort();
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const sponsorTypes = sponsorTypesQuery.data ?? [];
 
   // Colonnes pour List
   const columns: Column<(typeof sponsors)[number]>[] = [
@@ -92,7 +115,10 @@ export function ListeSponsors({ readOnly = false }: ListeSponsorsProps) {
   // Filtre composant pour List
   const filterComponent = (
     <div className="flex items-center gap-2">
-      <Select value={typeFilter} onValueChange={setTypeFilter}>
+        <Select value={typeFilter} onValueChange={(value) => {
+          setTypeFilter(value);
+          setCurrentPage(1);
+        }}>
         <SelectTrigger>
           <SelectValue placeholder="Type de sponsor" />
         </SelectTrigger>

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Clock, User, Filter, Users, Briefcase, X, Eye, Check } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -53,37 +54,44 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterStatuts, setFilterStatuts] = useState<string[]>([]);
   
-  // Fonction pour filtrer les rendez-vous
-  const filteredRendezVous = useMemo(() => {
-    let filtered = [...rendezVous];
-    
-    // Filtre par date
-    if (filterDate) {
-      filtered = filtered.filter(rdv => rdv.date === filterDate);
-    }
-    
-    // Filtre par heure de début
-    if (filterHeureDebut) {
-      filtered = filtered.filter(rdv => rdv.heureDebut >= filterHeureDebut);
-    }
-    
-    // Filtre par heure de fin
-    if (filterHeureFin) {
-      filtered = filtered.filter(rdv => rdv.heureFin <= filterHeureFin);
-    }
-    
-    // Filtre par type
-    if (filterTypes.length > 0) {
-      filtered = filtered.filter(rdv => filterTypes.includes(rdv.type));
-    }
-    
-    // Filtre par statut
-    if (filterStatuts.length > 0) {
-      filtered = filtered.filter(rdv => filterStatuts.includes(rdv.statut));
-    }
-    
-    return filtered;
-  }, [rendezVous, filterDate, filterHeureDebut, filterHeureFin, filterTypes, filterStatuts]);
+  // Query pour filtrer les rendez-vous
+  const filteredRendezVousQuery = useQuery({
+    queryKey: ['calendarView', 'filtered', rendezVous, filterDate, filterHeureDebut, filterHeureFin, filterTypes, filterStatuts],
+    queryFn: () => {
+      let filtered = [...rendezVous];
+      
+      // Filtre par date
+      if (filterDate) {
+        filtered = filtered.filter(rdv => rdv.date === filterDate);
+      }
+      
+      // Filtre par heure de début
+      if (filterHeureDebut) {
+        filtered = filtered.filter(rdv => rdv.heureDebut >= filterHeureDebut);
+      }
+      
+      // Filtre par heure de fin
+      if (filterHeureFin) {
+        filtered = filtered.filter(rdv => rdv.heureFin <= filterHeureFin);
+      }
+      
+      // Filtre par type
+      if (filterTypes.length > 0) {
+        filtered = filtered.filter(rdv => filterTypes.includes(rdv.type));
+      }
+      
+      // Filtre par statut
+      if (filterStatuts.length > 0) {
+        filtered = filtered.filter(rdv => filterStatuts.includes(rdv.statut));
+      }
+      
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredRendezVous = filteredRendezVousQuery.data ?? [];
   
   // Compter les filtres actifs
   const activeFiltersCount = (filterDate ? 1 : 0) + (filterHeureDebut ? 1 : 0) + (filterHeureFin ? 1 : 0) + filterTypes.length + filterStatuts.length;

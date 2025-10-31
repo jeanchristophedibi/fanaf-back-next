@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from "motion/react";
 import { Card } from "../../ui/card";
 import { Input } from "../../ui/input";
@@ -42,8 +43,27 @@ const isPaymentCompleted = (state: string): boolean => {
   return state?.includes('Completed') || false;
 };
 
+// Type pour les paiements
+type Paiement = {
+  id: string | number;
+  reference: string;
+  participantNom: string;
+  participantEmail: string;
+  organisationNom: string;
+  statut: string;
+  montant: number;
+  modePaiement: ModePaiement | string;
+  canalEncaissement: string;
+  dateInscription: Date | string;
+  datePaiement: Date | string;
+  administrateurEncaissement: string;
+  pays: string;
+  state?: string;
+  isCompleted?: boolean;
+};
+
 // Mapper les données API vers le format local
-const mapApiPaymentToLocal = (apiPayment: any) => {
+const mapApiPaymentToLocal = (apiPayment: any): Paiement => {
   return {
     id: apiPayment.id,
     reference: apiPayment.reference,
@@ -64,11 +84,8 @@ const mapApiPaymentToLocal = (apiPayment: any) => {
 };
 
 export function ListePaiements() {
-  const [apiPaiements, setApiPaiements] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [totalApiPages, setTotalApiPages] = useState(1);
   const [currentApiPage, setCurrentApiPage] = useState(1);
+  const queryClient = useQueryClient();
   
   // Fallback vers les données mock si l'API échoue
   const { participants } = useDynamicInscriptions();
@@ -87,12 +104,10 @@ export function ListePaiements() {
   // État pour la sélection en masse
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
 
-  // Charger les paiements depuis l'API
-  useEffect(() => {
-    const loadPayments = async () => {
-      setIsLoading(true);
-      setApiError(null);
-      
+  // Charger les paiements depuis l'API avec React Query
+  const { data: paymentsQueryData, isLoading, error: paymentsQueryError } = useQuery({
+    queryKey: ['listePaiements', currentApiPage, itemsPerPage],
+    queryFn: async () => {
       try {
         const response = await fanafApi.getPayments({
           page: currentApiPage,
@@ -103,121 +118,142 @@ export function ListePaiements() {
         const paymentsData = response?.data?.data || response?.data || [];
         const pagination = response?.data || response?.meta || {};
         
-        setApiPaiements(paymentsData.map(mapApiPaymentToLocal));
-        setTotalApiPages(pagination.last_page || pagination.meta?.last_page || 1);
+        return {
+          paiements: paymentsData.map(mapApiPaymentToLocal),
+          totalPages: pagination.last_page || pagination.meta?.last_page || 1,
+        };
       } catch (err: any) {
         console.error('Erreur lors du chargement des paiements:', err);
-        setApiError(err.message || 'Erreur lors du chargement des paiements');
-        toast.error(err.message || 'Erreur lors du chargement des paiements');
-      } finally {
-        setIsLoading(false);
+        const errorMessage = err.message || 'Erreur lors du chargement des paiements';
+        toast.error(errorMessage);
+        throw new Error(errorMessage);
       }
-    };
-    
-    loadPayments();
-  }, [currentApiPage, itemsPerPage]);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  // Transformer les paiements API en format attendu
-  const paiements = useMemo(() => {
-    // Si on a des données API, les utiliser
-    if (apiPaiements.length > 0) {
-      return apiPaiements;
-    }
-    
-    // Sinon, fallback vers les données mock (pour compatibilité)
-    return participants
-      .filter(p => p.statutInscription === 'finalisée')
-      .map(p => {
-        const organisation = getOrganisationById(p.organisationId);
-        
-        // Calcul du tarif selon le statut
-        let tarif = 0;
-        if (p.statut === 'non-membre') {
-          tarif = 400000;
-        } else if (p.statut === 'membre') {
-          tarif = 350000;
-        }
+  const apiPaiements = paymentsQueryData?.paiements || [];
+  const totalApiPages = paymentsQueryData?.totalPages || 1;
+  const apiError = paymentsQueryError ? (paymentsQueryError as Error).message : null;
 
-        return {
-          id: p.id,
-          reference: p.reference,
-          participantNom: `${p.prenom} ${p.nom}`,
-          participantEmail: p.email,
-          organisationNom: organisation?.nom || 'N/A',
-          statut: p.statut,
-          montant: tarif,
-          modePaiement: p.modePaiement || 'espèce',
-          canalEncaissement: p.canalEncaissement || 'externe',
-          dateInscription: p.dateInscription,
-          datePaiement: p.datePaiement || p.dateInscription,
-          administrateurEncaissement: p.caissier || 'N/A',
-          pays: p.pays,
-          isCompleted: true,
-        };
-      });
-  }, [apiPaiements, participants]);
-
-  // Filtrer les paiements
-  const filteredPaiements = useMemo(() => {
-    let filtered = [...paiements];
-
-    // Recherche
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        p =>
-          p.reference.toLowerCase().includes(term) ||
-          p.participantNom.toLowerCase().includes(term) ||
-          p.participantEmail.toLowerCase().includes(term) ||
-          p.organisationNom.toLowerCase().includes(term)
-      );
-    }
-
-    // Filtre par statut de paiement
-    if (filterStatut !== 'all') {
-      if (filterStatut === 'payé') {
-        filtered = filtered.filter(p => p.isCompleted !== false);
-      } else {
-        filtered = filtered.filter(p => p.isCompleted === false);
+  // Query pour transformer les paiements API en format attendu
+  const paiementsQuery = useQuery<Paiement[]>({
+    queryKey: ['listePaiements', 'transformed', apiPaiements, participants],
+    queryFn: (): Paiement[] => {
+      // Si on a des données API, les utiliser
+      if (apiPaiements.length > 0) {
+        return apiPaiements;
       }
-    }
+      
+      // Sinon, fallback vers les données mock (pour compatibilité)
+      return participants
+        .filter(p => p.statutInscription === 'finalisée')
+        .map(p => {
+          const organisation = getOrganisationById(p.organisationId);
+          
+          // Calcul du tarif selon le statut
+          let tarif = 0;
+          if (p.statut === 'non-membre') {
+            tarif = 400000;
+          } else if (p.statut === 'membre') {
+            tarif = 350000;
+          }
 
-    // Filtre par mode de paiement
-    if (filterMode !== 'all') {
-      filtered = filtered.filter(p => p.modePaiement === filterMode);
-    }
+          return {
+            id: p.id,
+            reference: p.reference,
+            participantNom: `${p.prenom} ${p.nom}`,
+            participantEmail: p.email,
+            organisationNom: organisation?.nom || 'N/A',
+            statut: p.statut,
+            montant: tarif,
+            modePaiement: p.modePaiement || 'espèce',
+            canalEncaissement: p.canalEncaissement || 'externe',
+            dateInscription: p.dateInscription,
+            datePaiement: p.datePaiement || p.dateInscription,
+            administrateurEncaissement: p.caissier || 'N/A',
+            pays: p.pays,
+            isCompleted: true,
+          };
+        });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-    // Filtre par canal
-    if (filterCanal !== 'all') {
-      filtered = filtered.filter(p => p.canalEncaissement === filterCanal);
-    }
+  const paiements = paiementsQuery.data ?? [];
 
-    // Tri
-    if (sortConfig) {
-      filtered.sort((a, b) => {
-        let aValue = a[sortConfig.key as keyof typeof a];
-        let bValue = b[sortConfig.key as keyof typeof b];
-        
-        // Gérer les dates et nombres
-        if (sortConfig.key === 'dateInscription' || sortConfig.key === 'datePaiement') {
-          aValue = new Date(aValue as any).getTime();
-          bValue = new Date(bValue as any).getTime();
-        } else if (sortConfig.key === 'montant') {
-          aValue = aValue as number;
-          bValue = bValue as number;
+  // Query pour filtrer les paiements
+  const filteredPaiementsQuery = useQuery({
+    queryKey: ['listePaiements', 'filtered', paiements, searchTerm, filterStatut, filterMode, filterCanal, sortConfig],
+    queryFn: () => {
+      let filtered = [...paiements];
+
+      // Recherche
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter(
+          p =>
+            p.reference.toLowerCase().includes(term) ||
+            p.participantNom.toLowerCase().includes(term) ||
+            p.participantEmail.toLowerCase().includes(term) ||
+            p.organisationNom.toLowerCase().includes(term)
+        );
+      }
+
+      // Filtre par statut de paiement
+      if (filterStatut !== 'all') {
+        if (filterStatut === 'payé') {
+          filtered = filtered.filter(p => p.isCompleted !== false);
         } else {
-          aValue = String(aValue).toLowerCase();
-          bValue = String(bValue).toLowerCase();
+          filtered = filtered.filter(p => p.isCompleted === false);
         }
-        
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
+      }
 
-    return filtered;
-  }, [paiements, searchTerm, filterStatut, filterMode, filterCanal, sortConfig]);
+      // Filtre par mode de paiement
+      if (filterMode !== 'all') {
+        filtered = filtered.filter(p => p.modePaiement === filterMode);
+      }
+
+      // Filtre par canal
+      if (filterCanal !== 'all') {
+        filtered = filtered.filter(p => p.canalEncaissement === filterCanal);
+      }
+
+      // Tri
+      if (sortConfig) {
+        filtered.sort((a, b) => {
+          let aValue = a[sortConfig.key as keyof typeof a];
+          let bValue = b[sortConfig.key as keyof typeof b];
+          
+          // Gérer les dates et nombres
+          if (sortConfig.key === 'dateInscription' || sortConfig.key === 'datePaiement') {
+            aValue = new Date(aValue as any).getTime();
+            bValue = new Date(bValue as any).getTime();
+          } else if (sortConfig.key === 'montant') {
+            aValue = aValue as number;
+            bValue = bValue as number;
+          } else {
+            aValue = String(aValue).toLowerCase();
+            bValue = String(bValue).toLowerCase();
+          }
+          
+          if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+          if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredPaiements = filteredPaiementsQuery.data ?? [];
   
   // Fonction de tri
   const handleSort = (key: string) => {
@@ -231,18 +267,34 @@ export function ListePaiements() {
 
   // Pagination locale (pour les résultats filtrés)
   const totalPages = Math.ceil(filteredPaiements.length / itemsPerPage);
-  const paginatedPaiements = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredPaiements.slice(startIndex, endIndex);
-  }, [filteredPaiements, currentPage, itemsPerPage]);
+  
+  // Query pour paginer les paiements
+  const paginatedPaiementsQuery = useQuery({
+    queryKey: ['listePaiements', 'paginated', filteredPaiements, currentPage, itemsPerPage],
+    queryFn: () => {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return filteredPaiements.slice(startIndex, endIndex);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-    // Réinitialiser la sélection quand les filtres changent
-    setSelectedIds(new Set());
-  }, [searchTerm, filterStatut, filterMode, filterCanal]);
+  const paginatedPaiements = paginatedPaiementsQuery.data ?? [];
+
+  // Query pour réinitialiser la page quand les filtres changent
+  useQuery({
+    queryKey: ['listePaiements', 'resetPage', searchTerm, filterStatut, filterMode, filterCanal],
+    queryFn: () => {
+      queryClient.setQueryData(['listePaiements', 'currentPage'], 1);
+      setCurrentPage(1);
+      // Réinitialiser la sélection quand les filtres changent
+      setSelectedIds(new Set());
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
   const activeFiltersCount =
     (filterStatut !== 'all' ? 1 : 0) +
@@ -276,9 +328,9 @@ export function ListePaiements() {
     setSelectedIds(newSelected);
   };
 
-  const isAllSelected = paginatedPaiements.length > 0 && paginatedPaiements.every(p => selectedIds.has(p.id));
-  const isIndeterminate = paginatedPaiements.some(p => selectedIds.has(p.id)) && !isAllSelected;
-  const selectedPaiements = paiements.filter(p => selectedIds.has(p.id));
+  const isAllSelected = paginatedPaiements.length > 0 && paginatedPaiements.every((p: Paiement) => selectedIds.has(p.id));
+  const isIndeterminate = paginatedPaiements.some((p: Paiement) => selectedIds.has(p.id)) && !isAllSelected;
+  const selectedPaiements = paiements.filter((p: Paiement) => selectedIds.has(p.id));
 
   // Actions en masse
   const handleBulkExport = () => {
@@ -302,7 +354,7 @@ export function ListePaiements() {
       'Pays',
     ];
 
-    const rows = selectedPaiements.map(p => [
+    const rows = selectedPaiements.map((p: Paiement) => [
       p.reference,
       p.participantNom,
       p.participantEmail,
@@ -348,7 +400,7 @@ export function ListePaiements() {
       'Pays',
     ];
 
-    const rows = filteredPaiements.map(p => [
+    const rows = filteredPaiements.map((p: Paiement) => [
       p.reference,
       p.participantNom,
       p.participantEmail,

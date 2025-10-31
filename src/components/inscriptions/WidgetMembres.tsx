@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "../ui/card";
 import { UserCheck } from "lucide-react";
 import { inscriptionsDataService } from "../data/inscriptionsData";
@@ -9,32 +9,37 @@ import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
 
 export function WidgetMembres() {
-  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
+  // Charger les participants membres avec React Query
+  const { data: participants = [], isLoading } = useQuery({
+    queryKey: ['widgetMembres'],
+    queryFn: async () => {
       try {
         const loaded = await inscriptionsDataService.loadParticipants(['member']);
-        setApiParticipants(loaded.filter((p) => p.statut === 'membre'));
+        return loaded.filter((p) => p.statut === 'membre');
       } catch (e) {
         console.error('Erreur chargement membres:', e);
-      } finally {
-        setIsLoading(false);
+        return [];
       }
-    };
-    load();
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  const participants = apiParticipants;
+  const statsQuery = useQuery({
+    queryKey: ['widgetMembres', 'stats', participants],
+    queryFn: () => {
+      const membres = participants.filter(p => p.statut === 'membre');
+      const finalises = membres.filter(p => p.statutInscription === 'finalisée').length;
+      const enAttente = membres.filter(p => p.statutInscription === 'non-finalisée').length;
+      return { total: membres.length, finalises, enAttente };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  const stats = useMemo(() => {
-    const membres = participants.filter(p => p.statut === 'membre');
-    const finalises = membres.filter(p => p.statutInscription === 'finalisée').length;
-    const enAttente = membres.filter(p => p.statutInscription === 'non-finalisée').length;
-    return { total: membres.length, finalises, enAttente };
-  }, [participants]);
+  const stats = statsQuery.data ?? { total: 0, finalises: 0, enAttente: 0 };
 
   if (isLoading) {
     return (

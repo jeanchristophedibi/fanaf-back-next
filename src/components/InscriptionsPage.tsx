@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -272,18 +273,27 @@ export function InscriptionsPage({ subSection, filter, readOnly = false }: Inscr
   // Liste unique des pays pour le filtre
   const uniquePays = Array.from(new Set(participants.map(p => p.pays))).sort();
   
-  // Liste unique des pays pour le filtre Plan de Vol
-  const uniquePaysVol = useMemo(() => {
-    const allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
-    const paysSet = new Set<string>();
-    allPlansVol.forEach(pv => {
-      const participant = getParticipantById(pv.participantId);
-      if (participant) {
-        paysSet.add(participant.pays);
-      }
-    });
-    return Array.from(paysSet).sort();
-  }, []);
+  const queryClient = useQueryClient();
+
+  // Query pour la liste unique des pays pour le filtre Plan de Vol
+  const uniquePaysVolQuery = useQuery({
+    queryKey: ['inscriptionsPage', 'uniquePaysVol'],
+    queryFn: () => {
+      const allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
+      const paysSet = new Set<string>();
+      allPlansVol.forEach(pv => {
+        const participant = getParticipantById(pv.participantId);
+        if (participant) {
+          paysSet.add(participant.pays);
+        }
+      });
+      return Array.from(paysSet).sort();
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const uniquePaysVol = uniquePaysVolQuery.data ?? [];
 
   // Fonction pour obtenir les statuts d'inscription disponibles selon le sous-menu
   const getAvailableStatutsInscription = () => {
@@ -331,166 +341,188 @@ export function InscriptionsPage({ subSection, filter, readOnly = false }: Inscr
     ? appliedTypeVolFilters.length + appliedOrganisationFilters.length + (appliedDateDebut ? 1 : 0) + (appliedDateFin ? 1 : 0) + appliedPaysVolFilters.length
     : appliedStatutInscriptionFilters.length + appliedOrganisationFilters.length + appliedPaysFilters.length;
 
-  const filteredParticipants = useMemo(() => {
-    if (activeFilter === 'planvol') return [];
+  // Query pour filtrer les participants
+  const filteredParticipantsQuery = useQuery({
+    queryKey: ['inscriptionsPage', 'filteredParticipants', activeFilter, participants, subSection, searchTerm, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters],
+    queryFn: () => {
+      if (activeFilter === 'planvol') return [];
 
-    let filtered = participants.filter(p => p.statut === activeFilter);
+      let filtered = participants.filter(p => p.statut === activeFilter);
 
-    // Filtre par recherche universelle
-    if (searchTerm) {
-      filtered = filtered.filter(p => {
-        const organisation = getOrganisationById(p.organisationId);
-        
-        return (
-          p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.telephone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.pays.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          organisation?.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.statutInscription.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-    }
-
-    // Application des filtres multi-sélection
-    if (appliedStatutInscriptionFilters.length > 0) {
-      filtered = filtered.filter(p => appliedStatutInscriptionFilters.includes(getStatutPaiementLabel(p)));
-    }
-
-    if (appliedOrganisationFilters.length > 0) {
-      filtered = filtered.filter(p => appliedOrganisationFilters.includes(p.organisationId));
-    }
-
-    if (appliedPaysFilters.length > 0) {
-      filtered = filtered.filter(p => appliedPaysFilters.includes(p.pays));
-    }
-
-    return filtered;
-  }, [participants, subSection, searchTerm, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
-
-  // Regrouper les plans de vol par participant
-  const groupedPlansVol = useMemo(() => {
-    if (activeFilter !== 'planvol') return [];
-
-    let allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
-
-    // Filtre par recherche universelle
-    if (searchTerm) {
-      allPlansVol = allPlansVol.filter(pv => {
-        const participant = getParticipantById(pv.participantId);
-        if (!participant) return false;
-
-        const organisation = getOrganisationById(participant.organisationId);
-        
-        return (
-          participant.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          participant.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          pv.numeroVol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          organisation?.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          pv.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          pv.aeroport.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-    }
-
-    // Application des filtres multi-sélection
-    if (appliedTypeVolFilters.length > 0) {
-      allPlansVol = allPlansVol.filter(pv => appliedTypeVolFilters.includes(pv.type));
-    }
-
-    if (appliedOrganisationFilters.length > 0) {
-      allPlansVol = allPlansVol.filter(pv => {
-        const participant = getParticipantById(pv.participantId);
-        return participant && appliedOrganisationFilters.includes(participant.organisationId);
-      });
-    }
-
-    // Filtrage par pays
-    if (appliedPaysVolFilters.length > 0) {
-      allPlansVol = allPlansVol.filter(pv => {
-        const participant = getParticipantById(pv.participantId);
-        return participant && appliedPaysVolFilters.includes(participant.pays);
-      });
-    }
-
-    // Filtrage par dates
-    if (appliedDateDebut || appliedDateFin) {
-      allPlansVol = allPlansVol.filter(pv => {
-        const volDate = new Date(pv.date);
-        volDate.setHours(0, 0, 0, 0);
-        
-        if (appliedDateDebut) {
-          const dateDebut = new Date(appliedDateDebut);
-          dateDebut.setHours(0, 0, 0, 0);
-          if (volDate < dateDebut) return false;
-        }
-        
-        if (appliedDateFin) {
-          const dateFin = new Date(appliedDateFin);
-          dateFin.setHours(0, 0, 0, 0);
-          if (volDate > dateFin) return false;
-        }
-        
-        return true;
-      });
-    }
-
-    // Regrouper par participant
-    const participantMap = new Map();
-    
-    allPlansVol.forEach(pv => {
-      if (!participantMap.has(pv.participantId)) {
-        participantMap.set(pv.participantId, {
-          participantId: pv.participantId,
-          arrivee: null,
-          depart: null
+      // Filtre par recherche universelle
+      if (searchTerm) {
+        filtered = filtered.filter(p => {
+          const organisation = getOrganisationById(p.organisationId);
+          
+          return (
+            p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.telephone.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.pays.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            organisation?.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.statutInscription.toLowerCase().includes(searchTerm.toLowerCase())
+          );
         });
       }
-      
-      const entry = participantMap.get(pv.participantId);
-      if (pv.type === 'arrivee') {
-        entry.arrivee = pv;
-      } else {
-        entry.depart = pv;
-      }
-    });
 
-    // Convertir en tableau et trier par date d'arrivée (ou de départ si pas d'arrivée)
-    const grouped = Array.from(participantMap.values());
-    grouped.sort((a, b) => {
-      const dateA = a.arrivee?.date || a.depart?.date || '';
-      const dateB = b.arrivee?.date || b.depart?.date || '';
+      // Application des filtres multi-sélection
+      if (appliedStatutInscriptionFilters.length > 0) {
+        filtered = filtered.filter(p => appliedStatutInscriptionFilters.includes(getStatutPaiementLabel(p)));
+      }
+
+      if (appliedOrganisationFilters.length > 0) {
+        filtered = filtered.filter(p => appliedOrganisationFilters.includes(p.organisationId));
+      }
+
+      if (appliedPaysFilters.length > 0) {
+        filtered = filtered.filter(p => appliedPaysFilters.includes(p.pays));
+      }
+
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredParticipants = filteredParticipantsQuery.data ?? [];
+
+  // Query pour regrouper les plans de vol par participant
+  const groupedPlansVolQuery = useQuery({
+    queryKey: ['inscriptionsPage', 'groupedPlansVol', activeFilter, searchTerm, appliedTypeVolFilters, appliedOrganisationFilters, appliedPaysVolFilters, appliedDateDebut, appliedDateFin],
+    queryFn: () => {
+      if (activeFilter !== 'planvol') return [];
+
+      let allPlansVol = [...getPlanVolByType('arrivee'), ...getPlanVolByType('depart')];
+
+      // Filtre par recherche universelle
+      if (searchTerm) {
+        allPlansVol = allPlansVol.filter(pv => {
+          const participant = getParticipantById(pv.participantId);
+          if (!participant) return false;
+
+          const organisation = getOrganisationById(participant.organisationId);
+          
+          return (
+            participant.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            participant.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            pv.numeroVol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            organisation?.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            pv.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            pv.aeroport.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
+      }
+
+      // Application des filtres multi-sélection
+      if (appliedTypeVolFilters.length > 0) {
+        allPlansVol = allPlansVol.filter(pv => appliedTypeVolFilters.includes(pv.type));
+      }
+
+      if (appliedOrganisationFilters.length > 0) {
+        allPlansVol = allPlansVol.filter(pv => {
+          const participant = getParticipantById(pv.participantId);
+          return participant && appliedOrganisationFilters.includes(participant.organisationId);
+        });
+      }
+
+      // Filtrage par pays
+      if (appliedPaysVolFilters.length > 0) {
+        allPlansVol = allPlansVol.filter(pv => {
+          const participant = getParticipantById(pv.participantId);
+          return participant && appliedPaysVolFilters.includes(participant.pays);
+        });
+      }
+
+      // Filtrage par dates
+      if (appliedDateDebut || appliedDateFin) {
+        allPlansVol = allPlansVol.filter(pv => {
+          const volDate = new Date(pv.date);
+          volDate.setHours(0, 0, 0, 0);
+          
+          if (appliedDateDebut) {
+            const dateDebut = new Date(appliedDateDebut);
+            dateDebut.setHours(0, 0, 0, 0);
+            if (volDate < dateDebut) return false;
+          }
+          
+          if (appliedDateFin) {
+            const dateFin = new Date(appliedDateFin);
+            dateFin.setHours(0, 0, 0, 0);
+            if (volDate > dateFin) return false;
+          }
+          
+          return true;
+        });
+      }
+
+      // Regrouper par participant
+      const participantMap = new Map();
       
-      if (dateA && dateB) {
-        const dateCompare = new Date(dateA).getTime() - new Date(dateB).getTime();
-        if (dateCompare !== 0) return dateCompare;
+      allPlansVol.forEach(pv => {
+        if (!participantMap.has(pv.participantId)) {
+          participantMap.set(pv.participantId, {
+            participantId: pv.participantId,
+            arrivee: null,
+            depart: null
+          });
+        }
         
-        const heureA = a.arrivee?.heure || a.depart?.heure || '';
-        const heureB = b.arrivee?.heure || b.depart?.heure || '';
-        return heureA.localeCompare(heureB);
-      }
+        const entry = participantMap.get(pv.participantId);
+        if (pv.type === 'arrivee') {
+          entry.arrivee = pv;
+        } else {
+          entry.depart = pv;
+        }
+      });
+
+      // Convertir en tableau et trier par date d'arrivée (ou de départ si pas d'arrivée)
+      const grouped = Array.from(participantMap.values());
+      grouped.sort((a, b) => {
+        const dateA = a.arrivee?.date || a.depart?.date || '';
+        const dateB = b.arrivee?.date || b.depart?.date || '';
+        
+        if (dateA && dateB) {
+          const dateCompare = new Date(dateA).getTime() - new Date(dateB).getTime();
+          if (dateCompare !== 0) return dateCompare;
+          
+          const heureA = a.arrivee?.heure || a.depart?.heure || '';
+          const heureB = b.arrivee?.heure || b.depart?.heure || '';
+          return heureA.localeCompare(heureB);
+        }
+        
+        return 0;
+      });
+
+      return grouped;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const groupedPlansVol = groupedPlansVolQuery.data ?? [];
+
+  // Query pour les statistiques du tableau de bord Plan de vol
+  const planVolStatsQuery = useQuery({
+    queryKey: ['inscriptionsPage', 'planVolStats', activeFilter],
+    queryFn: () => {
+      if (activeFilter !== 'planvol') return { total: 0, arrivees: 0, departs: 0 };
       
-      return 0;
-    });
+      const arrivees = getPlanVolByType('arrivee');
+      const departs = getPlanVolByType('depart');
+      
+      return {
+        total: arrivees.length + departs.length,
+        arrivees: arrivees.length,
+        departs: departs.length
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-    return grouped;
-  }, [activeFilter, searchTerm, appliedTypeVolFilters, appliedOrganisationFilters]);
-
-  // Statistiques pour le tableau de bord Plan de vol
-  const planVolStats = useMemo(() => {
-    if (activeFilter !== 'planvol') return { total: 0, arrivees: 0, departs: 0 };
-    
-    const arrivees = getPlanVolByType('arrivee');
-    const departs = getPlanVolByType('depart');
-    
-    return {
-      total: arrivees.length + departs.length,
-      arrivees: arrivees.length,
-      departs: departs.length
-    };
-  }, [activeFilter]);
+  const planVolStats = planVolStatsQuery.data ?? { total: 0, arrivees: 0, departs: 0 };
 
   // Fonction pour vérifier si une arrivée est pour demain
   const isArrivingTomorrow = (dateString: string) => {

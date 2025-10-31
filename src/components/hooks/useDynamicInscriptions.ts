@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { inscriptionsDataService } from '../data/inscriptionsData';
 import type { Participant, Organisation } from '../data/types';
 
@@ -28,11 +29,7 @@ export function useDynamicInscriptions({
   includeRendezVous = false,
   includeReservations = false,
 }: UseDynamicDataOptions = {}) {
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [organisations, setOrganisations] = useState<Organisation[]>([]);
-  const [rendezVous, setRendezVous] = useState<RendezVous[]>([]);
-  const [reservations, setReservations] = useState<ReservationStand[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   
   const [lastAddedParticipant, setLastAddedParticipant] = useState<Participant | null>(null);
   const [lastAddedOrganisation, setLastAddedOrganisation] = useState<Organisation | null>(null);
@@ -41,65 +38,49 @@ export function useDynamicInscriptions({
   
   const [totalAdded, setTotalAdded] = useState(0);
 
-  // Charger les données depuis l'API
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
+  // Charger les participants avec React Query
+  const { data: participants = [], isLoading: participantsLoading } = useQuery({
+    queryKey: ['dynamicParticipants'],
+    queryFn: async () => {
       try {
-        // Charger les participants
-        const loadedParticipants = await inscriptionsDataService.loadParticipants();
-        setParticipants(loadedParticipants);
-        
-        // Charger les organisations si demandé
-        if (includeOrganisations) {
-          const loadedOrganisations = await inscriptionsDataService.loadOrganisations();
-          setOrganisations(loadedOrganisations);
-        }
-        
-        // TODO: Charger rendezVous et reservations depuis l'API quand disponibles
-        // Pour l'instant, on laisse les tableaux vides
-        setRendezVous([]);
-        setReservations([]);
+        return await inscriptionsDataService.loadParticipants();
       } catch (error) {
-        console.error('Erreur lors du chargement des données:', error);
-      } finally {
-        setIsLoading(false);
+        console.error('Erreur lors du chargement des participants:', error);
+        return [];
       }
-    };
+    },
+    enabled: enabled,
+    refetchInterval: enabled ? interval : false,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-    loadData();
-    
-    // Recharger périodiquement si enabled
-    if (enabled) {
-      const intervalId = setInterval(() => {
-        loadData();
-      }, interval);
-
-      return () => clearInterval(intervalId);
-    }
-  }, [enabled, interval, includeOrganisations, includeRendezVous, includeReservations]);
-
-  // Écouter les changements de localStorage pour les paiements finalisés
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    const handlePaymentFinalized = async () => {
-      // Recharger les participants après finalisation d'un paiement
+  // Charger les organisations avec React Query si demandé
+  const { data: organisations = [], isLoading: organisationsLoading } = useQuery({
+    queryKey: ['dynamicOrganisations'],
+    queryFn: async () => {
       try {
-        const loadedParticipants = await inscriptionsDataService.loadParticipants();
-        setParticipants(loadedParticipants);
+        return await inscriptionsDataService.loadOrganisations();
       } catch (error) {
-        console.error('Erreur lors du rechargement des participants:', error);
+        console.error('Erreur lors du chargement des organisations:', error);
+        return [];
       }
-    };
+    },
+    enabled: enabled && includeOrganisations,
+    refetchInterval: enabled ? interval : false,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-    // Écouter l'événement personnalisé dispatché lors de la finalisation d'un paiement
-    window.addEventListener('paymentFinalized', handlePaymentFinalized);
+  // TODO: Charger rendezVous et reservations depuis l'API quand disponibles
+  const rendezVous: RendezVous[] = [];
+  const reservations: ReservationStand[] = [];
 
-    return () => {
-      window.removeEventListener('paymentFinalized', handlePaymentFinalized);
-    };
-  }, []);
+  const isLoading = participantsLoading || organisationsLoading;
 
   return {
     participants,

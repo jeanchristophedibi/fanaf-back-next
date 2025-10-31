@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -39,6 +40,7 @@ interface OrganisationsPageProps {
 
 export function OrganisationsPage({ subSection, filter, readOnly = false }: OrganisationsPageProps) {
   const { organisations, rendezVous } = useDynamicInscriptions({ includeOrganisations: true, includeRendezVous: true });
+  const queryClient = useQueryClient();
   const activeFilter = filter || subSection;
   const [searchTerm, setSearchTerm] = useState('');
   const [paysFilter, setPaysFilter] = useState<string>('tous');
@@ -47,6 +49,18 @@ export function OrganisationsPage({ subSection, filter, readOnly = false }: Orga
   const [historiqueParticipantId, setHistoriqueParticipantId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Query pour surveiller les changements de activeFilter et réinitialiser la page
+  useQuery({
+    queryKey: ['organisations', 'activeFilterMonitor', activeFilter],
+    queryFn: () => {
+      queryClient.setQueryData(['organisations', 'currentPage'], 1);
+      setCurrentPage(1);
+      return activeFilter;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
   
   // État du formulaire de création de sponsor
   const [formData, setFormData] = useState({
@@ -61,45 +75,57 @@ export function OrganisationsPage({ subSection, filter, readOnly = false }: Orga
     fonctionReferent: '',
   });
 
-  const filteredOrganisations = useMemo(() => {
-    let filtered = [...organisations];
+  // Query pour filtrer les organisations
+  const filteredOrganisationsQuery = useQuery({
+    queryKey: ['organisations', 'filtered', organisations, searchTerm, paysFilter, activeFilter],
+    queryFn: () => {
+      let filtered = [...organisations];
 
-    // Filtre par sous-section (statut)
-    if (activeFilter && activeFilter !== 'all' && activeFilter !== 'liste') {
-      filtered = filtered.filter(o => o.statut === activeFilter);
-    }
+      // Filtre par sous-section (statut)
+      if (activeFilter && activeFilter !== 'all' && activeFilter !== 'liste') {
+        filtered = filtered.filter(o => o.statut === activeFilter);
+      }
 
-    // Filtre par recherche
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(o =>
-        o.nom.toLowerCase().includes(searchLower) ||
-        (o.email?.toLowerCase().includes(searchLower) ?? false) ||
-        o.pays.toLowerCase().includes(searchLower) ||
-        (o.contact?.toLowerCase().includes(searchLower) ?? false)
-      );
-    }
+      // Filtre par recherche
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase().trim();
+        filtered = filtered.filter(o =>
+          o.nom.toLowerCase().includes(searchLower) ||
+          (o.email?.toLowerCase().includes(searchLower) ?? false) ||
+          o.pays.toLowerCase().includes(searchLower) ||
+          (o.contact?.toLowerCase().includes(searchLower) ?? false)
+        );
+      }
 
-    // Filtre par pays
-    if (paysFilter !== 'tous') {
-      filtered = filtered.filter(o => o.pays === paysFilter);
-    }
+      // Filtre par pays
+      if (paysFilter !== 'tous') {
+        filtered = filtered.filter(o => o.pays === paysFilter);
+      }
 
-    return filtered;
-  }, [organisations, searchTerm, paysFilter, activeFilter]);
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredOrganisations = filteredOrganisationsQuery.data ?? [];
 
   // Pagination
   const totalPages = Math.ceil(filteredOrganisations.length / itemsPerPage);
-  const paginatedOrganisations = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredOrganisations.slice(startIndex, endIndex);
-  }, [filteredOrganisations, currentPage]);
+  
+  // Query pour paginer les organisations
+  const paginatedOrganisationsQuery = useQuery({
+    queryKey: ['organisations', 'paginated', filteredOrganisations, currentPage, itemsPerPage],
+    queryFn: () => {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return filteredOrganisations.slice(startIndex, endIndex);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, paysFilter, activeFilter]);
+  const paginatedOrganisations = paginatedOrganisationsQuery.data ?? [];
 
   const getTitle = () => {
     const section = subSection || filter;
@@ -124,20 +150,34 @@ export function OrganisationsPage({ subSection, filter, readOnly = false }: Orga
     return organisations.filter(o => o.statut === section).length;
   };
 
-  // Récupérer la liste unique des pays
-  const paysList = useMemo(() => {
-    const pays = new Set(organisations.map(o => o.pays));
-    return Array.from(pays).sort();
-  }, [organisations]);
+  // Query pour récupérer la liste unique des pays
+  const paysListQuery = useQuery({
+    queryKey: ['organisations', 'paysList', organisations],
+    queryFn: () => {
+      const pays = new Set(organisations.map(o => o.pays));
+      return Array.from(pays).sort();
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Statistiques pour la vue "liste"
-  const stats = useMemo(() => {
-    const membre = organisations.filter(o => o.statut === 'membre').length;
-    const nonMembre = organisations.filter(o => o.statut === 'non-membre').length;
-    const sponsor = organisations.filter(o => o.statut === 'sponsor').length;
-    
-    return { membre, nonMembre, sponsor, total: organisations.length };
-  }, [organisations]);
+  const paysList = paysListQuery.data ?? [];
+
+  // Query pour les statistiques
+  const statsQuery = useQuery({
+    queryKey: ['organisations', 'stats', organisations],
+    queryFn: () => {
+      const membre = organisations.filter(o => o.statut === 'membre').length;
+      const nonMembre = organisations.filter(o => o.statut === 'non-membre').length;
+      const sponsor = organisations.filter(o => o.statut === 'sponsor').length;
+      
+      return { membre, nonMembre, sponsor, total: organisations.length };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { membre: 0, nonMembre: 0, sponsor: 0, total: 0 };
 
   const handleCreateSponsor = () => {
     console.log('Création du sponsor:', formData);
@@ -682,12 +722,18 @@ export function OrganisationsPage({ subSection, filter, readOnly = false }: Orga
               <Input
                 placeholder="Rechercher par nom, email, pays ou contact..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="pl-10"
               />
             </div>
 
-            <Select value={paysFilter} onValueChange={setPaysFilter}>
+            <Select value={paysFilter} onValueChange={(value) => {
+              setPaysFilter(value);
+              setCurrentPage(1);
+            }}>
               <SelectTrigger>
                 <SelectValue placeholder="Pays" />
               </SelectTrigger>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from "../ui/card";
 import { Plane, TrendingUp } from "lucide-react";
 import { planVolDataService } from "../data/planvolData";
@@ -9,34 +9,40 @@ import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
 
 export function WidgetPlanVol() {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    total: 0,
-    arrivees: 0,
-    departs: 0
+  // Charger les plans de vol avec React Query
+  const { data: plansVol = [], isLoading: loading } = useQuery({
+    queryKey: ['widgetPlanVol'],
+    queryFn: async () => {
+      try {
+        return await planVolDataService.loadFlightPlans();
+      } catch (error) {
+        console.error('Erreur lors du chargement des plans de vol:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        setLoading(true);
-        const plansVol = await planVolDataService.loadFlightPlans();
-        const arrivees = planVolDataService.getFlightPlansByType('arrivee');
-        const departs = planVolDataService.getFlightPlansByType('depart');
-        setStats({
-          total: arrivees.length + departs.length,
-          arrivees: arrivees.length,
-          departs: departs.length
-        });
-      } catch (error) {
-        console.error('Erreur lors du chargement des statistiques:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Query pour calculer les statistiques à partir des données
+  const statsQuery = useQuery({
+    queryKey: ['widgetPlanVol', 'stats', plansVol],
+    queryFn: () => {
+      const arrivees = plansVol.filter((pv: any) => pv.type === 'arrivee');
+      const departs = plansVol.filter((pv: any) => pv.type === 'depart');
+      return {
+        total: plansVol.length,
+        arrivees: arrivees.length,
+        departs: departs.length
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-    loadStats();
-  }, []);
+  const stats = statsQuery.data ?? { total: 0, arrivees: 0, departs: 0 };
 
   if (loading) {
     return (

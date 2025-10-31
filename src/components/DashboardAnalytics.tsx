@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Users, Building2, Calendar, DollarSign, Award } from 'lucide-react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -25,35 +26,64 @@ import { companiesDataService } from './data/companiesData';
 import { networkingDataService } from './data/networkingData';
 
 export function DashboardAnalytics() {
-  const [loading, setLoading] = useState(true);
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [organisations, setOrganisations] = useState<any[]>([]);
-  const [rendezVous, setRendezVous] = useState<any[]>([]);
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      setLoading(true);
+  // Charger les données avec React Query
+  const { data: organisationsData = [], isLoading: organisationsLoading } = useQuery({
+    queryKey: ['dashboardAnalyticsOrganisations'],
+    queryFn: async () => {
       try {
-        const [orgs, parts, rdv] = await Promise.all([
-          companiesDataService.loadOrganisations(),
-          inscriptionsDataService.loadParticipants(['member', 'not_member', 'vip']),
-          networkingDataService.loadNetworkingRequests(),
-        ]);
-        if (!mounted) return;
-        setOrganisations(orgs);
-        setParticipants(parts);
-        setRendezVous(rdv);
-      } finally {
-        if (mounted) setLoading(false);
+        return await companiesDataService.loadOrganisations();
+      } catch (error) {
+        console.error('Erreur lors du chargement des organisations:', error);
+        return [];
       }
-    };
-    load();
-    return () => { mounted = false; };
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  // Données pour le graphique d'évolution des inscriptions (mensuel sur 8 mois)
-  const inscriptionsEvolution = useMemo(() => {
+  const { data: participantsData = [], isLoading: participantsLoading } = useQuery({
+    queryKey: ['dashboardAnalyticsParticipants'],
+    queryFn: async () => {
+      try {
+        return await inscriptionsDataService.loadParticipants(['member', 'not_member', 'vip']);
+      } catch (error) {
+        console.error('Erreur lors du chargement des participants:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const { data: rendezVousData = [], isLoading: rendezVousLoading } = useQuery({
+    queryKey: ['dashboardAnalyticsRendezVous'],
+    queryFn: async () => {
+      try {
+        return await networkingDataService.loadNetworkingRequests();
+      } catch (error) {
+        console.error('Erreur lors du chargement des rendez-vous:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const loading = organisationsLoading || participantsLoading || rendezVousLoading;
+  const participants = participantsData;
+  const organisations = organisationsData;
+  const rendezVous = rendezVousData;
+
+  // Query pour les données du graphique d'évolution des inscriptions
+  const inscriptionsEvolutionQuery = useQuery({
+    queryKey: ['dashboardAnalytics', 'inscriptionsEvolution', participants],
+    queryFn: () => {
     // Regrouper par mois (YYYY-MM)
     const counts = new Map<string, number>();
     for (const p of participants) {
@@ -81,10 +111,17 @@ export function DashboardAnalytics() {
       return { mois: monthLabel(key), inscriptions: cumulative, objectif: cumulative };
     });
     return data;
-  }, [participants]);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Répartition par pays
-  const topPays = useMemo(() => {
+  const inscriptionsEvolution = inscriptionsEvolutionQuery.data ?? [];
+
+  // Query pour la répartition par pays
+  const topPaysQuery = useQuery({
+    queryKey: ['dashboardAnalytics', 'topPays', participants],
+    queryFn: () => {
     const paysData = participants.reduce((acc, p) => {
       const pays = p.pays || 'N/A';
       acc[pays] = (acc[pays] || 0) + 1;
@@ -95,10 +132,17 @@ export function DashboardAnalytics() {
       .sort((a, b) => (b[1] as number) - (a[1] as number))
       .slice(0, 6)
       .map(([pays, count]) => ({ pays, participants: count as number }));
-  }, [participants]);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Répartition par statut
-  const statutChartData = useMemo(() => {
+  const topPays = topPaysQuery.data ?? [];
+
+  // Query pour la répartition par statut
+  const statutChartDataQuery = useQuery({
+    queryKey: ['dashboardAnalytics', 'statutChart', participants],
+    queryFn: () => {
     const labels: Record<string, string> = {
       'membre': 'Membre',
       'non-membre': 'Non-membre',
@@ -113,29 +157,56 @@ export function DashboardAnalytics() {
       name: labels[statut] || statut,
       value: value as number,
     }));
-  }, [participants]);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const statutChartData = statutChartDataQuery.data ?? [];
 
   const COLORS = ['#ea580c', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
-  // Répartition des organisations
-  const orgByType = useMemo(() => ({
-    membre: organisations.filter((o) => o.statut === 'membre').length,
-    'non-membre': organisations.filter((o) => o.statut === 'non-membre').length,
-    sponsor: organisations.filter((o) => o.statut === 'sponsor').length,
-  }), [organisations]);
+  // Query pour la répartition des organisations
+  const orgByTypeQuery = useQuery({
+    queryKey: ['dashboardAnalytics', 'orgByType', organisations],
+    queryFn: () => ({
+      membre: organisations.filter((o) => o.statut === 'membre').length,
+      'non-membre': organisations.filter((o) => o.statut === 'non-membre').length,
+      sponsor: organisations.filter((o) => o.statut === 'sponsor').length,
+    }),
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Rendez-vous par statut
-  const rdvParticipantsByStatut = useMemo(() => ({
-    acceptee: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'acceptée').length,
-    enAttente: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'en-attente').length,
-    occupee: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'occupée').length,
-  }), [rendezVous]);
+  const orgByType = orgByTypeQuery.data ?? { membre: 0, 'non-membre': 0, sponsor: 0 };
 
-  const rdvSponsorsByStatut = useMemo(() => ({
-    acceptee: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'acceptée').length,
-    enAttente: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'en-attente').length,
-    occupee: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'occupée').length,
-  }), [rendezVous]);
+  // Query pour les rendez-vous participants par statut
+  const rdvParticipantsByStatutQuery = useQuery({
+    queryKey: ['dashboardAnalytics', 'rdvParticipantsByStatut', rendezVous],
+    queryFn: () => ({
+      acceptee: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'acceptée').length,
+      enAttente: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'en-attente').length,
+      occupee: rendezVous.filter((r) => r.type === 'participant' && r.statut === 'occupée').length,
+    }),
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const rdvParticipantsByStatut = rdvParticipantsByStatutQuery.data ?? { acceptee: 0, enAttente: 0, occupee: 0 };
+
+  // Query pour les rendez-vous sponsors par statut
+  const rdvSponsorsByStatutQuery = useQuery({
+    queryKey: ['dashboardAnalytics', 'rdvSponsorsByStatut', rendezVous],
+    queryFn: () => ({
+      acceptee: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'acceptée').length,
+      enAttente: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'en-attente').length,
+      occupee: rendezVous.filter((r) => r.type === 'sponsor' && r.statut === 'occupée').length,
+    }),
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const rdvSponsorsByStatut = rdvSponsorsByStatutQuery.data ?? { acceptee: 0, enAttente: 0, occupee: 0 };
 
   const comparisonData = {
     inscriptions: { actuel: participants.length, precedent: Math.max(participants.length - 20, 0), variation: 0 },

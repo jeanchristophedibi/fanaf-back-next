@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -30,8 +31,6 @@ import { GroupDocumentsGenerator } from './GroupDocumentsGenerator';
 
 export function PaiementsGroupesPage() {
   const { api } = useFanafApi();
-  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
-  const [apiLoading, setApiLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showDocumentsDialog, setShowDocumentsDialog] = useState(false);
   const [finalisedParticipants, setFinalisedParticipants] = useState<Participant[]>([]);
@@ -45,21 +44,29 @@ export function PaiementsGroupesPage() {
   const [selectedOrganisation, setSelectedOrganisation] = useState<string>('all');
   const [selectedStatut, setSelectedStatut] = useState<string>('all');
 
-  // Charger le nom du caissier depuis localStorage
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const storedName = localStorage.getItem('caissierName');
-    if (storedName) {
-      setNomCaissier(storedName);
-    }
-  }, []);
+  const queryClient = useQueryClient();
 
-  // Charger depuis l'API (registrations), fallback vers mocks si vide
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
+  // Query pour charger le nom du caissier depuis localStorage
+  useQuery({
+    queryKey: ['paiementsGroupes', 'caissierName'],
+    queryFn: () => {
+      if (typeof window === 'undefined') return '';
+      const storedName = localStorage.getItem('caissierName');
+      if (storedName) {
+        setNomCaissier(storedName);
+        return storedName;
+      }
+      return '';
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Charger depuis l'API (registrations) avec React Query
+  const { data: apiParticipants = [], isLoading: apiLoading } = useQuery({
+    queryKey: ['paiementsGroupesRegistrations'],
+    queryFn: async () => {
       try {
-        setApiLoading(true);
         const regsRes = await api.getRegistrations({ per_page: 200, page: 1 });
         const regsAny: any = regsRes as any;
         const regsArray = Array.isArray(regsAny?.data)
@@ -67,99 +74,135 @@ export function PaiementsGroupesPage() {
           : Array.isArray(regsAny)
             ? regsAny
             : [];
-        if (mounted) setApiParticipants(regsArray);
+        return regsArray;
       } catch (_) {
-        if (mounted) setApiParticipants([]);
-      } finally {
-        if (mounted) setApiLoading(false);
+        return [];
       }
-    })();
-    return () => { mounted = false; };
-  }, [api]);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
   const baseParticipants = apiParticipants;
 
-  // Filtrer les participants non finalisés (membres et non-membres uniquement)
-  const participantsEnAttente = useMemo(() => {
-    const getStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
-    const getCategory = (p: any) => (p.statut || p.category || '').toLowerCase();
-    const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
-    return (baseParticipants || []).filter(p =>
-      (getStatus(p) === 'non-finalisée' || getStatus(p) === 'pending' || !getStatus(p)) &&
-      (getCategory(p) === 'membre' || getCategory(p) === 'member' || getCategory(p) === 'non-membre' || getCategory(p) === 'not_member')
-    ).map((p: any) => ({ ...p, id: getId(p), statut: getCategory(p) || p.statut }));
-  }, [baseParticipants]);
+  // Query pour filtrer les participants non finalisés (membres et non-membres uniquement)
+  const participantsEnAttenteQuery = useQuery({
+    queryKey: ['paiementsGroupes', 'participantsEnAttente', baseParticipants],
+    queryFn: () => {
+      const getStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
+      const getCategory = (p: any) => (p.statut || p.category || '').toLowerCase();
+      const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
+      return (baseParticipants || []).filter(p =>
+        (getStatus(p) === 'non-finalisée' || getStatus(p) === 'pending' || !getStatus(p)) &&
+        (getCategory(p) === 'membre' || getCategory(p) === 'member' || getCategory(p) === 'non-membre' || getCategory(p) === 'not_member')
+      ).map((p: any) => ({ ...p, id: getId(p), statut: getCategory(p) || p.statut }));
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Obtenir les listes pour les filtres
-  const uniqueOrganisations = useMemo(() => {
-    const orgs = new Set<string>();
-    participantsEnAttente.forEach(p => {
-      const org = getOrganisationById(p.organisationId);
-      if (org) orgs.add(org.nom);
-    });
-    return Array.from(orgs).sort();
-  }, [participantsEnAttente]);
+  const participantsEnAttente = participantsEnAttenteQuery.data ?? [];
 
-  // Filtrer les participants selon les critères
-  const filteredParticipants = useMemo(() => {
-    let filtered = [...participantsEnAttente];
-
-    // Filtre par recherche
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(p => {
+  // Query pour obtenir les listes pour les filtres
+  const uniqueOrganisationsQuery = useQuery({
+    queryKey: ['paiementsGroupes', 'uniqueOrganisations', participantsEnAttente],
+    queryFn: () => {
+      const orgs = new Set<string>();
+      participantsEnAttente.forEach(p => {
         const org = getOrganisationById(p.organisationId);
-        return (
-          p.nom.toLowerCase().includes(searchLower) ||
-          p.prenom.toLowerCase().includes(searchLower) ||
-          p.reference.toLowerCase().includes(searchLower) ||
-          p.email.toLowerCase().includes(searchLower) ||
-          p.telephone.includes(searchLower) ||
-          org?.nom.toLowerCase().includes(searchLower) ||
-          p.nomGroupe?.toLowerCase().includes(searchLower) ||
-          ''
-        );
+        if (org) orgs.add(org.nom);
       });
-    }
+      return Array.from(orgs).sort();
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-    // Filtre par organisation
-    if (selectedOrganisation !== 'all') {
-      filtered = filtered.filter(p => {
-        const org = getOrganisationById(p.organisationId);
-        return org?.nom === selectedOrganisation;
-      });
-    }
+  const uniqueOrganisations = uniqueOrganisationsQuery.data ?? [];
 
-    // Filtre par statut
-    if (selectedStatut !== 'all') {
-      filtered = filtered.filter(p => p.statut === selectedStatut);
-    }
+  // Query pour filtrer les participants selon les critères
+  const filteredParticipantsQuery = useQuery({
+    queryKey: ['paiementsGroupes', 'filteredParticipants', participantsEnAttente, searchTerm, selectedOrganisation, selectedStatut],
+    queryFn: () => {
+      let filtered = [...participantsEnAttente];
 
-    return filtered;
-  }, [participantsEnAttente, searchTerm, selectedOrganisation, selectedStatut]);
-
-  // Grouper les participants par groupeId
-  const participantsByGroup = useMemo<Map<string, Participant[]>>(() => {
-    const groups = new Map<string, Participant[]>();
-    filteredParticipants.forEach(p => {
-      if (p.groupeId) {
-        const existing = groups.get(p.groupeId) || [];
-        groups.set(p.groupeId, [...existing, p]);
-      } else {
-        // Participants sans groupe
-        groups.set(`single-${p.id}`, [p]);
+      // Filtre par recherche
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase().trim();
+        filtered = filtered.filter(p => {
+          const org = getOrganisationById(p.organisationId);
+          return (
+            p.nom.toLowerCase().includes(searchLower) ||
+            p.prenom.toLowerCase().includes(searchLower) ||
+            p.reference.toLowerCase().includes(searchLower) ||
+            p.email.toLowerCase().includes(searchLower) ||
+            p.telephone.includes(searchLower) ||
+            org?.nom.toLowerCase().includes(searchLower) ||
+            p.nomGroupe?.toLowerCase().includes(searchLower) ||
+            ''
+          );
+        });
       }
-    });
-    return groups;
-  }, [filteredParticipants]);
 
-  // Compter les filtres actifs
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (selectedOrganisation !== 'all') count++;
-    if (selectedStatut !== 'all') count++;
-    return count;
-  }, [selectedOrganisation, selectedStatut]);
+      // Filtre par organisation
+      if (selectedOrganisation !== 'all') {
+        filtered = filtered.filter(p => {
+          const org = getOrganisationById(p.organisationId);
+          return org?.nom === selectedOrganisation;
+        });
+      }
+
+      // Filtre par statut
+      if (selectedStatut !== 'all') {
+        filtered = filtered.filter(p => p.statut === selectedStatut);
+      }
+
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredParticipants = filteredParticipantsQuery.data ?? [];
+
+  // Query pour grouper les participants par groupeId
+  const participantsByGroupQuery = useQuery<Map<string, Participant[]>>({
+    queryKey: ['paiementsGroupes', 'participantsByGroup', filteredParticipants],
+    queryFn: () => {
+      const groups = new Map<string, Participant[]>();
+      filteredParticipants.forEach(p => {
+        if (p.groupeId) {
+          const existing = groups.get(p.groupeId) || [];
+          groups.set(p.groupeId, [...existing, p]);
+        } else {
+          // Participants sans groupe
+          groups.set(`single-${p.id}`, [p]);
+        }
+      });
+      return groups;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const participantsByGroup = participantsByGroupQuery.data ?? new Map();
+
+  // Query pour compter les filtres actifs
+  const activeFiltersCountQuery = useQuery({
+    queryKey: ['paiementsGroupes', 'activeFiltersCount', selectedOrganisation, selectedStatut],
+    queryFn: () => {
+      let count = 0;
+      if (selectedOrganisation !== 'all') count++;
+      if (selectedStatut !== 'all') count++;
+      return count;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const activeFiltersCount = activeFiltersCountQuery.data ?? 0;
 
   // Réinitialiser les filtres
   const handleResetFilters = () => {

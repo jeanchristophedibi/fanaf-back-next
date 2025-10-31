@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useQuery } from '@tanstack/react-query';
 import { Award, Trophy, Star } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { sponsorsDataService } from "../data/sponsorsData";
@@ -10,37 +10,43 @@ import { Skeleton } from "../ui/skeleton";
 import type { Organisation } from '../data/types';
 
 export function WidgetSponsors() {
-  const [sponsors, setSponsors] = useState<Organisation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
+  // Charger les sponsors avec React Query
+  const { data: sponsors = [], isLoading } = useQuery({
+    queryKey: ['widgetSponsors'],
+    queryFn: async () => {
       try {
-        const sponsorsData = await sponsorsDataService.loadSponsors();
-        if (mounted) setSponsors(sponsorsData);
+        return await sponsorsDataService.loadSponsors();
       } catch (error) {
         console.error('Erreur lors du chargement des sponsors:', error);
-      } finally {
-        if (mounted) setIsLoading(false);
+        return [];
       }
-    })();
-    return () => { mounted = false; };
-  }, []);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  // Statistiques pour les sponsors par type
-  const stats = useMemo(() => {
-    const total = sponsors.length;
-    const argent = sponsors.filter(s => s.secteurActivite === 'ARGENT').length;
-    const gold = sponsors.filter(s => s.secteurActivite === 'GOLD').length;
-    const autres = sponsors.filter(s => 
-      s.secteurActivite && 
-      s.secteurActivite !== 'ARGENT' && 
-      s.secteurActivite !== 'GOLD'
-    ).length;
-    
-    return { total, argent, gold, autres };
-  }, [sponsors]);
+  // Query pour les statistiques des sponsors par type
+  const statsQuery = useQuery({
+    queryKey: ['widgetSponsors', 'stats', sponsors],
+    queryFn: () => {
+      const total = sponsors.length;
+      const argent = sponsors.filter(s => s.secteurActivite === 'ARGENT').length;
+      const gold = sponsors.filter(s => s.secteurActivite === 'GOLD').length;
+      const autres = sponsors.filter(s => 
+        s.secteurActivite && 
+        s.secteurActivite !== 'ARGENT' && 
+        s.secteurActivite !== 'GOLD'
+      ).length;
+      
+      return { total, argent, gold, autres };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { total: 0, argent: 0, gold: 0, autres: 0 };
 
   if (isLoading) {
     return (
