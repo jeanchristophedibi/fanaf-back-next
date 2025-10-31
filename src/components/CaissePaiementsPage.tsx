@@ -25,6 +25,7 @@ export function CaissePaiementsPage() {
   const [caissierName, setCaissierName] = useState<string>('');
   // Charger les participants finalisés depuis localStorage
   const [finalisedParticipants, setFinalisedParticipants] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
     const stored = localStorage.getItem('finalisedParticipantsIds');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });

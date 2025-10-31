@@ -48,6 +48,7 @@ export function PaiementsGroupesPage() {
 
   // Charger le nom du caissier depuis localStorage
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const storedName = localStorage.getItem('caissierName');
     if (storedName) {
       setNomCaissier(storedName);

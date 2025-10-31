@@ -46,12 +46,14 @@ export function TousPaiementsPage() {
 
   // Charger les participants finalisés depuis localStorage
   const [finalisedParticipants, setFinalisedParticipants] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
     const stored = localStorage.getItem('finalisedParticipantsIds');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
 
   // Charger les infos de paiement depuis localStorage
   const [finalisedPayments, setFinalisedPayments] = useState<Record<string, { modePaiement: string; datePaiement: string; caissier?: string }>>(() => {
+    if (typeof window === 'undefined') return {};
     const stored = localStorage.getItem('finalisedPayments');
     return stored ? JSON.parse(stored) : {};
   });
