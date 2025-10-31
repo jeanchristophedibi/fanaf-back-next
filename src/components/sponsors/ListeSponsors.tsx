@@ -80,7 +80,7 @@ export function ListeSponsors({ readOnly = false }: ListeSponsorsProps) {
       key: 'dateCreation',
       header: 'Date de création',
       sortable: true,
-      render: (s) => new Date(s.dateCreation).toLocaleDateString('fr-FR')
+      render: (s) => s.dateCreation ? new Date(s.dateCreation).toLocaleDateString('fr-FR') : '-'
     },
     {
       key: 'actions',
@@ -113,7 +113,7 @@ export function ListeSponsors({ readOnly = false }: ListeSponsorsProps) {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Date de création</p>
-                  <p className="text-gray-900">{new Date(s.dateCreation).toLocaleDateString('fr-FR')}</p>
+                  <p className="text-gray-900">{s.dateCreation ? new Date(s.dateCreation).toLocaleDateString('fr-FR') : '-'}</p>
                 </div>
               </div>
             </div>
@@ -146,7 +146,7 @@ export function ListeSponsors({ readOnly = false }: ListeSponsorsProps) {
       sponsor.nom, 
       sponsor.secteurActivite || 'N/A', 
       sponsor.email || 'N/A', 
-      new Date(sponsor.dateCreation).toLocaleDateString('fr-FR')
+      sponsor.dateCreation ? new Date(sponsor.dateCreation).toLocaleDateString('fr-FR') : '-'
     ];
   };
 

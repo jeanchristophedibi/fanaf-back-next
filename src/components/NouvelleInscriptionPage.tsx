@@ -106,8 +106,8 @@ export const NouvelleInscriptionPage = () => {
       const orgAny = orgTrouvee as any;
       setOrganisationData({
         nom: orgTrouvee.nom,
-        email: orgTrouvee.email,
-        contact: orgTrouvee.contact,
+        email: orgTrouvee.email || '',
+        contact: orgTrouvee.contact || '',
         adresse: orgAny.adresse || '',
         domaineActivite: orgAny.domaineActivite || '',
         codeOrganisation: ''

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from '../ui/badge';
 import { Phone, Mail, Globe, Calendar } from 'lucide-react';
 import { type Participant } from '../data/types';
-import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from '../data/helpers';
 
 import { inscriptionsDataService } from '../data/inscriptionsData';
 import { motion } from 'motion/react';

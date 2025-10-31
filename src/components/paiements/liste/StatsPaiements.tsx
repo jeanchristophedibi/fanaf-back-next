@@ -6,7 +6,7 @@ import { fanafApi } from "../../../services/fanafApi";
 import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { motion } from "motion/react";
 import { useMemo, useEffect, useState } from "react";
-import { getOrganisationById } from '../../data/types';
+import { getOrganisationById } from '../../data/helpers';
 import { Skeleton } from "../../ui/skeleton";
 
 // Mapper le canal de paiement

@@ -8,12 +8,10 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { Search, Filter, Eye, Download, Building2, UserPlus, User, QrCode, Package, History, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getParticipantsByOrganisation, getParticipantById } from './data/types';
 import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
 
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import type { OrganisationSubSection } from '../app/dashboard/agence/types';
-import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
 
 import { BadgeReferentGenerator } from './BadgeReferentGenerator';
 import { AnimatedStat } from './AnimatedStat';
@@ -76,9 +74,9 @@ export function OrganisationsPage({ subSection, filter, readOnly = false }: Orga
       const searchLower = searchTerm.toLowerCase().trim();
       filtered = filtered.filter(o =>
         o.nom.toLowerCase().includes(searchLower) ||
-        o.email.toLowerCase().includes(searchLower) ||
+        (o.email?.toLowerCase().includes(searchLower) ?? false) ||
         o.pays.toLowerCase().includes(searchLower) ||
-        o.contact.toLowerCase().includes(searchLower)
+        (o.contact?.toLowerCase().includes(searchLower) ?? false)
       );
     }
 
@@ -188,8 +186,10 @@ export function OrganisationsPage({ subSection, filter, readOnly = false }: Orga
     if (!referent) return null;
 
     // Trouver le participant correspondant au référent pour avoir son ID
+    // Note: Le statut 'referent' n'existe pas dans StatutParticipant
+    // On cherche par email pour trouver le participant correspondant
     const referentParticipant = getParticipantsByOrganisation(organisationId).find(
-      p => p.statut === 'referent'
+      p => p.email === referent.email
     );
 
     return (
@@ -751,7 +751,7 @@ export function OrganisationsPage({ subSection, filter, readOnly = false }: Orga
                         <TableCell className="text-gray-600">{organisation.email}</TableCell>
                         <TableCell>{organisation.pays}</TableCell>
                         <TableCell className="text-gray-600">
-                          {new Date(organisation.dateCreation).toLocaleDateString('fr-FR')}
+                          {organisation.dateCreation ? new Date(organisation.dateCreation).toLocaleDateString('fr-FR') : '-'}
                         </TableCell>
                         <TableCell>
                           <Badge className={statutOrgColors[organisation.statut]}>

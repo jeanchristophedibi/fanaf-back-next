@@ -851,7 +851,6 @@ export function ListeInscriptions({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => {
-                                    setApiError(null);
                                     // Recharger les données
                                     window.location.reload();
                                 }}

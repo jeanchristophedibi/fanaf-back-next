@@ -21,7 +21,7 @@ import {
 } from './ui/select';
 import { Search, FileText, Download, ChevronLeft, ChevronRight, MoreVertical, Receipt, BadgeCheck, Mail, Filter, X } from 'lucide-react';
 import { useFanafApi } from '../hooks/useFanafApi';
-import { getOrganisationById, type Participant, type StatutParticipant, type ModePaiement } from './data/types';
+import { type Participant, type StatutParticipant, type ModePaiement } from './data/types';
 import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
 
 import { motion, AnimatePresence } from 'motion/react';

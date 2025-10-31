@@ -28,6 +28,7 @@ export interface RendezVous {
   statut: StatutRendezVous;
   sujet?: string;
   notes?: string;
+  commentaire?: string;
 }
 
 interface CalendarViewProps {
@@ -63,12 +64,12 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
     
     // Filtre par heure de début
     if (filterHeureDebut) {
-      filtered = filtered.filter(rdv => rdv.heure >= filterHeureDebut);
+      filtered = filtered.filter(rdv => rdv.heureDebut >= filterHeureDebut);
     }
     
     // Filtre par heure de fin
     if (filterHeureFin) {
-      filtered = filtered.filter(rdv => rdv.heure <= filterHeureFin);
+      filtered = filtered.filter(rdv => rdv.heureFin <= filterHeureFin);
     }
     
     // Filtre par type
@@ -169,12 +170,13 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
   // Dialog de détails avec actions pour les sponsors
   const RendezVousDialog = ({ rdv }: { rdv: RendezVous }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [commentaire, setCommentaire] = useState(rdv.commentaire || '');
+    const [commentaire, setCommentaire] = useState(rdv.commentaire ?? '');
     const demandeur = getParticipantById(rdv.demandeurId);
     const demandeurOrganisation = demandeur ? getOrganisationById(demandeur.organisationId) : undefined;
     const recepteur = rdv.type === 'participant' ? getParticipantById(rdv.recepteurId) : undefined;
     const recepteurOrganisation = recepteur ? getOrganisationById(recepteur.organisationId) : undefined;
     const referentSponsor = rdv.type === 'sponsor' ? getReferentSponsor(rdv.recepteurId) : undefined;
+    const sponsorOrganisation = rdv.type === 'sponsor' && rdv.recepteurId ? getOrganisationById(rdv.recepteurId) : undefined;
 
     if (!demandeur) return null;
     if (rdv.type === 'participant' && !recepteur) return null;
@@ -254,7 +256,7 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
                       <p className="text-sm text-orange-600">{referentSponsor.fonction}</p>
                       <p className="text-sm text-gray-600">{referentSponsor.email}</p>
                       <p className="text-sm text-gray-600">{referentSponsor.telephone}</p>
-                      <p className="text-sm text-gray-600 mt-1">Organisation: {referentSponsor.organisationNom}</p>
+                      <p className="text-sm text-gray-600 mt-1">Organisation: {sponsorOrganisation?.nom || ''}</p>
                     </>
                   ) : recepteur ? (
                     <>
@@ -284,7 +286,7 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
               </div>
               <div>
                 <Label className="text-gray-700">Heure</Label>
-                <p className="mt-1 text-gray-900">{rdv.heure}</p>
+                <p className="mt-1 text-gray-900">{rdv.heureDebut} - {rdv.heureFin}</p>
               </div>
             </div>
 
@@ -658,7 +660,7 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
                   {weekDays.map((day, dayIdx) => {
                     const dayRendezVous = getRendezVousForDate(day);
                     const hourRendezVous = dayRendezVous.filter((rdv) => {
-                      const rdvHour = parseInt(rdv.heure.split(':')[0]);
+                      const rdvHour = parseInt(rdv.heureDebut.split(':')[0]);
                       return rdvHour === hour;
                     });
 
@@ -676,6 +678,8 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
                           const demandeurOrg = getOrganisationById(demandeur.organisationId);
                           const recepteurOrg = rdv.type === 'participant' && 'organisationId' in recepteur 
                             ? getOrganisationById(recepteur.organisationId) 
+                            : rdv.type === 'sponsor' 
+                            ? getOrganisationById(rdv.recepteurId)
                             : null;
                           
                           return (
@@ -735,7 +739,7 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
                                     </div>
                                   )}
                                   <Clock className="w-2.5 h-2.5 text-gray-500" />
-                                  <span className="text-xs text-gray-900">{rdv.heure}</span>
+                                  <span className="text-xs text-gray-900">{rdv.heureDebut}</span>
                                 </div>
                               </div>
                               
@@ -758,7 +762,7 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
                                 <div className="text-center text-gray-400 text-xs">↓</div>
                                 
                                 {/* Récepteur */}
-                                {rdv.type === 'sponsor' && 'organisationNom' in recepteur ? (
+                                {rdv.type === 'sponsor' && recepteur && 'prenom' in recepteur ? (
                                   <div className="bg-orange-50 px-1 py-0.5 rounded">
                                     <div className="flex items-center gap-0.5">
                                       <Briefcase className="w-2.5 h-2.5 text-orange-600 flex-shrink-0" />
@@ -767,7 +771,7 @@ export function CalendarView({ rendezVous, readOnly = false, activeFilter }: Cal
                                       </span>
                                     </div>
                                     <div className="text-xs text-orange-700 truncate pl-3">
-                                      Sponsor • {recepteur.organisationNom}
+                                      Sponsor • {recepteurOrg?.nom || ''}
                                     </div>
                                   </div>
                                 ) : 'prenom' in recepteur && (

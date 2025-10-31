@@ -1,8 +1,8 @@
 'use client';
 
 import OperateurBadgeMain from './Main';
-import { PageLoader } from '../../components/ui/PageLoader';
-import { usePageLoading } from '../../components/hooks/usePageLoading';
+import { PageLoader } from '../../../components/ui/PageLoader';
+import { usePageLoading } from '../../../components/hooks/usePageLoading';
 
 export default function OperateurBadgePage() {
   const { isLoading } = usePageLoading();

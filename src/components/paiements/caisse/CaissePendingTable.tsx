@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { CheckCircle2, Clock } from 'lucide-react';
-import { getOrganisationById, type Participant } from '../../data/types';
+import { type Participant } from '../../data/types';
+import { getOrganisationById } from '../../data/helpers';
 
 interface CaissePendingTableProps {
   items: Participant[];

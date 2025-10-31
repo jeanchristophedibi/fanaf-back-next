@@ -31,6 +31,14 @@ export interface Participant {
   nomGroupe?: string;
 }
 
+export interface Referent {
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone: string;
+  fonction: string;
+}
+
 export interface Organisation {
   id: string;
   nom: string;
@@ -40,13 +48,7 @@ export interface Organisation {
   dateCreation?: string;
   statut: 'membre' | 'non-membre' | 'sponsor';
   secteurActivite?: string;
-  referent?: {
-    nom: string;
-    prenom: string;
-    email: string;
-    telephone: string;
-    fonction: string;
-  };
+  referent?: Referent;
 }
 
 export type StatutRendezVous = 'acceptée' | 'en-attente' | 'occupée' | 'annulée';
@@ -98,6 +100,51 @@ export interface MembreComite {
   telephone: string;
   profil: ProfilMembre;
   dateCreation: string;
+}
+
+export type TypeNotification = 'inscription' | 'rendez-vous' | 'vol' | 'alerte';
+export type PrioriteNotification = 'haute' | 'moyenne' | 'basse';
+
+export interface Notification {
+  id: string;
+  type: TypeNotification;
+  priorite: PrioriteNotification;
+  titre: string;
+  message: string;
+  dateCreation: string;
+  lu: boolean;
+  lien?: string;
+}
+
+// Système de notifications (stub - à implémenter avec l'API quand disponible)
+const notificationsStore: Notification[] = [];
+const subscribers: Array<(notification: Notification) => void> = [];
+
+export function getCurrentNotifications(): Notification[] {
+  return [...notificationsStore];
+}
+
+export function subscribeToNotifications(callback: (notification: Notification) => void): () => void {
+  subscribers.push(callback);
+  return () => {
+    const index = subscribers.indexOf(callback);
+    if (index > -1) {
+      subscribers.splice(index, 1);
+    }
+  };
+}
+
+export function markNotificationAsRead(id: string): void {
+  const notification = notificationsStore.find(n => n.id === id);
+  if (notification) {
+    notification.lu = true;
+  }
+}
+
+export function markAllNotificationsAsRead(): void {
+  notificationsStore.forEach(n => {
+    n.lu = true;
+  });
 }
 
 

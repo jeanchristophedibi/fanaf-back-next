@@ -9,7 +9,8 @@ import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Calendar, CheckCircle2, Clock, Users, User, Building, Download, UserPlus } from 'lucide-react';
-import { getOrganisationById, type Participant, type StatutParticipant } from '../../data/types';
+import { type Participant, type StatutParticipant } from '../../data/types';
+import { getOrganisationById } from '../../data/helpers';
 import { useDynamicInscriptions } from '../../hooks/useDynamicInscriptions';
 
 function getTypeInscription(participant: Participant): 'Groupée' | 'Individuelle' {
@@ -22,7 +23,6 @@ function getMontant(statut: Participant['statut']): number {
     'non-membre': 400000,
     vip: 0,
     speaker: 0,
-    referent: 0,
   };
   return PRIX[statut];
 }

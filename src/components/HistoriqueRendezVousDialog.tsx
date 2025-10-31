@@ -95,6 +95,7 @@ export function HistoriqueRendezVousDialog({
       : undefined;
     const receiverIdStr: string = String(getReceiverId(rdv) ?? '');
     const referentSponsor = rdv.type === 'sponsor' ? getReferentSponsor(receiverIdStr) : undefined;
+    const sponsorOrganisation = rdv.type === 'sponsor' && receiverIdStr ? getOrganisationById(receiverIdStr) : undefined;
 
     return (
       <TableRow key={rdv.id}>
@@ -110,7 +111,7 @@ export function HistoriqueRendezVousDialog({
               <div>
                 <p className="text-gray-900">{referentSponsor.prenom} {referentSponsor.nom}</p>
                 <p className="text-xs text-orange-600">{referentSponsor.fonction}</p>
-                <p className="text-xs text-gray-500">{referentSponsor.organisationNom}</p>
+                <p className="text-xs text-gray-500">{sponsorOrganisation?.nom || ''}</p>
               </div>
             ) : (autre || autreMock) ? (
               <div>

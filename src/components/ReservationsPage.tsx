@@ -7,7 +7,6 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { Search, Filter, Eye, Download, Store } from 'lucide-react';
-import { getParticipantById, getOrganisationById } from './data/types';
 import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
 
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';

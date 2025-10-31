@@ -45,6 +45,7 @@ function mapApiFlightPlanToPlanVol(apiData: any, participantId: string): PlanVol
     date,
     heure,
     aeroport,
+    compagnie: apiData.airline || apiData.airline_name || apiData.company || '',
     aeroportOrigine,
     aeroportDestination,
     type: flightType,
