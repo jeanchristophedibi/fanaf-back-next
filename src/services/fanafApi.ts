@@ -278,12 +278,13 @@ class FanafApiService {
 
   /**
    * Récupérer tous les participants
+   * @deprecated Utilisez getRegistrations() à la place. Conserve pour compatibilité.
    */
   async getParticipants(params?: {
     page?: number;
     per_page?: number;
     category?: 'member' | 'not_member' | 'vip';
-  }): Promise<PaginatedResponse<any>> {
+  }): Promise<any> {
     // Unification des données: participants et registrations proviennent de la même source
     return this.getRegistrations({
       category: params?.category,
@@ -397,23 +398,23 @@ class FanafApiService {
   // ==================== REGISTRATIONS/INSCRIPTIONS ====================
 
   /**
-   * Récupérer les inscriptions/registrations
+   * Récupérer les inscriptions/participants
    * @param category - member | not_member | vip (optionnel - si non fourni, récupère tout)
-   * @returns Promise avec la structure paginée Laravel: { data: { data: [...], current_page, last_page, ... }, meta: {...} }
+   * @returns Promise avec la structure: { status: 200, message: string, data: [...] }
    */
   async getRegistrations(params?: {
     category?: 'member' | 'not_member' | 'vip';
     per_page?: number;
     page?: number;
-  }): Promise<PaginatedResponse<any>> {
+  }): Promise<any> {
     const queryParams = new URLSearchParams();
     if (params?.category) queryParams.append('category', params.category);
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
     if (params?.page) queryParams.append('page', params.page.toString());
 
-    // Utiliser l'endpoint /registrations qui correspond à la structure de réponse observée
-    const endpoint = `/api/v1/admin/registrations${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    return this.fetchApi<PaginatedResponse<any>>(endpoint);
+    // Utiliser l'endpoint /participants (remplace /registrations)
+    const endpoint = `/api/v1/admin/participants${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.fetchApi<any>(endpoint);
   }
 
   // ==================== FLIGHT PLANS ====================

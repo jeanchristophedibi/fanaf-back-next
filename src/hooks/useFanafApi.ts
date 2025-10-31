@@ -20,8 +20,8 @@ export function useFanafApi(options: UseFanafApiOptions = {}) {
     queryKey: ['fanafApi', 'participants'],
     queryFn: async () => {
       const response = await fanafApi.getParticipants();
-      // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
-      return response?.data?.data || response?.data || [];
+      // Nouvelle structure API: { status: 200, message: "...", data: [...] }
+      return response?.data || [];
     },
     enabled: enabled && autoFetch,
     staleTime: 60 * 1000,
@@ -59,8 +59,8 @@ export function useFanafApi(options: UseFanafApiOptions = {}) {
     queryKey: ['fanafApi', 'registrations'],
     queryFn: async () => {
       const response = await fanafApi.getRegistrations();
-      // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
-      return response?.data?.data || response?.data || [];
+      // Nouvelle structure API: { status: 200, message: "...", data: [...] }
+      return response?.data || [];
     },
     enabled: false, // Non auto-fetché par défaut
     staleTime: 60 * 1000,

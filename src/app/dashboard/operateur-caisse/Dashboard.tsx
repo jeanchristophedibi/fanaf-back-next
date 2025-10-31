@@ -31,14 +31,12 @@ export default function OperateurCaisseDashboard() {
       try {
         const regsRes = await api.getRegistrations({ per_page: 200, page: 1 });
         const regsAny: any = regsRes as any;
-        // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
-        const regsArray = Array.isArray(regsAny?.data?.data)
-          ? regsAny.data.data
-          : Array.isArray(regsAny?.data)
-            ? regsAny.data
-            : Array.isArray(regsAny)
-              ? regsAny
-              : [];
+        // Nouvelle structure API: { status: 200, message: "...", data: [...] }
+        const regsArray = Array.isArray(regsAny?.data)
+          ? regsAny.data
+          : Array.isArray(regsAny)
+            ? regsAny
+            : [];
         return regsArray;
       } catch (_) {
         return [];

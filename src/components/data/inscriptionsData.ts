@@ -12,43 +12,32 @@ import { companiesDataService } from './companiesData';
  */
 export function mapApiRegistrationToParticipant(apiData: any): Participant {
   // Mapper la catégorie API vers le statut Participant
-  // La nouvelle API utilise 'membership' (member/not_member) et 'vip' (boolean)
-  // L'API a aussi 'type' qui est 'individual' ou 'group' (pour distinguer les inscriptions individuelles vs groupées)
-  const membership = apiData.membership || apiData.category || apiData.participant_type || apiData.statut;
-  const isVip = apiData.vip === true || apiData.vip === 'true' || apiData.is_vip === true;
-  const apiType = apiData.type; // 'individual' ou 'group'
+  // La nouvelle API utilise 'statut' directement (non-membre, membre, vip, speaker)
+  const apiStatut = apiData.statut || apiData.status || apiData.membership || apiData.category;
   let statut: StatutParticipant = 'non-membre';
   
-  // Priorité: vip > membership > catégorie
-  if (isVip) {
+  // Mapper directement depuis l'API
+  if (apiStatut === 'vip') {
     statut = 'vip';
-  } else if (membership === 'member' || membership === 'membre') {
+  } else if (apiStatut === 'member' || apiStatut === 'membre') {
     statut = 'membre';
-  } else if (membership === 'not_member' || membership === 'non-membre' || membership === 'not-member') {
+  } else if (apiStatut === 'not_member' || apiStatut === 'non-membre' || apiStatut === 'not-member') {
     statut = 'non-membre';
-  } else if (apiData.category === 'speaker' || apiData.statut === 'speaker') {
+  } else if (apiStatut === 'speaker') {
     statut = 'speaker';
   }
-  // Si pas de catégorie spécifique, par défaut non-membre
+  // Si pas de statut spécifique, par défaut non-membre
   
-  // Déterminer le statut d'inscription basé sur 'status' et 'payment_status' de l'API
-  // 'status' peut être 'completed' ou 'pending'
-  // 'payment_status' peut être 'paid' ou 'unpaid'
-  const apiStatus = apiData.status; // 'completed' ou 'pending'
-  const paymentStatus = apiData.payment_status; // 'paid' ou 'unpaid'
-  const registrationStatus = apiData.registration_status || apiData.status_inscription || apiData.registrationStatus;
+  // Déterminer le statut d'inscription basé sur 'statut_inscription' de l'API
+  // La nouvelle API utilise 'statut_inscription' directement ('finalisée' ou 'non-finalisée')
+  const statutInscriptionApi = apiData.statut_inscription || apiData.status_inscription || apiData.registration_status || apiData.status;
   
   let statutInscription: StatutInscription = 'non-finalisée';
-  if (apiStatus === 'completed' || 
-      paymentStatus === 'paid' || 
-      apiStatus === 'paid' || 
-      apiStatus === 'payé' || 
-      apiStatus === 'finalized' || 
-      registrationStatus === 'finalized' || 
-      registrationStatus === 'finalisée' || 
-      apiData.is_paid === true || 
-      apiData.isPaid === true || 
-      apiData.confirmed_at) {
+  if (statutInscriptionApi === 'finalisée' || 
+      statutInscriptionApi === 'finalized' || 
+      statutInscriptionApi === 'completed' || 
+      statutInscriptionApi === 'paid' ||
+      apiData.date_paiement) {
     statutInscription = 'finalisée';
   }
   
@@ -88,32 +77,24 @@ export function mapApiRegistrationToParticipant(apiData: any): Participant {
     return `reg_hash_${Math.abs(hash).toString(36)}`;
   };
   
-  // Extraire nom et prénom depuis full_name
-  const fullName = apiData.full_name || apiData.name || '';
-  let nom = '';
-  let prenom = '';
+  // La nouvelle API fournit directement 'nom' et 'prenom' séparés
+  let nom = apiData.nom || apiData.last_name || apiData.lastName || '';
+  let prenom = apiData.prenom || apiData.first_name || apiData.firstName || '';
   
-  if (fullName) {
+  // Fallback: si on a seulement full_name, l'extraire
+  if (!nom && !prenom && (apiData.full_name || apiData.name)) {
+    const fullName = apiData.full_name || apiData.name || '';
     const nameParts = fullName.trim().split(/\s+/);
     if (nameParts.length >= 2) {
       nom = nameParts[nameParts.length - 1]; // Dernier mot = nom
       prenom = nameParts.slice(0, -1).join(' '); // Tout le reste = prénom
     } else if (nameParts.length === 1) {
       prenom = nameParts[0];
-      nom = '';
     }
   }
   
-  // Si on a déjà first_name et last_name, les utiliser
-  if (apiData.last_name || apiData.lastName) {
-    nom = apiData.last_name || apiData.lastName || nom;
-  }
-  if (apiData.first_name || apiData.firstName) {
-    prenom = apiData.first_name || apiData.firstName || prenom;
-  }
-  
-  // S'assurer que dateInscription est toujours valide
-  let dateInscription = apiData.created_at || apiData.date_inscription || apiData.createdAt || apiData.registration_date;
+  // La nouvelle API utilise 'date_inscription' directement
+  let dateInscription = apiData.date_inscription || apiData.created_at || apiData.createdAt || apiData.registration_date;
   if (!dateInscription) {
     dateInscription = new Date().toISOString();
   } else if (typeof dateInscription === 'string') {
@@ -146,25 +127,24 @@ export function mapApiRegistrationToParticipant(apiData: any): Participant {
     fonction: apiData.function || apiData.fonction || apiData.position || apiData.job_title,
     // L'API utilise 'company' au lieu de organisation_id, on devra mapper ça séparément
     organisationId: apiData.organisation_id || apiData.organization_id || apiData.organisationId || 
-                     apiData.association_id || apiData.associationId || apiData.organizationId || 
-                     apiData.org_id || apiData.orgId || apiData.company || '', // company contient le nom de l'entreprise
+                     apiData.association_id || apiData.associationId || apiData.org_id || apiData.orgId || apiData.company || '',
     statut,
     statutInscription,
     dateInscription,
-    datePaiement: apiData.confirmed_at || apiData.payment_date || apiData.date_paiement || apiData.paymentDate || apiData.paid_at,
-    modePaiement: apiData.payment_method ? 
-      (apiData.payment_method.toLowerCase().replace(/_/g, '-').replace(' ', '-') as any) : undefined,
-    canalEncaissement: apiData.payment_channel || apiData.canal_encaissement || apiData.paymentChannel,
-    badgeGenere: apiData.badge_generated || apiData.badgeGenere || apiData.badge_generated === true || apiData.has_badge === true,
-    checkIn: apiData.check_in || apiData.checkIn || apiData.checked_in === true || apiData.has_checked_in === true,
+    datePaiement: apiData.date_paiement || apiData.confirmed_at || apiData.payment_date || apiData.paymentDate || apiData.paid_at,
+    modePaiement: apiData.mode_paiement || apiData.payment_method ? 
+      (apiData.mode_paiement || apiData.payment_method || '').toLowerCase().replace(/_/g, '-').replace(' ', '-') as any : undefined,
+    canalEncaissement: apiData.canal_encaissement || apiData.payment_channel || apiData.paymentChannel,
+    badgeGenere: apiData.badge_genere === true || apiData.badge_generated === true || apiData.badgeGenere === true || apiData.has_badge === true,
+    checkIn: apiData.check_in === true || apiData.checked_in === true || apiData.checkIn === true || apiData.has_checked_in === true,
     checkInDate: apiData.check_in_date || apiData.checkInDate || apiData.checked_in_at,
   };
 
-  // Gestion des inscriptions groupées: si type === 'group', renseigner les infos de groupe
-  if (apiType === 'group') {
-    const groupId = apiData.group_id || apiData.groupe_id || apiData.groupId || apiData.groupeId ||
+  // Gestion des inscriptions groupées: si groupe_id existe, renseigner les infos de groupe
+  if (apiData.groupe_id || apiData.group_id) {
+    const groupId = apiData.groupe_id || apiData.group_id || apiData.groupId || apiData.groupeId ||
       apiData.group_reference || apiData.reference || undefined;
-    const groupName = apiData.group_name || apiData.groupe_nom || apiData.groupName || apiData.groupeName ||
+    const groupName = apiData.nom_groupe || apiData.group_name || apiData.groupe_nom || apiData.groupName || apiData.groupeName ||
       apiData.company || undefined;
     if (groupId) participant.groupeId = String(groupId);
     if (groupName) participant.nomGroupe = String(groupName);
@@ -238,17 +218,21 @@ export async function fetchRegistrations(
           });
           
           // Extraire les données de la réponse
-          // Ordre de vérification important: response.data.data AVANT response.data
-          // Nouvelle structure API: { data: { data: [...], current_page, last_page, ... }, meta: {...} }
+          // Nouvelle structure API: { status: 200, message: "...", data: [...] }
           let data: any[] = [];
           
           if (Array.isArray(response)) {
             data = response;
             hasMore = false; // Si c'est un tableau simple, pas de pagination
             console.log(`[fetchRegistrations] Réponse est un tableau direct, ${data.length} éléments`);
+          } else if (response?.data && Array.isArray(response.data)) {
+            // Nouvelle structure: { status: 200, message: "...", data: [...] }
+            data = response.data;
+            hasMore = false; // Pas de pagination dans la nouvelle structure
+            totalInCategory = data.length;
+            console.log(`[fetchRegistrations] Réponse avec structure simple: ${data.length} éléments`);
           } else if (response?.data?.data && Array.isArray(response.data.data)) {
-            // Structure imbriquée: response.data.data (double data) - PRIORITÉ
-            // C'est la structure Laravel avec pagination: { data: { data: [...], current_page, last_page, ... }, meta: {...} }
+            // Structure imbriquée: response.data.data (ancienne structure Laravel) - fallback pour compatibilité
             data = response.data.data;
             // Les métadonnées sont dans response.data (current_page, last_page, total, etc.)
             if (response.data.last_page !== undefined) {
@@ -263,7 +247,7 @@ export async function fetchRegistrations(
               hasMore = currentPage < totalPages;
               console.log(`[fetchRegistrations] Pagination détectée (structure imbriquée): page ${currentPage}/${totalPages}, total: ${totalInCategory}, per_page réel: ${perPage}`);
             } else if (response.meta) {
-              // Fallback sur meta si disponible (nouvelle structure avec meta)
+              // Fallback sur meta si disponible
               totalPages = response.meta.last_page || 1;
               totalInCategory = response.meta.total || 0;
               const currentPage = response.meta.current_page || response.data.current_page || page;
@@ -274,42 +258,6 @@ export async function fetchRegistrations(
               }
               hasMore = currentPage < totalPages;
               console.log(`[fetchRegistrations] Pagination détectée (via meta): page ${currentPage}/${totalPages}, total: ${totalInCategory}, per_page réel: ${perPage}`);
-            }
-          } else if (response?.data && Array.isArray(response.data)) {
-            data = response.data;
-            // Vérifier la pagination dans meta ET dans response.data (structure Laravel)
-            if (response.meta) {
-              totalPages = response.meta.last_page || response.meta.total_pages || 1;
-              totalInCategory = response.meta.total || 0;
-              const currentPage = response.meta.current_page || page;
-              const actualPerPage = response.meta.per_page;
-              if (actualPerPage && actualPerPage !== perPage) {
-                console.log(`[fetchRegistrations] L'API limite à ${actualPerPage} éléments par page (demandé: ${perPage})`);
-                perPage = actualPerPage;
-              }
-              hasMore = currentPage < totalPages;
-              console.log(`[fetchRegistrations] Pagination détectée (via meta): page ${currentPage}/${totalPages}, total: ${totalInCategory}, per_page réel: ${perPage}`);
-            } else if (response.data.last_page !== undefined) {
-              // Pagination Laravel dans response.data directement
-              totalPages = response.data.last_page || 1;
-              totalInCategory = response.data.total || 0;
-              const currentPage = response.data.current_page || page;
-              const actualPerPage = response.data.per_page;
-              if (actualPerPage && actualPerPage !== perPage) {
-                console.log(`[fetchRegistrations] L'API limite à ${actualPerPage} éléments par page (demandé: ${perPage})`);
-                perPage = actualPerPage;
-              }
-              hasMore = currentPage < totalPages;
-              console.log(`[fetchRegistrations] Pagination détectée (via data): page ${currentPage}/${totalPages}, total: ${totalInCategory}, per_page réel: ${perPage}`);
-            } else {
-              // Pas de meta, vérifier si on a reçu moins d'éléments que demandé
-              // Si on reçoit 20 éléments alors qu'on a demandé 100, l'API limite probablement à 20
-              if (data.length === 20 && perPage > 20) {
-                console.log(`[fetchRegistrations] L'API semble limiter à 20 éléments (reçu ${data.length} alors que ${perPage} demandé)`);
-                perPage = 20;
-              }
-              hasMore = data.length >= perPage;
-              console.log(`[fetchRegistrations] Pas de meta, vérification basée sur longueur: ${data.length} >= ${perPage}? ${hasMore}`);
             }
           } else if (response?.results && Array.isArray(response.results)) {
             data = response.results;
@@ -656,3 +604,4 @@ export class InscriptionsDataService {
 
 // Instance singleton pour être utilisée dans les composants
 export const inscriptionsDataService = new InscriptionsDataService();
+
