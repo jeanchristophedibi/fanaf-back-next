@@ -3,7 +3,7 @@
   "table": "notifications",
   "schema": {
     "id": "string (UUID)",
-    "destinataire": "string (enum: 'admin_agence', 'admin_fanaf', 'agent', 'operateur_badge', 'operateur_caisse')",
+    "destinataire": "string (enum: 'admin_agence', 'admin_fanaf', 'agent', 'operateur_badge', 'cashier')",
     "type": "enum('inscription', 'rendez-vous', 'vol', 'alerte')",
     "priorite": "enum('haute', 'moyenne', 'basse')",
     "titre": "string",
@@ -28,7 +28,7 @@
     },
     {
       "id": "550e8400-e29b-41d4-a716-446655440502",
-      "destinataire": "operateur_caisse",
+      "destinataire": "cashier",
       "type": "alerte",
       "priorite": "haute",
       "titre": "Paiement en attente",

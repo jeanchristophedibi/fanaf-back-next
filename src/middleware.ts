@@ -36,7 +36,7 @@ export function middleware(request: NextRequest) {
     if (d4) return d4;
 
     // Opérateur caisse
-    const d5 = deny(pathname.startsWith('/dashboard/operateur-caisse') && role !== 'operateur_caisse');
+    const d5 = deny(pathname.startsWith('/dashboard/operateur-caisse') && role !== 'cashier');
     if (d5) return d5;
 
     // Opérateur badge

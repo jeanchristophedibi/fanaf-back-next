@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Card } from '../../../components/ui/card';
+import { WidgetCard } from '../../../components/ui/WidgetCard';
 import { 
   CreditCard, 
   TrendingUp, 
@@ -16,103 +17,119 @@ import {
   FileText
 } from 'lucide-react';
 import { AnimatedStat } from '../../../components/AnimatedStat';
-import { useDynamicInscriptions } from '../../../components/hooks/useDynamicInscriptions';
-import { type Participant } from '../../../components/data/mockData';
+import { useFanafApi } from '../../../hooks/useFanafApi';
+import { StatsPaiements } from '../../../components/paiements/liste/StatsPaiements';
 
 export default function OperateurCaisseDashboard() {
-  const { participants } = useDynamicInscriptions();
+  const { api } = useFanafApi();
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // Fonctions utilitaires pour récupérer les informations de paiement
-  const getPaymentInfo = (participant: Participant) => {
-    if (typeof window === 'undefined') return null;
-    const paymentKey = `payment_${participant.id}`;
-    const stored = localStorage.getItem(paymentKey);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-    return null;
-  };
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const [regsRes, payRes] = await Promise.all([
+          api.getRegistrations({ per_page: 200, page: 1 }),
+          api.getPayments({ per_page: 200, page: 1 })
+        ]);
+        if (!mounted) return;
+        const regsAny: any = regsRes as any;
+        const regsArray = Array.isArray(regsAny?.data)
+          ? regsAny.data
+          : Array.isArray(regsAny)
+            ? regsAny
+            : [];
+        setParticipants(regsArray);
 
-  const getGroupPaymentInfo = (participant: Participant) => {
-    if (typeof window === 'undefined') return null;
-    const groupKey = `group_payment_${participant.organisationId}`;
-    const stored = localStorage.getItem(groupKey);
-    if (stored) {
-      const groupData = JSON.parse(stored);
-      if (groupData.participants?.includes(participant.id)) {
-        return groupData;
+        const payAny: any = payRes as any;
+        const payArray = Array.isArray(payAny?.data?.data)
+          ? payAny.data.data
+          : Array.isArray(payAny?.data)
+            ? payAny.data
+            : Array.isArray(payAny)
+              ? payAny
+              : [];
+        setPayments(payArray);
+      } catch (e) {
+        // Fallback silencieux: laisser les tableaux vides
+      } finally {
+        if (mounted) setLoading(false);
       }
+    })();
+    return () => { mounted = false; };
+  }, [api]);
+
+  // Calcul des statistiques (API-first, fallback au minimum)
+  const stats = useMemo(() => {
+    if (!Array.isArray(participants)) {
+      return { finalises: 0, enAttente: 0, payants: 0, exoneres: 0 };
     }
-    return null;
-  };
+    // Essayer de dériver depuis les registrations si champs présents
+    const hasInscriptionStatus = participants.some((p) => p.statutInscription || p.registration_status);
+    const hasCategory = participants.some((p) => p.category || p.statut);
 
-  // Calcul des statistiques
-  const stats = {
-    // Paiements finalisés (individuels et groupés)
-    finalises: participants.filter(p => p.statutInscription === 'finalisée').length,
-    
-    // Paiements en attente
-    enAttente: participants.filter(p => p.statutInscription !== 'finalisée' && p.statut !== 'vip' && p.statut !== 'speaker').length,
-    
-    // Participants payants (non VIP/speakers)
-    payants: participants.filter(p => p.statut === 'membre' || p.statut === 'non-membre').length,
-    
-    // VIP et speakers (exonérés)
-    exoneres: participants.filter(p => p.statut === 'vip' || p.statut === 'speaker').length,
-  };
+    const getCategory = (p: any) => (p.category || p.statut || '').toLowerCase();
+    const getInscrStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
 
-  // Calcul du montant total encaissé
-  const PRIX = {
-    membre: 350000,
-    nonMembre: 400000,
-  };
+    const finalises = hasInscriptionStatus
+      ? participants.filter((p) => getInscrStatus(p) === 'finalisée' || getInscrStatus(p) === 'finalise' || getInscrStatus(p) === 'completed').length
+      : payments.length; // à défaut, approx par nb paiements
 
-  let montantTotal = 0;
-  let paiementsIndividuels = 0;
-  let paiementsGroupes = 0;
-  
-  const modesPaiement = {
-    especes: 0,
-    virement: 0,
-    cheque: 0,
-    mobileMoney: 0,
-  };
+    const enAttente = hasInscriptionStatus
+      ? participants.filter((p) => getInscrStatus(p) !== 'finalisée' && getCategory(p) !== 'vip' && getCategory(p) !== 'speaker').length
+      : Math.max(0, (participants.length || 0) - finalises);
 
-  participants.forEach(participant => {
-    if (participant.statutInscription === 'finalisée' && (participant.statut === 'membre' || participant.statut === 'non-membre')) {
-      const prix = participant.statut === 'membre' ? PRIX.membre : PRIX.nonMembre;
-      montantTotal += prix;
+    const payants = hasCategory
+      ? participants.filter((p) => ['membre', 'member', 'non-membre', 'not_member'].includes(getCategory(p))).length
+      : participants.length;
 
-      // Vérifier si paiement individuel ou groupé
-      const individualPayment = getPaymentInfo(participant);
-      const groupPayment = getGroupPaymentInfo(participant);
+    const exoneres = hasCategory
+      ? participants.filter((p) => ['vip', 'speaker'].includes(getCategory(p))).length
+      : 0;
 
-      if (groupPayment) {
-        paiementsGroupes++;
-        const mode = groupPayment.modePaiement?.toLowerCase() || 'virement';
-        if (mode.includes('espèce')) modesPaiement.especes++;
-        else if (mode.includes('virement')) modesPaiement.virement++;
-        else if (mode.includes('chèque')) modesPaiement.cheque++;
-        else if (mode.includes('mobile') || mode.includes('money')) modesPaiement.mobileMoney++;
-      } else if (individualPayment) {
-        paiementsIndividuels++;
-        const mode = individualPayment.modePaiement?.toLowerCase() || 'virement';
-        if (mode.includes('espèce')) modesPaiement.especes++;
-        else if (mode.includes('virement')) modesPaiement.virement++;
-        else if (mode.includes('chèque')) modesPaiement.cheque++;
-        else if (mode.includes('mobile') || mode.includes('money')) modesPaiement.mobileMoney++;
-      }
+    return { finalises, enAttente, payants, exoneres };
+  }, [participants, payments]);
+
+  // Calcul du montant encaissé via API paiements
+  const { montantTotal, paiementsIndividuels, paiementsGroupes, modesPaiement } = useMemo(() => {
+    if (!Array.isArray(payments) || payments.length === 0) {
+      return {
+        montantTotal: 0,
+        paiementsIndividuels: 0,
+        paiementsGroupes: 0,
+        modesPaiement: { especes: 0, virement: 0, cheque: 0, mobileMoney: 0 },
+      };
     }
-  });
+    let total = 0;
+    let indiv = 0;
+    let group = 0;
+    const modes = { especes: 0, virement: 0, cheque: 0, mobileMoney: 0 } as Record<string, number>;
 
-  // Calcul du montant restant (en attente)
-  let montantEnAttente = 0;
-  participants.forEach(participant => {
-    if (participant.statutInscription !== 'finalisée' && (participant.statut === 'membre' || participant.statut === 'non-membre')) {
-      const prix = participant.statut === 'membre' ? PRIX.membre : PRIX.nonMembre;
-      montantEnAttente += prix;
-    }
-  });
+    payments.forEach((p: any) => {
+      const amount = Number(p.amount || 0);
+      total += amount;
+      // Heuristique: presence de multiple registration_ids => groupé
+      const isGroup = Array.isArray(p.registration_ids) && p.registration_ids.length > 1;
+      if (isGroup) group++; else indiv++;
+      const method = String(p.payment_method || '').toLowerCase();
+      const provider = String(p.payment_provider || '').toLowerCase();
+      if (method.includes('cash') || method.includes('esp')) modes.especes++;
+      else if (method.includes('wire') || method.includes('vir')) modes.virement++;
+      else if (method.includes('cheq') || method.includes('chèque')) modes.cheque++;
+      else if (method.includes('mobile') || provider.includes('orange') || provider.includes('wave')) modes.mobileMoney++;
+    });
+
+    return { montantTotal: total, paiementsIndividuels: indiv, paiementsGroupes: group, modesPaiement: modes };
+  }, [payments]);
+
+  // Montant restant (approx) – si tarifs non dispo via API, approcher avec nb en attente * 350k
+  const montantEnAttente = useMemo(() => {
+    // Si l'API paiements expose un total attendu, l'utiliser (non dispo ici)
+    return stats.enAttente * 350000;
+  }, [stats.enAttente]);
 
   return (
     <div className="p-8 bg-gradient-to-br from-orange-50 to-white min-h-screen">
@@ -122,14 +139,19 @@ export default function OperateurCaisseDashboard() {
         <p className="text-gray-600">Vue d'ensemble des encaissements FANAF 2026</p>
       </div>
 
-      {/* Statistiques principales */}
+      {/* Statistiques principales (widget standard paiements) */}
+      <div className="mb-8">
+        <StatsPaiements />
+      </div>
+
+      {/* Autres widgets complémentaires */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="p-6 bg-gradient-to-br from-green-500 to-green-600 text-white hover:shadow-xl transition-shadow">
+          <WidgetCard variant="green">
             <div className="flex items-start justify-between mb-4">
               <div className="p-3 bg-white/20 rounded-lg">
                 <CheckCircle2 className="w-6 h-6" />
@@ -138,7 +160,7 @@ export default function OperateurCaisseDashboard() {
             </div>
             <AnimatedStat value={stats.finalises} className="text-3xl mb-1" />
             <p className="text-green-100 text-sm">Paiements finalisés</p>
-          </Card>
+          </WidgetCard>
         </motion.div>
 
         <motion.div
@@ -146,7 +168,7 @@ export default function OperateurCaisseDashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="p-6 bg-gradient-to-br from-orange-500 to-orange-600 text-white hover:shadow-xl transition-shadow">
+          <WidgetCard variant="orange">
             <div className="flex items-start justify-between mb-4">
               <div className="p-3 bg-white/20 rounded-lg">
                 <Clock className="w-6 h-6" />
@@ -155,7 +177,7 @@ export default function OperateurCaisseDashboard() {
             </div>
             <AnimatedStat value={stats.enAttente} className="text-3xl mb-1" />
             <p className="text-orange-100 text-sm">Paiements en attente</p>
-          </Card>
+          </WidgetCard>
         </motion.div>
 
         <motion.div
@@ -163,7 +185,7 @@ export default function OperateurCaisseDashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Card className="p-6 bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:shadow-xl transition-shadow">
+          <WidgetCard variant="blue">
             <div className="flex items-start justify-between mb-4">
               <div className="p-3 bg-white/20 rounded-lg">
                 <CreditCard className="w-6 h-6" />
@@ -174,7 +196,7 @@ export default function OperateurCaisseDashboard() {
               {(montantTotal / 1000000).toFixed(1)}M
             </div>
             <p className="text-blue-100 text-sm">FCFA encaissés</p>
-          </Card>
+          </WidgetCard>
         </motion.div>
 
         <motion.div
@@ -182,7 +204,7 @@ export default function OperateurCaisseDashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
-          <Card className="p-6 bg-gradient-to-br from-purple-500 to-purple-600 text-white hover:shadow-xl transition-shadow">
+          <WidgetCard variant="purple">
             <div className="flex items-start justify-between mb-4">
               <div className="p-3 bg-white/20 rounded-lg">
                 <Wallet className="w-6 h-6" />
@@ -193,7 +215,7 @@ export default function OperateurCaisseDashboard() {
               {(montantEnAttente / 1000000).toFixed(1)}M
             </div>
             <p className="text-purple-100 text-sm">FCFA en attente</p>
-          </Card>
+          </WidgetCard>
         </motion.div>
       </div>
 

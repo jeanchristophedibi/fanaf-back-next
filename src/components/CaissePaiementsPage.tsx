@@ -1,24 +1,28 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Input } from './ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { Label } from './ui/label';
-import { Search, CheckCircle2, CreditCard, Clock, User, Building, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CheckCircle2, CreditCard, Clock, User, Building, DollarSign } from 'lucide-react';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
+import { useFanafApi } from '../hooks/useFanafApi';
 import { getOrganisationById, type Participant, type ModePaiement } from './data/mockData';
 import { toast } from 'sonner';
+import { CaisseSearchBar } from './paiements/caisse/CaisseSearchBar';
+import { CaissePagination } from './paiements/caisse/CaissePagination';
+import { FinalizePaiementDialog } from './paiements/caisse/FinalizePaiementDialog';
+import { CaissePendingTable } from './paiements/caisse/CaissePendingTable';
 
 export function CaissePaiementsPage() {
-  const { participants } = useDynamicInscriptions();
+  const { participants: mockParticipants } = useDynamicInscriptions();
+  const { api } = useFanafApi();
+  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
+  const [apiLoading, setApiLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [isPaiementDialogOpen, setIsPaiementDialogOpen] = useState(false);
   const [selectedModePaiement, setSelectedModePaiement] = useState<ModePaiement>('espèce');
+  const [caissierName, setCaissierName] = useState<string>('');
   // Charger les participants finalisés depuis localStorage
   const [finalisedParticipants, setFinalisedParticipants] = useState<Set<string>>(() => {
     const stored = localStorage.getItem('finalisedParticipantsIds');
@@ -26,16 +30,53 @@ export function CaissePaiementsPage() {
   });
   const itemsPerPage = 10;
 
+  // Charger depuis l'API (registrations), fallback vers mocks si vide/erreur
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setApiLoading(true);
+        const regsRes = await api.getRegistrations({ per_page: 200, page: 1 });
+        const regsAny: any = regsRes as any;
+        const regsArray = Array.isArray(regsAny?.data)
+          ? regsAny.data
+          : Array.isArray(regsAny)
+            ? regsAny
+            : [];
+        if (mounted) setApiParticipants(regsArray);
+      } catch (_) {
+        if (mounted) setApiParticipants([]);
+      } finally {
+        if (mounted) setApiLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [api]);
+
+  const participantsSource = apiParticipants.length > 0 ? apiParticipants : mockParticipants;
+
   // Filtrer uniquement les inscriptions en attente (non finalisées) et qui ne sont pas exonérées
   // Exclure aussi les participants qui ont été finalisés localement
   const paiementsEnAttente = useMemo(() => {
-    return participants.filter(p => 
-      p.statutInscription === 'non-finalisée' && 
-      p.statut !== 'vip' && 
-      p.statut !== 'speaker' &&
-      !finalisedParticipants.has(p.id)
-    );
-  }, [participants, finalisedParticipants]);
+    const getStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
+    const getCategory = (p: any) => (p.statut || p.category || '').toLowerCase();
+    const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
+
+    return (participantsSource || []).filter((p: any) => 
+      (getStatus(p) === 'non-finalisée' || getStatus(p) === 'pending' || getStatus(p) === 'en_attente' || !getStatus(p)) &&
+      getCategory(p) !== 'vip' &&
+      getCategory(p) !== 'speaker' &&
+      !finalisedParticipants.has(getId(p))
+    ).map((p: any) => {
+      // Uniformiser quelques champs utilisés à l'affichage
+      return {
+        ...p,
+        id: getId(p),
+        statut: getCategory(p) || p.statut,
+        statutInscription: getStatus(p) || p.statutInscription,
+      };
+    });
+  }, [participantsSource, finalisedParticipants]);
 
   // Filtrer par recherche
   const filteredPaiements = useMemo(() => {
@@ -76,6 +117,9 @@ export function CaissePaiementsPage() {
         const newFinalisedIds = new Set<string>(JSON.parse(e.newValue));
         setFinalisedParticipants(newFinalisedIds);
       }
+      if (e.key === 'caissierName' && e.newValue !== null) {
+        setCaissierName(e.newValue);
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -94,6 +138,12 @@ export function CaissePaiementsPage() {
 
     window.addEventListener('paymentFinalized', handlePaymentFinalized);
     return () => window.removeEventListener('paymentFinalized', handlePaymentFinalized);
+  }, []);
+
+  // Charger le nom du caissier depuis localStorage
+  useEffect(() => {
+    const storedName = localStorage.getItem('caissierName');
+    if (storedName) setCaissierName(storedName);
   }, []);
 
   // Calculer le montant selon le statut
@@ -129,7 +179,7 @@ export function CaissePaiementsPage() {
     finalisedPayments[selectedParticipant.id] = {
       modePaiement: selectedModePaiement,
       datePaiement: new Date().toISOString(),
-      caissier: 'Agent FANAF', // Nom du caissier - peut être personnalisé selon l'utilisateur connecté
+      caissier: caissierName || 'Caissier',
     };
     localStorage.setItem('finalisedPayments', JSON.stringify(finalisedPayments));
 
@@ -235,245 +285,38 @@ export function CaissePaiementsPage() {
       </div>
 
       {/* Barre de recherche */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Rechercher par nom, email, référence, organisation..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <div className="mt-4 flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              {filteredPaiements.length} paiement(s) en attente
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <CaisseSearchBar
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        resultsCount={filteredPaiements.length}
+      />
 
       {/* Tableau des paiements en attente */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Référence</TableHead>
-                  <TableHead>Participant</TableHead>
-                  <TableHead>Organisation</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Montant</TableHead>
-                  <TableHead>Date inscription</TableHead>
-                  <TableHead className="text-center">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPaiements.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-gray-500 py-8">
-                      <div className="flex flex-col items-center gap-2">
-                        <CheckCircle2 className="w-12 h-12 text-green-500" />
-                        <p className="text-lg font-medium">Aucun paiement en attente</p>
-                        <p className="text-sm">Tous les paiements ont été finalisés !</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedPaiements.map((participant) => {
-                    const organisation = getOrganisationById(participant.organisationId);
-                    const montant = getMontant(participant);
-                    const joursDAttente = Math.floor(
-                      (Date.now() - new Date(participant.dateInscription).getTime()) / (1000 * 60 * 60 * 24)
-                    );
-
-                    return (
-                      <TableRow key={participant.id} className="hover:bg-orange-50 transition-colors">
-                        <TableCell className="font-mono text-sm text-gray-900">
-                          {participant.reference}
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="text-gray-900 font-medium">
-                              {participant.prenom} {participant.nom}
-                            </p>
-                            <p className="text-xs text-gray-500">{participant.email}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-gray-600">
-                          {organisation?.nom || 'N/A'}
-                        </TableCell>
-                        <TableCell className="text-gray-600">
-                          {participant.telephone}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={
-                            participant.statut === 'membre' 
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }>
-                            {participant.statut}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <span className="text-lg font-semibold text-green-700">
-                              {montant}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="text-gray-600 text-sm">
-                              {new Date(participant.dateInscription).toLocaleDateString('fr-FR')}
-                            </p>
-                            {joursDAttente > 0 && (
-                              <p className="text-xs text-orange-600 flex items-center gap-1 mt-1">
-                                <Clock className="w-3 h-3" />
-                                {joursDAttente} jour{joursDAttente > 1 ? 's' : ''}
-                              </p>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <Badge className="bg-orange-100 text-orange-700">
-                              En attente de paiement
-                            </Badge>
-                            <Button
-                              size="sm"
-                              onClick={() => handleFinaliserPaiement(participant)}
-                              className="bg-green-600 hover:bg-green-700 text-white gap-2"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                              Finaliser le paiement
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <CaissePendingTable
+        items={paginatedPaiements as any}
+        onFinalize={handleFinaliserPaiement}
+        getMontant={getMontant}
+      />
 
       {/* Pagination */}
-      {filteredPaiements.length > 0 && totalPages > 1 && (
-        <Card className="mt-4">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                Page {currentPage} sur {totalPages} ({filteredPaiements.length} résultat{filteredPaiements.length > 1 ? 's' : ''})
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="gap-1"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Précédent
-                </Button>
-                
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
-                    
-                    return (
-                      <Button
-                        key={i}
-                        variant={currentPage === pageNum ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={currentPage === pageNum ? "bg-orange-600 hover:bg-orange-700" : ""}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="gap-1"
-                >
-                  Suivant
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <CaissePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalResults={filteredPaiements.length}
+        setCurrentPage={setCurrentPage}
+      />
 
       {/* Dialog de finalisation de paiement */}
-      <Dialog open={isPaiementDialogOpen} onOpenChange={setIsPaiementDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Finaliser le paiement</DialogTitle>
-            <DialogDescription>
-              {selectedParticipant && (
-                <>
-                  Participant : {selectedParticipant.prenom} {selectedParticipant.nom}
-                  <br />
-                  Montant : {getMontant(selectedParticipant)}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            <Label className="text-sm mb-3 block">Sélectionnez le mode de paiement :</Label>
-            <RadioGroup value={selectedModePaiement} onValueChange={(value) => setSelectedModePaiement(value as ModePaiement)}>
-              <div className="space-y-3">
-                {modesPaiementDisponibles.map((mode) => (
-                  <div key={mode} className="flex items-center space-x-2">
-                    <RadioGroupItem value={mode} id={mode} />
-                    <Label htmlFor={mode} className="cursor-pointer flex items-center gap-2">
-                      {mode === 'espèce' && <DollarSign className="w-4 h-4 text-green-600" />}
-                      {mode === 'carte bancaire' && <CreditCard className="w-4 h-4 text-blue-600" />}
-                      {mode === 'orange money' && <span className="w-4 h-4 rounded-full bg-orange-500" />}
-                      {mode === 'wave' && <span className="w-4 h-4 rounded-full bg-blue-500" />}
-                      <span className="capitalize">{mode}</span>
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </RadioGroup>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPaiementDialogOpen(false)}>
-              Annuler
-            </Button>
-            <Button onClick={handleValiderPaiement} className="bg-green-600 hover:bg-green-700">
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Valider le paiement
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FinalizePaiementDialog
+        open={isPaiementDialogOpen}
+        onOpenChange={setIsPaiementDialogOpen}
+        participant={selectedParticipant as any}
+        getMontant={getMontant as any}
+        modesDisponibles={modesPaiementDisponibles}
+        selectedMode={selectedModePaiement}
+        setSelectedMode={setSelectedModePaiement}
+        onConfirm={handleValiderPaiement}
+      />
     </div>
   );
 }

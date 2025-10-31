@@ -21,12 +21,16 @@ import {
 } from './ui/select';
 import { Search, FileText, Download, ChevronLeft, ChevronRight, MoreVertical, Receipt, BadgeCheck, Mail, Filter, X } from 'lucide-react';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
+import { useFanafApi } from '../hooks/useFanafApi';
 import { getOrganisationById, type Participant, type StatutParticipant, type ModePaiement } from './data/mockData';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 export function TousPaiementsPage() {
-  const { participants } = useDynamicInscriptions();
+  const { participants: mockParticipants } = useDynamicInscriptions();
+  const { api } = useFanafApi();
+  const [apiPayments, setApiPayments] = useState<any[]>([]);
+  const [apiLoading, setApiLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -52,12 +56,55 @@ export function TousPaiementsPage() {
     return stored ? JSON.parse(stored) : {};
   });
 
-  // Filtrer tous les participants finalisés (ceux qui ont payé)
+  // Charger paiements depuis l'API (fallback vers participants mocks si vide)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setApiLoading(true);
+        const payRes = await api.getPayments({ per_page: 200, page: 1 });
+        const payAny: any = payRes as any;
+        const payArray = Array.isArray(payAny?.data?.data)
+          ? payAny.data.data
+          : Array.isArray(payAny?.data)
+            ? payAny.data
+            : Array.isArray(payAny)
+              ? payAny
+              : [];
+        if (mounted) setApiPayments(payArray);
+      } catch (_) {
+        if (mounted) setApiPayments([]);
+      } finally {
+        if (mounted) setApiLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [api]);
+
   const participantsPayes = useMemo(() => {
-    return participants.filter(p => 
+    if (apiPayments.length > 0) {
+      // Adapter la structure pour l'affichage commun
+      return apiPayments.map((p: any) => {
+        return {
+          id: p.id || p.payment_id || p.reference,
+          reference: p.reference || p.payment_reference || p.id,
+          prenom: p.user?.first_name || p.prenom || '',
+          nom: p.user?.last_name || p.nom || '',
+          email: p.user?.email || p.email || '',
+          telephone: p.user?.phone || p.user?.telephone || p.phone || p.telephone || '',
+          organisationId: p.company_id || p.organisationId,
+          statut: (p.category || p.statut || '').toLowerCase(),
+          dateInscription: p.paid_at || p.created_at || new Date().toISOString(),
+          modePaiement: p.payment_method || p.modePaiement,
+          caissier: p.cashier_name || p.caissier,
+        };
+      });
+    }
+    // Fallback: participants finalisés (mocks)
+    return mockParticipants.filter(p => 
       p.statutInscription === 'finalisée' || finalisedParticipants.has(p.id)
     );
-  }, [participants, finalisedParticipants]);
+  }, [apiPayments, mockParticipants, finalisedParticipants]);
 
   // Obtenir les listes uniques pour les filtres
   const uniqueOrganisations = useMemo(() => {
@@ -223,53 +270,62 @@ export function TousPaiementsPage() {
   }, []);
 
   // Obtenir la date de paiement
-  const getDatePaiement = (participant: Participant) => {
-    const paymentInfo = finalisedPayments[participant.id];
+  const getDatePaiement = (participant: any) => {
+    const participantId = participant.id || participant._id || participant.registration_id || participant.reference;
+    const paymentInfo = finalisedPayments[participantId];
     if (paymentInfo?.datePaiement) {
       return new Date(paymentInfo.datePaiement).toLocaleDateString('fr-FR');
     }
     // Si pas d'info dans localStorage, utiliser la date d'inscription comme fallback
-    return new Date(participant.dateInscription).toLocaleDateString('fr-FR');
+    const dateInscription = participant.dateInscription || participant.date_inscription || participant.created_at || new Date().toISOString();
+    return new Date(dateInscription).toLocaleDateString('fr-FR');
   };
 
   // Obtenir le mode de paiement
-  const getModePaiement = (participant: Participant) => {
-    const paymentInfo = finalisedPayments[participant.id];
-    return paymentInfo?.modePaiement || participant.modePaiement || 'Non spécifié';
+  const getModePaiement = (participant: any) => {
+    const participantId = participant.id || participant._id || participant.registration_id || participant.reference;
+    const paymentInfo = finalisedPayments[participantId];
+    return paymentInfo?.modePaiement || participant.modePaiement || participant.payment_method || 'Non spécifié';
   };
 
   // Obtenir le nom du caissier
-  const getNomCaissier = (participant: Participant) => {
-    const paymentInfo = finalisedPayments[participant.id];
-    return paymentInfo?.caissier || participant.caissier || 'Non spécifié';
+  const getNomCaissier = (participant: any) => {
+    const participantId = participant.id || participant._id || participant.registration_id || participant.reference;
+    const paymentInfo = finalisedPayments[participantId];
+    return paymentInfo?.caissier || participant.caissier || participant.cashier_name || 'Non spécifié';
   };
 
   // Calculer le montant selon le statut
-  const getMontant = (participant: Participant) => {
-    if (participant.statut === 'vip' || participant.statut === 'speaker') return '0 FCFA (Exonéré)';
-    if (participant.statut === 'membre') return '350 000 FCFA';
-    if (participant.statut === 'non-membre') return '400 000 FCFA';
+  const getMontant = (participant: any) => {
+    const statut = (participant.statut || participant.category || '').toLowerCase();
+    if (statut === 'vip' || statut === 'speaker') return '0 FCFA (Exonéré)';
+    if (statut === 'membre' || statut === 'member') return '350 000 FCFA';
+    if (statut === 'non-membre' || statut === 'not_member') return '400 000 FCFA';
     return '0 FCFA';
   };
 
   // Télécharger le badge
-  const handleDownloadBadge = (participant: Participant) => {
+  const handleDownloadBadge = (participant: any) => {
     toast.info('Téléchargement du badge...');
     // Utiliser le système de génération existant via DocumentsParticipantsPage
     // Pour l'instant, afficher un message
-    toast.success(`Badge de ${participant.prenom} ${participant.nom} prêt à télécharger`);
+    const prenom = participant.prenom || participant.first_name || '';
+    const nom = participant.nom || participant.last_name || '';
+    toast.success(`Badge de ${prenom} ${nom} prêt à télécharger`);
   };
 
   // Télécharger le reçu
-  const handleDownloadReceipt = (participant: Participant) => {
+  const handleDownloadReceipt = (participant: any) => {
     toast.info('Téléchargement du reçu...');
     // Utiliser le système de génération existant via DocumentsParticipantsPage
     // Pour l'instant, afficher un message
-    toast.success(`Reçu de ${participant.prenom} ${participant.nom} prêt à télécharger`);
+    const prenom = participant.prenom || participant.first_name || '';
+    const nom = participant.nom || participant.last_name || '';
+    toast.success(`Reçu de ${prenom} ${nom} prêt à télécharger`);
   };
 
   // Télécharger tous les documents
-  const handleDownloadAllDocuments = (participant: Participant) => {
+  const handleDownloadAllDocuments = (participant: any) => {
     toast.info('Téléchargement des documents en cours...');
     handleDownloadBadge(participant);
     handleDownloadReceipt(participant);

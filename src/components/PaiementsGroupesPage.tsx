@@ -22,13 +22,17 @@ import {
 } from './ui/dialog';
 import { Search, Users, CheckCircle2, Filter, X, AlertCircle, FileText } from 'lucide-react';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
+import { useFanafApi } from '../hooks/useFanafApi';
 import { getOrganisationById, type Participant, type ModePaiement } from './data/mockData';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { GroupDocumentsGenerator } from './GroupDocumentsGenerator';
 
 export function PaiementsGroupesPage() {
-  const { participants } = useDynamicInscriptions();
+  const { participants: mockParticipants } = useDynamicInscriptions();
+  const { api } = useFanafApi();
+  const [apiParticipants, setApiParticipants] = useState<any[]>([]);
+  const [apiLoading, setApiLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showDocumentsDialog, setShowDocumentsDialog] = useState(false);
   const [finalisedParticipants, setFinalisedParticipants] = useState<Participant[]>([]);
@@ -50,13 +54,41 @@ export function PaiementsGroupesPage() {
     }
   }, []);
 
+  // Charger depuis l'API (registrations), fallback vers mocks si vide
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setApiLoading(true);
+        const regsRes = await api.getRegistrations({ per_page: 200, page: 1 });
+        const regsAny: any = regsRes as any;
+        const regsArray = Array.isArray(regsAny?.data)
+          ? regsAny.data
+          : Array.isArray(regsAny)
+            ? regsAny
+            : [];
+        if (mounted) setApiParticipants(regsArray);
+      } catch (_) {
+        if (mounted) setApiParticipants([]);
+      } finally {
+        if (mounted) setApiLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [api]);
+
+  const baseParticipants = apiParticipants.length > 0 ? apiParticipants : mockParticipants;
+
   // Filtrer les participants non finalisés (membres et non-membres uniquement)
   const participantsEnAttente = useMemo(() => {
-    return participants.filter(p =>
-      p.statutInscription === 'non-finalisée' &&
-      (p.statut === 'membre' || p.statut === 'non-membre')
-    );
-  }, [participants]);
+    const getStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
+    const getCategory = (p: any) => (p.statut || p.category || '').toLowerCase();
+    const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
+    return (baseParticipants || []).filter(p =>
+      (getStatus(p) === 'non-finalisée' || getStatus(p) === 'pending' || !getStatus(p)) &&
+      (getCategory(p) === 'membre' || getCategory(p) === 'member' || getCategory(p) === 'non-membre' || getCategory(p) === 'not_member')
+    ).map((p: any) => ({ ...p, id: getId(p), statut: getCategory(p) || p.statut }));
+  }, [baseParticipants]);
 
   // Obtenir les listes pour les filtres
   const uniqueOrganisations = useMemo(() => {
@@ -183,11 +215,16 @@ export function PaiementsGroupesPage() {
   const calculateTotal = () => {
     let total = 0;
     selectedParticipants.forEach(id => {
-      const participant = participants.find(p => p.id === id);
+      const participant = baseParticipants.find((p: any) => {
+        const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
+        return getId(p) === id;
+      });
       if (participant) {
-        if (participant.statut === 'membre') {
+        const getCategory = (p: any) => (p.statut || p.category || '').toLowerCase();
+        const category = getCategory(participant);
+        if (category === 'membre' || category === 'member') {
           total += 350000;
-        } else if (participant.statut === 'non-membre') {
+        } else if (category === 'non-membre' || category === 'not_member') {
           total += 400000;
         }
       }
@@ -237,8 +274,11 @@ export function PaiementsGroupesPage() {
     window.dispatchEvent(new Event('storage'));
 
     // Récupérer les participants finalisés pour la génération des documents
-    const finalisedPartsList = participants.filter(p => selectedParticipants.has(p.id));
-    setFinalisedParticipants(finalisedPartsList);
+    const finalisedPartsList = baseParticipants.filter((p: any) => {
+      const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
+      return selectedParticipants.has(getId(p));
+    });
+    setFinalisedParticipants(finalisedPartsList as any);
 
     toast.success(`${selectedParticipants.size} paiement(s) finalisé(s) avec succès`);
     setSelectedParticipants(new Set());
@@ -423,8 +463,11 @@ export function PaiementsGroupesPage() {
           <Button
             variant="outline"
             onClick={() => {
-              const selectedPartsList = participants.filter(p => selectedParticipants.has(p.id));
-              setFinalisedParticipants(selectedPartsList);
+              const selectedPartsList = baseParticipants.filter((p: any) => {
+                const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
+                return selectedParticipants.has(getId(p));
+              });
+              setFinalisedParticipants(selectedPartsList as any);
               setShowDocumentsDialog(true);
             }}
           >
