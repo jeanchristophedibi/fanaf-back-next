@@ -3,7 +3,7 @@
 import React from 'react';
 import { Card } from '../../ui/card';
 import { Button } from '../../ui/button';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Building2, User, Users, CreditCard, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface StepRecapProps {
