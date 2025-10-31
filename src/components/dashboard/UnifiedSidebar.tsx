@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake, UserPlus } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
@@ -41,15 +42,21 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
   const [tresorerieOpen, setTresorerieOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Synchroniser l'état après le montage pour éviter les erreurs d'hydratation
-  useEffect(() => {
-    setIsMounted(true);
-    setInscriptionsOpen(true);
-    setOrganisationsOpen(true);
-    setNetworkingOpen(true);
-    setPaiementsOpen(true);
-    setTresorerieOpen(true);
-  }, []);
+  // Query pour synchroniser l'état après le montage pour éviter les erreurs d'hydratation
+  useQuery({
+    queryKey: ['unifiedSidebar', 'mount', isMounted],
+    queryFn: () => {
+      setIsMounted(true);
+      setInscriptionsOpen(true);
+      setOrganisationsOpen(true);
+      setNetworkingOpen(true);
+      setPaiementsOpen(true);
+      setTresorerieOpen(true);
+      return true;
+    },
+    enabled: !isMounted,
+    staleTime: 0,
+  });
 
   // Menu configuration based on user profile
   const getMenuConfig = () => {

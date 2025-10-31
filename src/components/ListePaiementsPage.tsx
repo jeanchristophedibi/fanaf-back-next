@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
@@ -29,6 +30,7 @@ import { getOrganisationById } from './data/helpers';
 
 export function ListePaiementsPage() {
   const { participants } = useDynamicInscriptions();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<'all' | 'payé' | 'non-payé'>('all');
   const [filterMode, setFilterMode] = useState<'all' | ModePaiement>('all');
@@ -37,113 +39,150 @@ export function ListePaiementsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Extraire les paiements effectués (participants avec statutInscription finalisée)
-  const paiements = useMemo(() => {
-    return participants
-      .filter(p => p.statutInscription === 'finalisée')
-      .map(p => {
-        const organisation = getOrganisationById(p.organisationId);
-        
-        // Calcul du tarif selon le statut
-        let tarif = 0;
-        if (p.statut === 'non-membre') {
-          tarif = 400000;
-        } else if (p.statut === 'membre') {
-          tarif = 350000;
-        }
-        // VIP et speakers sont exonérés (0 FCFA)
+  // Query pour extraire les paiements effectués (participants avec statutInscription finalisée)
+  const paiementsQuery = useQuery({
+    queryKey: ['listePaiementsPage', 'paiements', participants],
+    queryFn: () => {
+      return participants
+        .filter(p => p.statutInscription === 'finalisée')
+        .map(p => {
+          const organisation = getOrganisationById(p.organisationId);
+          
+          // Calcul du tarif selon le statut
+          let tarif = 0;
+          if (p.statut === 'non-membre') {
+            tarif = 400000;
+          } else if (p.statut === 'membre') {
+            tarif = 350000;
+          }
+          // VIP et speakers sont exonérés (0 FCFA)
 
-        return {
-          id: p.id,
-          reference: p.reference,
-          participantNom: `${p.prenom} ${p.nom}`,
-          participantEmail: p.email,
-          organisationNom: organisation?.nom || 'N/A',
-          statut: p.statut,
-          montant: tarif,
-          modePaiement: p.modePaiement || 'espèce',
-          canalEncaissement: p.canalEncaissement || 'externe',
-          dateInscription: p.dateInscription,
-          datePaiement: p.datePaiement || p.dateInscription, // Utilise dateInscription si datePaiement n'existe pas
-          administrateurEncaissement: p.caissier || 'N/A',
-          pays: p.pays,
-        };
-      });
-  }, [participants]);
+          return {
+            id: p.id,
+            reference: p.reference,
+            participantNom: `${p.prenom} ${p.nom}`,
+            participantEmail: p.email,
+            organisationNom: organisation?.nom || 'N/A',
+            statut: p.statut,
+            montant: tarif,
+            modePaiement: p.modePaiement || 'espèce',
+            canalEncaissement: p.canalEncaissement || 'externe',
+            dateInscription: p.dateInscription,
+            datePaiement: p.datePaiement || p.dateInscription, // Utilise dateInscription si datePaiement n'existe pas
+            administrateurEncaissement: p.caissier || 'N/A',
+            pays: p.pays,
+          };
+        });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Filtrer les paiements
-  const filteredPaiements = useMemo(() => {
-    let filtered = [...paiements];
+  const paiements = paiementsQuery.data ?? [];
 
-    // Recherche
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        p =>
-          p.reference.toLowerCase().includes(term) ||
-          p.participantNom.toLowerCase().includes(term) ||
-          p.participantEmail.toLowerCase().includes(term) ||
-          p.organisationNom.toLowerCase().includes(term)
-      );
-    }
+  // Query pour filtrer les paiements
+  const filteredPaiementsQuery = useQuery({
+    queryKey: ['listePaiementsPage', 'filtered', paiements, searchTerm, filterStatut, filterMode, filterCanal],
+    queryFn: () => {
+      let filtered = [...paiements];
 
-    // Filtre par statut de paiement
-    if (filterStatut !== 'all') {
-      if (filterStatut === 'payé') {
-        filtered = filtered.filter(p => p.montant === 0 || p.modePaiement);
-      } else {
-        filtered = filtered.filter(p => p.montant > 0 && !p.modePaiement);
+      // Recherche
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter(
+          p =>
+            p.reference.toLowerCase().includes(term) ||
+            p.participantNom.toLowerCase().includes(term) ||
+            p.participantEmail.toLowerCase().includes(term) ||
+            p.organisationNom.toLowerCase().includes(term)
+        );
       }
-    }
 
-    // Filtre par mode de paiement
-    if (filterMode !== 'all') {
-      filtered = filtered.filter(p => p.modePaiement === filterMode);
-    }
+      // Filtre par statut de paiement
+      if (filterStatut !== 'all') {
+        if (filterStatut === 'payé') {
+          filtered = filtered.filter(p => p.montant === 0 || p.modePaiement);
+        } else {
+          filtered = filtered.filter(p => p.montant > 0 && !p.modePaiement);
+        }
+      }
 
-    // Filtre par canal
-    if (filterCanal !== 'all') {
-      filtered = filtered.filter(p => p.canalEncaissement === filterCanal);
-    }
+      // Filtre par mode de paiement
+      if (filterMode !== 'all') {
+        filtered = filtered.filter(p => p.modePaiement === filterMode);
+      }
 
-    return filtered;
-  }, [paiements, searchTerm, filterStatut, filterMode, filterCanal]);
+      // Filtre par canal
+      if (filterCanal !== 'all') {
+        filtered = filtered.filter(p => p.canalEncaissement === filterCanal);
+      }
+
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredPaiements = filteredPaiementsQuery.data ?? [];
 
   // Pagination
   const totalPages = Math.ceil(filteredPaiements.length / itemsPerPage);
-  const paginatedPaiements = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredPaiements.slice(startIndex, endIndex);
-  }, [filteredPaiements, currentPage]);
 
-  // Réinitialiser la page quand les filtres changent
-  useMemo(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterStatut, filterMode, filterCanal]);
+  // Query pour paginer
+  const paginatedPaiementsQuery = useQuery({
+    queryKey: ['listePaiementsPage', 'paginated', filteredPaiements, currentPage, itemsPerPage],
+    queryFn: () => {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return filteredPaiements.slice(startIndex, endIndex);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Statistiques
-  const stats = useMemo(() => {
-    const totalPaiements = paiements.length;
-    const totalMontant = paiements.reduce((sum, p) => sum + p.montant, 0);
-    const paiementsExterne = paiements.filter(p => p.canalEncaissement === 'externe').length;
-    const paiementsAsapay = paiements.filter(p => p.canalEncaissement === 'asapay').length;
-    const montantExterne = paiements
-      .filter(p => p.canalEncaissement === 'externe')
-      .reduce((sum, p) => sum + p.montant, 0);
-    const montantAsapay = paiements
-      .filter(p => p.canalEncaissement === 'asapay')
-      .reduce((sum, p) => sum + p.montant, 0);
+  const paginatedPaiements = paginatedPaiementsQuery.data ?? [];
 
-    return {
-      totalPaiements,
-      totalMontant,
-      paiementsExterne,
-      paiementsAsapay,
-      montantExterne,
-      montantAsapay,
-    };
-  }, [paiements]);
+  // Query pour réinitialiser la page quand les filtres changent
+  useQuery({
+    queryKey: ['listePaiementsPage', 'resetPage', searchTerm, filterStatut, filterMode, filterCanal],
+    queryFn: () => {
+      queryClient.setQueryData(['listePaiementsPage', 'currentPage'], 1);
+      setCurrentPage(1);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Query pour les statistiques
+  const statsQuery = useQuery({
+    queryKey: ['listePaiementsPage', 'stats', paiements],
+    queryFn: () => {
+      const totalPaiements = paiements.length;
+      const totalMontant = paiements.reduce((sum, p) => sum + p.montant, 0);
+      const paiementsExterne = paiements.filter(p => p.canalEncaissement === 'externe').length;
+      const paiementsAsapay = paiements.filter(p => p.canalEncaissement === 'asapay').length;
+      const montantExterne = paiements
+        .filter(p => p.canalEncaissement === 'externe')
+        .reduce((sum, p) => sum + p.montant, 0);
+      const montantAsapay = paiements
+        .filter(p => p.canalEncaissement === 'asapay')
+        .reduce((sum, p) => sum + p.montant, 0);
+
+      return {
+        totalPaiements,
+        totalMontant,
+        paiementsExterne,
+        paiementsAsapay,
+        montantExterne,
+        montantAsapay,
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { totalPaiements: 0, totalMontant: 0, paiementsExterne: 0, paiementsAsapay: 0, montantExterne: 0, montantAsapay: 0 };
 
   const activeFiltersCount =
     (filterStatut !== 'all' ? 1 : 0) +

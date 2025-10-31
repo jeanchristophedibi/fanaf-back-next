@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { Card } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
@@ -130,7 +131,7 @@ const initialPaiementsData: PaiementEnAttente[] = [
 ];
 
 export function AdminAsaciPaiementsEnAttentePage() {
-  const [paiements, setPaiements] = useState<PaiementEnAttente[]>([]);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterModePaiement, setFilterModePaiement] = useState<'all' | 'Cash' | 'Virement bancaire' | 'Chèque'>('all');
   const [filterStatut, setFilterStatut] = useState<'all' | 'membre' | 'non-membre'>('all');
@@ -139,14 +140,17 @@ export function AdminAsaciPaiementsEnAttentePage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  // Charger les paiements depuis localStorage ou utiliser les données initiales
-  useEffect(() => {
-    const stored = localStorage.getItem('asaci_paiements_attente');
-    if (stored) {
-      setPaiements(JSON.parse(stored));
-    } else {
+  // Query pour charger les paiements depuis localStorage ou utiliser les données initiales
+  const paiementsQuery = useQuery({
+    queryKey: ['adminAsaciPaiementsEnAttente', 'paiements'],
+    queryFn: () => {
+      if (typeof window === 'undefined') return initialPaiementsData;
+      const stored = localStorage.getItem('asaci_paiements_attente');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed as PaiementEnAttente[];
+      }
       // Initialiser les paiements en attente
-      setPaiements(initialPaiementsData);
       localStorage.setItem('asaci_paiements_attente', JSON.stringify(initialPaiementsData));
 
       // S'assurer que les participants correspondants existent dans fanaf_participants
@@ -178,43 +182,48 @@ export function AdminAsaciPaiementsEnAttentePage() {
           window.dispatchEvent(new Event('paymentFinalized')); // Rafraîchir les données
         }
       }
-    }
-  }, []);
+      return initialPaiementsData;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Sauvegarder les paiements dans localStorage à chaque modification
-  useEffect(() => {
-    if (paiements.length > 0) {
-      localStorage.setItem('asaci_paiements_attente', JSON.stringify(paiements));
-    }
-  }, [paiements]);
+  const paiements = paiementsQuery.data ?? [];
 
-  // Filtrer les paiements en attente
-  const paiementsEnAttente = useMemo(() => {
-    let filtered = paiements.filter(p => p.statutPaiement === 'En attente');
+  // Query pour filtrer les paiements en attente
+  const paiementsEnAttenteQuery = useQuery({
+    queryKey: ['adminAsaciPaiementsEnAttente', 'filtered', paiements, searchTerm, filterModePaiement, filterStatut],
+    queryFn: () => {
+      let filtered = paiements.filter(p => p.statutPaiement === 'En attente');
 
-    // Filtre par recherche
-    if (searchTerm) {
-      filtered = filtered.filter(p => 
-        p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.organisation.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
+      // Filtre par recherche
+      if (searchTerm) {
+        filtered = filtered.filter(p => 
+          p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.organisation.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
 
-    // Filtre par mode de paiement
-    if (filterModePaiement !== 'all') {
-      filtered = filtered.filter(p => p.modePaiementDeclare === filterModePaiement);
-    }
+      // Filtre par mode de paiement
+      if (filterModePaiement !== 'all') {
+        filtered = filtered.filter(p => p.modePaiementDeclare === filterModePaiement);
+      }
 
-    // Filtre par statut participant
-    if (filterStatut !== 'all') {
-      filtered = filtered.filter(p => p.statut === filterStatut);
-    }
+      // Filtre par statut participant
+      if (filterStatut !== 'all') {
+        filtered = filtered.filter(p => p.statut === filterStatut);
+      }
 
-    return filtered;
-  }, [paiements, searchTerm, filterModePaiement, filterStatut]);
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const paiementsEnAttente = paiementsEnAttenteQuery.data ?? [];
 
   const handleConfirmPayment = (participant: PaiementEnAttente) => {
     setSelectedParticipant(participant);
@@ -273,7 +282,11 @@ export function AdminAsaciPaiementsEnAttentePage() {
         : p
     );
 
-    setPaiements(updatedPaiements);
+    // Sauvegarder dans localStorage
+    localStorage.setItem('asaci_paiements_attente', JSON.stringify(updatedPaiements));
+    
+    // Mettre à jour le cache React Query
+    queryClient.setQueryData(['adminAsaciPaiementsEnAttente', 'paiements'], updatedPaiements);
 
     // Mettre à jour également les participants dans le localStorage principal
     const participantsStorage = localStorage.getItem('fanaf_participants');
@@ -338,28 +351,38 @@ export function AdminAsaciPaiementsEnAttentePage() {
     toast.success('Export CSV téléchargé avec succès');
   };
 
-  const statsParMode = useMemo(() => {
-    const stats = {
-      cash: 0,
-      virement: 0,
-      cheque: 0,
-      total: paiementsEnAttente.length
-    };
+  // Query pour les statistiques par mode
+  const statsParModeQuery = useQuery({
+    queryKey: ['adminAsaciPaiementsEnAttente', 'statsParMode', paiementsEnAttente],
+    queryFn: () => {
+      const stats = {
+        cash: 0,
+        virement: 0,
+        cheque: 0,
+        total: paiementsEnAttente.length
+      };
 
-    paiementsEnAttente.forEach(p => {
-      if (p.modePaiementDeclare === 'Cash') stats.cash++;
-      if (p.modePaiementDeclare === 'Virement bancaire') stats.virement++;
-      if (p.modePaiementDeclare === 'Chèque') stats.cheque++;
-    });
+      paiementsEnAttente.forEach(p => {
+        if (p.modePaiementDeclare === 'Cash') stats.cash++;
+        if (p.modePaiementDeclare === 'Virement bancaire') stats.virement++;
+        if (p.modePaiementDeclare === 'Chèque') stats.cheque++;
+      });
 
-    return stats;
-  }, [paiementsEnAttente]);
+      return stats;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const statsParMode = statsParModeQuery.data ?? { cash: 0, virement: 0, cheque: 0, total: 0 };
 
   const hasActiveFilters = filterModePaiement !== 'all' || filterStatut !== 'all' || searchTerm !== '';
 
   const resetToInitialData = () => {
-    setPaiements(initialPaiementsData);
     localStorage.setItem('asaci_paiements_attente', JSON.stringify(initialPaiementsData));
+    // Mettre à jour le cache React Query
+    queryClient.setQueryData(['adminAsaciPaiementsEnAttente', 'paiements'], initialPaiementsData);
+    queryClient.invalidateQueries({ queryKey: ['adminAsaciPaiementsEnAttente'] });
     toast.success('Données réinitialisées', {
       description: '6 paiements en attente restaurés'
     });

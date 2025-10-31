@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -8,11 +9,20 @@ import { ShieldAlert } from 'lucide-react';
 import { fanafApi } from '../../services/fanafApi';
 
 export default function NoAccessPage() {
-  useEffect(() => {
-    try {
-      fanafApi.logout();
-    } catch (_) {}
-  }, []);
+  // Query pour déconnecter l'utilisateur au chargement de la page
+  useQuery({
+    queryKey: ['noAccessPage', 'logout'],
+    queryFn: () => {
+      try {
+        fanafApi.logout();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    },
+    enabled: true,
+    staleTime: 0,
+  });
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-6">
       <Card className="max-w-lg w-full p-8 text-center">

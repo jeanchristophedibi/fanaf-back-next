@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 import { Card, CardContent } from '../../ui/card';
@@ -37,14 +38,25 @@ export function AgentInscriptionsTabs() {
   const [selectedTab, setSelectedTab] = useState<'en-cours' | 'finalisees'>('en-cours');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const inscriptionsEnCours = useMemo(
-    () => participants.filter((p) => p.statutInscription !== 'finalisée'),
-    [participants]
-  );
-  const inscriptionsFinalisees = useMemo(
-    () => participants.filter((p) => p.statutInscription === 'finalisée'),
-    [participants]
-  );
+  // Query pour filtrer les inscriptions en cours
+  const inscriptionsEnCoursQuery = useQuery({
+    queryKey: ['agentInscriptionsTabs', 'inscriptionsEnCours', participants],
+    queryFn: () => participants.filter((p) => p.statutInscription !== 'finalisée'),
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const inscriptionsEnCours = inscriptionsEnCoursQuery.data ?? [];
+
+  // Query pour filtrer les inscriptions finalisées
+  const inscriptionsFinaliseesQuery = useQuery({
+    queryKey: ['agentInscriptionsTabs', 'inscriptionsFinalisees', participants],
+    queryFn: () => participants.filter((p) => p.statutInscription === 'finalisée'),
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const inscriptionsFinalisees = inscriptionsFinaliseesQuery.data ?? [];
 
   const filterBySearch = (list: Participant[]) => {
     if (!searchTerm) return list;

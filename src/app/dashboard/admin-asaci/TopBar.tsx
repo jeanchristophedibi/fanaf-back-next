@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../../../components/ui/dropdown-menu';
@@ -18,20 +19,30 @@ export function TopBar({ userEmail }: TopBarProps) {
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    setIsMounted(true);
-    if (userEmail) {
-      setEmail(userEmail);
-      return;
-    }
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('fanaf_user') : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.email) setEmail(parsed.email);
+  // Query pour initialiser l'email et le montage
+  useQuery({
+    queryKey: ['topBar', 'init', userEmail, isMounted],
+    queryFn: () => {
+      setIsMounted(true);
+      if (userEmail) {
+        setEmail(userEmail);
+        return userEmail;
       }
-    } catch (_) {}
-  }, [userEmail]);
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem('fanaf_user') : null;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.email) {
+            setEmail(parsed.email);
+            return parsed.email;
+          }
+        }
+      } catch (_) {}
+      return '';
+    },
+    enabled: !isMounted,
+    staleTime: 0,
+  });
 
   const handleProfile = () => {
     console.log('Profile clicked');

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Badge as BadgeUI } from '../../../components/ui/badge';
 import { 
@@ -21,58 +22,73 @@ import { AnimatedStat } from '../../../components/AnimatedStat';
 export default function OperateurBadgeDashboard() {
   const { participants } = useDynamicInscriptions();
 
-  // Statistiques globales
-  const stats = useMemo(() => {
-    const finalisés = participants.filter(p => p.statutInscription === 'finalisée');
-    const enAttente = participants.filter(p => 
-      p.statutInscription === 'non-finalisée' && 
-      (p.statut === 'membre' || p.statut === 'non-membre')
-    );
-    const exonérés = participants.filter(p => 
-      p.statut === 'vip' || p.statut === 'speaker'
-    );
+  // Query pour les statistiques globales
+  const statsQuery = useQuery({
+    queryKey: ['operateurBadgeDashboard', 'stats', participants],
+    queryFn: () => {
+      const finalisés = participants.filter(p => p.statutInscription === 'finalisée');
+      const enAttente = participants.filter(p => 
+        p.statutInscription === 'non-finalisée' && 
+        (p.statut === 'membre' || p.statut === 'non-membre')
+      );
+      const exonérés = participants.filter(p => 
+        p.statut === 'vip' || p.statut === 'speaker'
+      );
 
-    // Documents générés aujourd'hui (simulation)
-    const aujourdhui = new Date().toISOString().split('T')[0];
-    const aujourdhuiDocs = finalisés.filter(p => {
-      // Simulation: on considère que 30% des documents ont été générés aujourd'hui
-      return Math.random() > 0.7;
-    }).length;
+      // Documents générés aujourd'hui (simulation)
+      const aujourdhui = new Date().toISOString().split('T')[0];
+      const aujourdhuiDocs = finalisés.filter(p => {
+        // Simulation: on considère que 30% des documents ont été générés aujourd'hui
+        return Math.random() > 0.7;
+      }).length;
 
-    // Par type de participant
-    const parType = {
-      membre: finalisés.filter(p => p.statut === 'membre').length,
-      nonMembre: finalisés.filter(p => p.statut === 'non-membre').length,
-      vip: finalisés.filter(p => p.statut === 'vip').length,
-      speaker: finalisés.filter(p => p.statut === 'speaker').length,
-    };
+      // Par type de participant
+      const parType = {
+        membre: finalisés.filter(p => p.statut === 'membre').length,
+        nonMembre: finalisés.filter(p => p.statut === 'non-membre').length,
+        vip: finalisés.filter(p => p.statut === 'vip').length,
+        speaker: finalisés.filter(p => p.statut === 'speaker').length,
+      };
 
-    // Top 5 organisations
-    const orgStats = new Map<string, number>();
-    finalisés.forEach(p => {
-      const count = orgStats.get(p.organisationId) || 0;
-      orgStats.set(p.organisationId, count + 1);
-    });
-    
-    const topOrganisations = Array.from(orgStats.entries())
-      .map(([orgId, count]) => ({
-        org: getOrganisationById(orgId),
-        count
-      }))
-      .filter(item => item.org !== undefined)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      // Top 5 organisations
+      const orgStats = new Map<string, number>();
+      finalisés.forEach(p => {
+        const count = orgStats.get(p.organisationId) || 0;
+        orgStats.set(p.organisationId, count + 1);
+      });
+      
+      const topOrganisations = Array.from(orgStats.entries())
+        .map(([orgId, count]) => ({
+          org: getOrganisationById(orgId),
+          count
+        }))
+        .filter(item => item.org !== undefined)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
 
-    return {
-      badgesGénérés: finalisés.length,
-      badgesEnAttente: enAttente.length,
-      documentsAujourdhui: aujourdhuiDocs,
-      exonérés: exonérés.length,
-      total: participants.length,
-      parType,
-      topOrganisations
-    };
-  }, [participants]);
+      return {
+        badgesGénérés: finalisés.length,
+        badgesEnAttente: enAttente.length,
+        documentsAujourdhui: aujourdhuiDocs,
+        exonérés: exonérés.length,
+        total: participants.length,
+        parType,
+        topOrganisations
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? {
+    badgesGénérés: 0,
+    badgesEnAttente: 0,
+    documentsAujourdhui: 0,
+    exonérés: 0,
+    total: 0,
+    parType: { membre: 0, nonMembre: 0, vip: 0, speaker: 0 },
+    topOrganisations: []
+  };
 
   return (
     <div className="p-6 space-y-6">

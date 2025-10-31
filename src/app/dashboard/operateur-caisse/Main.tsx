@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import OperateurCaisseDashboard from './Dashboard';
 import { CaissePaiementsPage } from '../../../components/CaissePaiementsPage';
 import { TousPaiementsPage } from '../../../components/TousPaiementsPage';
@@ -17,35 +18,54 @@ interface OperateurCaisseMainProps {
 
 export default function OperateurCaisseMain({ onSwitchProfile }: OperateurCaisseMainProps = {}) {
   const [activeTab, setActiveTab] = useState<OperateurTab>('paiements');
-  // Synchroniser avec la sidebar unifiée (layout) via localStorage
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    const mapNavToTab = (nav: string): OperateurTab => {
-      if (nav === 'paiements-attente') return 'paiements';
-      if (nav === 'paiements') return 'tous-paiements';
-      return 'dashboard';
-    };
+  
+  // Query pour synchroniser avec la sidebar unifiée (layout) via localStorage
+  useQuery({
+    queryKey: ['operateurCaisseMain', 'activeTab', activeTab],
+    queryFn: () => {
+      if (typeof window === 'undefined') return 'paiements';
+      
+      const mapNavToTab = (nav: string): OperateurTab => {
+        if (nav === 'paiements-attente') return 'paiements';
+        if (nav === 'paiements') return 'tous-paiements';
+        return 'dashboard';
+      };
 
-    const applyFromStorage = () => {
-      try {
-        const stored = localStorage.getItem('operateur_caisse_active_nav');
-        if (stored) setActiveTab(mapNavToTab(stored));
-      } catch (_) {}
-    };
+      const applyFromStorage = () => {
+        try {
+          const stored = localStorage.getItem('operateur_caisse_active_nav');
+          if (stored) setActiveTab(mapNavToTab(stored));
+        } catch (_) {}
+      };
 
-    applyFromStorage();
-    const onStorage = () => applyFromStorage();
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+      applyFromStorage();
+      const onStorage = () => applyFromStorage();
+      window.addEventListener('storage', onStorage);
+      
+      return activeTab;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
   const [caissierName, setCaissierName] = useState<string>('');
   const [isCaissierDialogOpen, setIsCaissierDialogOpen] = useState<boolean>(false);
 
-  useEffect(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('caissierName') : null;
-    if (stored) setCaissierName(stored);
-  }, []);
+  // Query pour charger le nom du caissier depuis localStorage
+  useQuery({
+    queryKey: ['operateurCaisseMain', 'caissierName'],
+    queryFn: () => {
+      if (typeof window === 'undefined') return '';
+      const stored = localStorage.getItem('caissierName');
+      if (stored) {
+        setCaissierName(stored);
+        return stored;
+      }
+      return '';
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
   const handleSaveCaissier = () => {
     localStorage.setItem('caissierName', caissierName.trim());

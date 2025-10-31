@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { LineChart as ReLineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { TrendingUp, Calendar } from 'lucide-react';
@@ -49,29 +50,31 @@ const WeeklyTooltip = ({ active, payload, label }: any) => {
 };
 
 export function InscriptionsEvolutionChart() {
-  const [loading, setLoading] = useState(true);
-  const [evolutionData, setEvolutionData] = useState<any[]>([]);
-  const [weeklyData, setWeeklyData] = useState<any[]>([]);
+  // Query pour charger les données d'évolution
+  const evolutionDataQuery = useQuery({
+    queryKey: ['inscriptionsEvolutionChart', 'evolutionData'],
+    queryFn: async () => {
+      return await loadInscriptionsEvolutionSeries({ days: 30 });
+    },
+    enabled: true,
+    staleTime: 60 * 1000,
+  });
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [evo, weekly] = await Promise.all([
-          loadInscriptionsEvolutionSeries({ days: 30 }),
-          loadInscriptionsWeeklySeries({ weeks: 8 }),
-        ]);
-        if (!mounted) return;
-        setEvolutionData(evo);
-        setWeeklyData(weekly);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, []);
+  const evolutionData = evolutionDataQuery.data ?? [];
+
+  // Query pour charger les données hebdomadaires
+  const weeklyDataQuery = useQuery({
+    queryKey: ['inscriptionsEvolutionChart', 'weeklyData'],
+    queryFn: async () => {
+      return await loadInscriptionsWeeklySeries({ weeks: 8 });
+    },
+    enabled: true,
+    staleTime: 60 * 1000,
+  });
+
+  const weeklyData = weeklyDataQuery.data ?? [];
+
+  const loading = evolutionDataQuery.isLoading || weeklyDataQuery.isLoading;
 
   if (loading) {
     return (

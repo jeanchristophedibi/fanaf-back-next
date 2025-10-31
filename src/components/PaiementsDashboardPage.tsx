@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { 
@@ -24,60 +25,67 @@ const TARIF_NON_MEMBRE = 400000;
 export function PaiementsDashboardPage() {
   const { participants } = useDynamicInscriptions();
 
-  // Statistiques globales
-  const stats = useMemo(() => {
-    const paiementsEnAttente = participants.filter(p => 
-      p.statutInscription === 'non-finalisée' && 
-      (p.statut === 'membre' || p.statut === 'non-membre')
-    );
+  // Query pour les statistiques globales
+  const statsQuery = useQuery({
+    queryKey: ['paiementsDashboardPage', 'stats', participants],
+    queryFn: () => {
+      const paiementsEnAttente = participants.filter(p => 
+        p.statutInscription === 'non-finalisée' && 
+        (p.statut === 'membre' || p.statut === 'non-membre')
+      );
 
-    const paiementsFinalises = participants.filter(p => 
-      p.statutInscription === 'finalisée' && 
-      (p.statut === 'membre' || p.statut === 'non-membre')
-    );
+      const paiementsFinalises = participants.filter(p => 
+        p.statutInscription === 'finalisée' && 
+        (p.statut === 'membre' || p.statut === 'non-membre')
+      );
 
-    const exoneres = participants.filter(p => 
-      p.statut === 'vip' || p.statut === 'speaker'
-    );
+      const exoneres = participants.filter(p => 
+        p.statut === 'vip' || p.statut === 'speaker'
+      );
 
-    // Calcul des montants
-    const montantEncaisse = paiementsFinalises.reduce((total, p) => {
-      const tarif = p.statut === 'membre' ? TARIF_MEMBRE : TARIF_NON_MEMBRE;
-      return total + tarif;
-    }, 0);
+      // Calcul des montants
+      const montantEncaisse = paiementsFinalises.reduce((total, p) => {
+        const tarif = p.statut === 'membre' ? TARIF_MEMBRE : TARIF_NON_MEMBRE;
+        return total + tarif;
+      }, 0);
 
-    const montantEnAttente = paiementsEnAttente.reduce((total, p) => {
-      const tarif = p.statut === 'membre' ? TARIF_MEMBRE : TARIF_NON_MEMBRE;
-      return total + tarif;
-    }, 0);
+      const montantEnAttente = paiementsEnAttente.reduce((total, p) => {
+        const tarif = p.statut === 'membre' ? TARIF_MEMBRE : TARIF_NON_MEMBRE;
+        return total + tarif;
+      }, 0);
 
-    const montantTotal = montantEncaisse + montantEnAttente;
+      const montantTotal = montantEncaisse + montantEnAttente;
 
-    // Statistiques par mode de paiement
-    const parModePaiement: { [key in ModePaiement]?: number } = {};
-    paiementsFinalises.forEach(p => {
-      if (p.modePaiement) {
-        parModePaiement[p.modePaiement] = (parModePaiement[p.modePaiement] || 0) + 1;
-      }
-    });
+      // Statistiques par mode de paiement
+      const parModePaiement: { [key in ModePaiement]?: number } = {};
+      paiementsFinalises.forEach(p => {
+        if (p.modePaiement) {
+          parModePaiement[p.modePaiement] = (parModePaiement[p.modePaiement] || 0) + 1;
+        }
+      });
 
-    // Statistiques par canal
-    const canalExterne = paiementsFinalises.filter(p => p.canalEncaissement === 'externe').length;
-    const canalAsapay = paiementsFinalises.filter(p => p.canalEncaissement === 'asapay').length;
+      // Statistiques par canal
+      const canalExterne = paiementsFinalises.filter(p => p.canalEncaissement === 'externe').length;
+      const canalAsapay = paiementsFinalises.filter(p => p.canalEncaissement === 'asapay').length;
 
-    return {
-      totalPaiements: paiementsFinalises.length,
-      paiementsEnAttente: paiementsEnAttente.length,
-      exoneres: exoneres.length,
-      montantEncaisse,
-      montantEnAttente,
-      montantTotal,
-      parModePaiement,
-      canalExterne,
-      canalAsapay,
-      tauxRecouvrement: montantTotal > 0 ? (montantEncaisse / montantTotal) * 100 : 0,
-    };
-  }, [participants]);
+      return {
+        totalPaiements: paiementsFinalises.length,
+        paiementsEnAttente: paiementsEnAttente.length,
+        exoneres: exoneres.length,
+        montantEncaisse,
+        montantEnAttente,
+        montantTotal,
+        parModePaiement,
+        canalExterne,
+        canalAsapay,
+        tauxRecouvrement: montantTotal > 0 ? (montantEncaisse / montantTotal) * 100 : 0,
+      };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { totalPaiements: 0, paiementsEnAttente: 0, exoneres: 0, montantEncaisse: 0, montantEnAttente: 0, montantTotal: 0, parModePaiement: {}, canalExterne: 0, canalAsapay: 0, tauxRecouvrement: 0 };
 
   const formatMontant = (montant: number) => {
     return new Intl.NumberFormat('fr-FR', {

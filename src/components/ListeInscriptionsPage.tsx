@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -303,47 +304,55 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
   const activeFiltersCount = appliedStatutFilters.length + appliedStatutInscriptionFilters.length + 
                              appliedOrganisationFilters.length + appliedPaysFilters.length;
 
-  const filteredParticipants = useMemo(() => {
-    let filtered = [...participants];
+  // Query pour filtrer les participants
+  const filteredParticipantsQuery = useQuery({
+    queryKey: ['listeInscriptionsPage', 'filtered', participants, searchTerm, appliedStatutFilters, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters],
+    queryFn: () => {
+      let filtered = [...participants];
 
-    // Filtre par recherche universelle
-    if (searchTerm) {
-      filtered = filtered.filter(p => {
-        const organisation = getOrganisationById(p.organisationId);
-        
-        return (
-          p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.telephone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.pays.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          organisation?.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.statut.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.statutInscription.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-    }
+      // Filtre par recherche universelle
+      if (searchTerm) {
+        filtered = filtered.filter(p => {
+          const organisation = getOrganisationById(p.organisationId);
+          
+          return (
+            p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.telephone.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.pays.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            organisation?.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.statut.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.statutInscription.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
+      }
 
-    // Application des filtres multi-sélection
-    if (appliedStatutFilters.length > 0) {
-      filtered = filtered.filter(p => appliedStatutFilters.includes(p.statut));
-    }
+      // Application des filtres multi-sélection
+      if (appliedStatutFilters.length > 0) {
+        filtered = filtered.filter(p => appliedStatutFilters.includes(p.statut));
+      }
 
-    if (appliedStatutInscriptionFilters.length > 0) {
-      filtered = filtered.filter(p => appliedStatutInscriptionFilters.includes(getStatutPaiementLabel(p)));
-    }
+      if (appliedStatutInscriptionFilters.length > 0) {
+        filtered = filtered.filter(p => appliedStatutInscriptionFilters.includes(getStatutPaiementLabel(p)));
+      }
 
-    if (appliedOrganisationFilters.length > 0) {
-      filtered = filtered.filter(p => appliedOrganisationFilters.includes(p.organisationId));
-    }
+      if (appliedOrganisationFilters.length > 0) {
+        filtered = filtered.filter(p => appliedOrganisationFilters.includes(p.organisationId));
+      }
 
-    if (appliedPaysFilters.length > 0) {
-      filtered = filtered.filter(p => appliedPaysFilters.includes(p.pays));
-    }
+      if (appliedPaysFilters.length > 0) {
+        filtered = filtered.filter(p => appliedPaysFilters.includes(p.pays));
+      }
 
-    return filtered;
-  }, [searchTerm, appliedStatutFilters, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
+      return filtered;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredParticipants = filteredParticipantsQuery.data ?? [];
 
   // Calculer le nombre de badges générables (inscriptions finalisées uniquement)
   const badgesGenerables = filteredParticipants.filter(p => p.statutInscription === 'finalisée').length;

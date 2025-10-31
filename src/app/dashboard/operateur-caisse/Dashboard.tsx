@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { Card } from '../../../components/ui/card';
@@ -75,74 +75,100 @@ export default function OperateurCaisseDashboard() {
   const payments = paymentsData;
   const loading = registrationsLoading || paymentsLoading;
 
-  // Calcul des statistiques (API-first, fallback au minimum)
-  const stats = useMemo(() => {
-    if (!Array.isArray(participants)) {
-      return { finalises: 0, enAttente: 0, payants: 0, exoneres: 0 };
-    }
-    // Essayer de dériver depuis les registrations si champs présents
-    const hasInscriptionStatus = participants.some((p) => p.statutInscription || p.registration_status);
-    const hasCategory = participants.some((p) => p.category || p.statut);
+  // Query pour calculer les statistiques (API-first, fallback au minimum)
+  const statsQuery = useQuery({
+    queryKey: ['operateurCaisseDashboard', 'stats', participants, payments],
+    queryFn: () => {
+      if (!Array.isArray(participants)) {
+        return { finalises: 0, enAttente: 0, payants: 0, exoneres: 0 };
+      }
+      // Essayer de dériver depuis les registrations si champs présents
+      const hasInscriptionStatus = participants.some((p) => p.statutInscription || p.registration_status);
+      const hasCategory = participants.some((p) => p.category || p.statut);
 
-    const getCategory = (p: any) => (p.category || p.statut || '').toLowerCase();
-    const getInscrStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
+      const getCategory = (p: any) => (p.category || p.statut || '').toLowerCase();
+      const getInscrStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
 
-    const finalises = hasInscriptionStatus
-      ? participants.filter((p) => getInscrStatus(p) === 'finalisée' || getInscrStatus(p) === 'finalise' || getInscrStatus(p) === 'completed').length
-      : payments.length; // à défaut, approx par nb paiements
+      const finalises = hasInscriptionStatus
+        ? participants.filter((p) => getInscrStatus(p) === 'finalisée' || getInscrStatus(p) === 'finalise' || getInscrStatus(p) === 'completed').length
+        : payments.length; // à défaut, approx par nb paiements
 
-    const enAttente = hasInscriptionStatus
-      ? participants.filter((p) => getInscrStatus(p) !== 'finalisée' && getCategory(p) !== 'vip' && getCategory(p) !== 'speaker').length
-      : Math.max(0, (participants.length || 0) - finalises);
+      const enAttente = hasInscriptionStatus
+        ? participants.filter((p) => getInscrStatus(p) !== 'finalisée' && getCategory(p) !== 'vip' && getCategory(p) !== 'speaker').length
+        : Math.max(0, (participants.length || 0) - finalises);
 
-    const payants = hasCategory
-      ? participants.filter((p) => ['membre', 'member', 'non-membre', 'not_member'].includes(getCategory(p))).length
-      : participants.length;
+      const payants = hasCategory
+        ? participants.filter((p) => ['membre', 'member', 'non-membre', 'not_member'].includes(getCategory(p))).length
+        : participants.length;
 
-    const exoneres = hasCategory
-      ? participants.filter((p) => ['vip', 'speaker'].includes(getCategory(p))).length
-      : 0;
+      const exoneres = hasCategory
+        ? participants.filter((p) => ['vip', 'speaker'].includes(getCategory(p))).length
+        : 0;
 
-    return { finalises, enAttente, payants, exoneres };
-  }, [participants, payments]);
+      return { finalises, enAttente, payants, exoneres };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  // Calcul du montant encaissé via API paiements
-  const { montantTotal, paiementsIndividuels, paiementsGroupes, modesPaiement } = useMemo(() => {
-    if (!Array.isArray(payments) || payments.length === 0) {
-      return {
-        montantTotal: 0,
-        paiementsIndividuels: 0,
-        paiementsGroupes: 0,
-        modesPaiement: { especes: 0, virement: 0, cheque: 0, mobileMoney: 0 },
-      };
-    }
-    let total = 0;
-    let indiv = 0;
-    let group = 0;
-    const modes = { especes: 0, virement: 0, cheque: 0, mobileMoney: 0 } as Record<string, number>;
+  const stats = statsQuery.data ?? { finalises: 0, enAttente: 0, payants: 0, exoneres: 0 };
 
-    payments.forEach((p: any) => {
-      const amount = Number(p.amount || 0);
-      total += amount;
-      // Heuristique: presence de multiple registration_ids => groupé
-      const isGroup = Array.isArray(p.registration_ids) && p.registration_ids.length > 1;
-      if (isGroup) group++; else indiv++;
-      const method = String(p.payment_method || '').toLowerCase();
-      const provider = String(p.payment_provider || '').toLowerCase();
-      if (method.includes('cash') || method.includes('esp')) modes.especes++;
-      else if (method.includes('wire') || method.includes('vir')) modes.virement++;
-      else if (method.includes('cheq') || method.includes('chèque')) modes.cheque++;
-      else if (method.includes('mobile') || provider.includes('orange') || provider.includes('wave')) modes.mobileMoney++;
-    });
+  // Query pour calculer le montant encaissé via API paiements
+  const montantStatsQuery = useQuery({
+    queryKey: ['operateurCaisseDashboard', 'montantStats', payments],
+    queryFn: () => {
+      if (!Array.isArray(payments) || payments.length === 0) {
+        return {
+          montantTotal: 0,
+          paiementsIndividuels: 0,
+          paiementsGroupes: 0,
+          modesPaiement: { especes: 0, virement: 0, cheque: 0, mobileMoney: 0 },
+        };
+      }
+      let total = 0;
+      let indiv = 0;
+      let group = 0;
+      const modes = { especes: 0, virement: 0, cheque: 0, mobileMoney: 0 } as Record<string, number>;
 
-    return { montantTotal: total, paiementsIndividuels: indiv, paiementsGroupes: group, modesPaiement: modes };
-  }, [payments]);
+      payments.forEach((p: any) => {
+        const amount = Number(p.amount || 0);
+        total += amount;
+        // Heuristique: presence de multiple registration_ids => groupé
+        const isGroup = Array.isArray(p.registration_ids) && p.registration_ids.length > 1;
+        if (isGroup) group++; else indiv++;
+        const method = String(p.payment_method || '').toLowerCase();
+        const provider = String(p.payment_provider || '').toLowerCase();
+        if (method.includes('cash') || method.includes('esp')) modes.especes++;
+        else if (method.includes('wire') || method.includes('vir')) modes.virement++;
+        else if (method.includes('cheq') || method.includes('chèque')) modes.cheque++;
+        else if (method.includes('mobile') || provider.includes('orange') || provider.includes('wave')) modes.mobileMoney++;
+      });
 
-  // Montant restant (approx) – si tarifs non dispo via API, approcher avec nb en attente * 350k
-  const montantEnAttente = useMemo(() => {
-    // Si l'API paiements expose un total attendu, l'utiliser (non dispo ici)
-    return stats.enAttente * 350000;
-  }, [stats.enAttente]);
+      return { montantTotal: total, paiementsIndividuels: indiv, paiementsGroupes: group, modesPaiement: modes };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const { montantTotal, paiementsIndividuels, paiementsGroupes, modesPaiement } = montantStatsQuery.data ?? {
+    montantTotal: 0,
+    paiementsIndividuels: 0,
+    paiementsGroupes: 0,
+    modesPaiement: { especes: 0, virement: 0, cheque: 0, mobileMoney: 0 },
+  };
+
+  // Query pour calculer le montant restant (approx) – si tarifs non dispo via API, approcher avec nb en attente * 350k
+  const montantEnAttenteQuery = useQuery({
+    queryKey: ['operateurCaisseDashboard', 'montantEnAttente', stats.enAttente],
+    queryFn: () => {
+      // Si l'API paiements expose un total attendu, l'utiliser (non dispo ici)
+      return stats.enAttente * 350000;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const montantEnAttente = montantEnAttenteQuery.data ?? 0;
 
   return (
     <div className="p-8 bg-gradient-to-br from-orange-50 to-white min-h-screen">

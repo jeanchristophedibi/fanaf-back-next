@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -21,7 +22,7 @@ const profilLabels = {
 };
 
 export function ComiteOrganisationPage() {
-  const [membresComite, setMembresComite] = useState<MembreComite[]>([]);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProfil, setSelectedProfil] = useState<string>('tous');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -35,46 +36,86 @@ export function ComiteOrganisationPage() {
     profil: '' as ProfilMembre | '',
   });
 
-  // TODO: Charger les membres du comité depuis l'API quand l'endpoint sera disponible
-  useEffect(() => {
-    // Pour l'instant, état vide - sera remplacé par un appel API
-    setMembresComite([]);
-  }, []);
+  // Query pour charger les membres du comité depuis l'API quand l'endpoint sera disponible
+  const membresComiteQuery = useQuery({
+    queryKey: ['comiteOrganisation', 'membres'],
+    queryFn: async () => {
+      // TODO: Charger depuis l'API quand l'endpoint sera disponible
+      // Pour l'instant, retourner un tableau vide
+      return [] as MembreComite[];
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  const filteredMembres = useMemo(() => {
-    return membresComite.filter((membre: MembreComite) => {
-      const matchesSearch = 
-        membre.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        membre.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        membre.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        membre.telephone.includes(searchTerm);
-      
-      const matchesProfil = selectedProfil === 'tous' || membre.profil === selectedProfil;
-      
-      return matchesSearch && matchesProfil;
-    });
-  }, [membresComite, searchTerm, selectedProfil]);
+  const membresComite = membresComiteQuery.data ?? [];
+
+  // Query pour filtrer les membres
+  const filteredMembresQuery = useQuery({
+    queryKey: ['comiteOrganisation', 'filtered', membresComite, searchTerm, selectedProfil],
+    queryFn: () => {
+      return membresComite.filter((membre: MembreComite) => {
+        const matchesSearch = 
+          membre.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          membre.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          membre.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          membre.telephone.includes(searchTerm);
+        
+        const matchesProfil = selectedProfil === 'tous' || membre.profil === selectedProfil;
+        
+        return matchesSearch && matchesProfil;
+      });
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const filteredMembres = filteredMembresQuery.data ?? [];
 
   // Pagination
   const totalPages = Math.ceil(filteredMembres.length / itemsPerPage);
-  const paginatedMembres = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredMembres.slice(startIndex, endIndex);
-  }, [filteredMembres, currentPage]);
 
-  // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedProfil]);
+  // Query pour paginer
+  const paginatedMembresQuery = useQuery({
+    queryKey: ['comiteOrganisation', 'paginated', filteredMembres, currentPage, itemsPerPage],
+    queryFn: () => {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return filteredMembres.slice(startIndex, endIndex);
+    },
+    enabled: true,
+    staleTime: 0,
+  });
 
-  const stats = useMemo(() => {
-    const total = membresComite.length;
-    const caissiers = membresComite.filter((m: MembreComite) => m.profil === 'caissier').length;
-    const agentsScan = membresComite.filter((m: MembreComite) => m.profil === 'agent-scan').length;
-    
-    return { total, caissiers, agentsScan };
-  }, [membresComite]);
+  const paginatedMembres = paginatedMembresQuery.data ?? [];
+
+  // Query pour réinitialiser la page quand les filtres changent
+  useQuery({
+    queryKey: ['comiteOrganisation', 'resetPage', searchTerm, selectedProfil],
+    queryFn: () => {
+      queryClient.setQueryData(['comiteOrganisation', 'currentPage'], 1);
+      setCurrentPage(1);
+      return true;
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  // Query pour les statistiques
+  const statsQuery = useQuery({
+    queryKey: ['comiteOrganisation', 'stats', membresComite],
+    queryFn: () => {
+      const total = membresComite.length;
+      const caissiers = membresComite.filter((m: MembreComite) => m.profil === 'caissier').length;
+      const agentsScan = membresComite.filter((m: MembreComite) => m.profil === 'agent-scan').length;
+      
+      return { total, caissiers, agentsScan };
+    },
+    enabled: true,
+    staleTime: 0,
+  });
+
+  const stats = statsQuery.data ?? { total: 0, caissiers: 0, agentsScan: 0 };
 
   const handleCreateMembre = () => {
     console.log('Création nouveau membre:', newMembre);
