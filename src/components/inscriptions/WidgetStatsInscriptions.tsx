@@ -6,7 +6,9 @@ import { AnimatedStat } from '../AnimatedStat';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Phone, Mail, Globe, Calendar } from 'lucide-react';
-import { type Participant } from '../data/mockData';
+import { type Participant } from '../data/types';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 import { inscriptionsDataService } from '../data/inscriptionsData';
 import { motion } from 'motion/react';
 import { Skeleton } from '../ui/skeleton';

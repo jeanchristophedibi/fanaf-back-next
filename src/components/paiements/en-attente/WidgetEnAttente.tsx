@@ -6,7 +6,7 @@ import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { motion } from "motion/react";
 import { AlertCircle } from "lucide-react";
 import { AnimatedStat } from "../../AnimatedStat";
-import { getOrganisationById, type ModePaiement } from "../../data/mockData";
+import { getOrganisationById, type ModePaiement } from '../../data/types';
 import { useState, useMemo, useEffect } from "react";
 
 

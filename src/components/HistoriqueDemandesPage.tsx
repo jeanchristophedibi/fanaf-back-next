@@ -3,8 +3,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
-import { Eye, Clock, User, Send, Inbox, FileText, Download } from 'lucide-react';
-import { getOrganisationById } from './data/mockData';
+import { Eye, Clock, User, Send, Inbox, FileText, Download } from 'lucide-react';import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { useFanafApi } from '../hooks/useFanafApi';
 import { getApiRequestsArray, normalizeStatus, extractRequester, extractReceiver, extractOrganisationName } from './data/networkingRecap';

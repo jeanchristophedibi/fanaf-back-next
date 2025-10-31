@@ -28,7 +28,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
-import { getOrganisationById, mockOrganisations, type Participant } from './data/mockData';
+import { type Participant } from './data/types';
+import { getOrganisationById } from './data/helpers';
+import { useOrganisationsQuery } from '../hooks/useOrganisationsQuery';
+
 import { BadgeGenerator } from './BadgeGenerator';
 import { ReceiptGenerator } from './ReceiptGenerator';
 import JSZip from 'jszip';
@@ -37,6 +40,7 @@ import QRCodeReact from 'react-qr-code';
 
 export function DocumentsParticipantsPage() {
   const { participants } = useDynamicInscriptions();
+  const { organisations } = useOrganisationsQuery();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [isBadgeOpen, setIsBadgeOpen] = useState(false);
@@ -717,7 +721,7 @@ export function DocumentsParticipantsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes les organisations</SelectItem>
-                {mockOrganisations.map((org) => (
+                {organisations.map((org: any) => (
                   <SelectItem key={org.id} value={org.id}>
                     {org.nom}
                   </SelectItem>

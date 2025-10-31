@@ -23,7 +23,9 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
-import { getParticipantById, getOrganisationById, type ModePaiement } from './data/mockData';
+import { type ModePaiement } from './data/types';
+import { getOrganisationById } from './data/helpers';
+
 
 export function ListePaiementsPage() {
   const { participants } = useDynamicInscriptions();

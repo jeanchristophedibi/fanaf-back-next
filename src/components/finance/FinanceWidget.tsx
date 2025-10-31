@@ -7,7 +7,7 @@ import { Badge } from "../ui/badge";
 import { Progress } from "../ui/progress";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
 import { motion } from "motion/react";
-import type { CanalEncaissement } from "../data/mockData";
+import type { CanalEncaissement } from '../data/types';
 
 interface FinanceWidgetProps {
   canal?: CanalEncaissement;
@@ -15,7 +15,7 @@ interface FinanceWidgetProps {
 }
 
 export function FinanceWidget({ canal, showDetails = false }: FinanceWidgetProps) {
-  const { participants: mockParticipants } = useDynamicInscriptions();
+  const { participants } = useDynamicInscriptions();
 
   // Prix des inscriptions
   const PRIX = {
@@ -43,7 +43,7 @@ export function FinanceWidget({ canal, showDetails = false }: FinanceWidgetProps
       enAttenteNonMembres: 0,
     };
 
-    mockParticipants.forEach((participant) => {
+    participants.forEach((participant) => {
       // Filtrer par canal si spécifié
       if (canal && participant.canalEncaissement !== canal) {
         return;
@@ -77,7 +77,7 @@ export function FinanceWidget({ canal, showDetails = false }: FinanceWidgetProps
     statsData.aEncaisserTotal = statsData.aEncaisserMembres + statsData.aEncaisserNonMembres;
 
     return statsData;
-  }, [mockParticipants, canal]);
+  }, [participants, canal]);
 
   // Formater les montants en FCFA
   const formatCurrency = (amount: number) => {

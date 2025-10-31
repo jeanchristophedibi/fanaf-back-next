@@ -6,6 +6,12 @@ import { WidgetVIP } from '../../../../../components/inscriptions/WidgetVIP';
 export default function InscriptionsVipFanafPage() {
   return (
     <div className="space-y-6 px-6 mt-6">
+      <div>
+          <h2 className="text-2xl text-gray-900 mb-2">Inscriptions - VIP</h2>
+          <p className="text-sm text-gray-600">
+            Gestion des inscriptions des VIP pour FANAF 2026
+          </p>
+        </div>
       <WidgetVIP />
       <ListeInscriptions 
         readOnly 

@@ -6,7 +6,7 @@ import { RadioGroup, RadioGroupItem } from '../../ui/radio-group';
 import { Label } from '../../ui/label';
 import { Button } from '../../ui/button';
 import { CheckCircle2, CreditCard, DollarSign } from 'lucide-react';
-import type { ModePaiement, Participant } from '../../data/mockData';
+import type { ModePaiement, Participant } from '../../data/types';
 
 interface FinalizePaiementDialogProps {
   open: boolean;

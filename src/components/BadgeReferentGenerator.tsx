@@ -2,7 +2,7 @@ import React from 'react';
 import { Download, QrCode, User, Building2, MapPin, CheckCircle, Mail, Phone } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { type Referent } from './data/mockData';
+import { type Referent } from './data/types';
 import QRCode from 'react-qr-code';
 import { toast } from 'sonner';
 

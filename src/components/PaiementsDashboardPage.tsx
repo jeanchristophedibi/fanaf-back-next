@@ -14,7 +14,7 @@ import {
   Building2
 } from 'lucide-react';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
-import { type Participant, type ModePaiement } from './data/mockData';
+import { type Participant, type ModePaiement } from './data/types';
 import { motion } from 'motion/react';
 
 // Tarifs

@@ -24,7 +24,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
-import { getOrganisationById, type Participant, type ModePaiement } from './data/mockData';
+import { getOrganisationById, type Participant, type ModePaiement } from './data/types';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 
 export function PaiementsEnAttentePage() {
   const { participants } = useDynamicInscriptions();

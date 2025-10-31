@@ -3,7 +3,9 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Badge as BadgeUI } from './ui/badge';
 import { FileText, Download, CheckCircle2, Loader2, Package } from 'lucide-react';
-import { type Participant, getOrganisationById } from './data/mockData';
+import { type Participant, getOrganisationById } from './data/types';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 import { toast } from 'sonner';
 import { BadgeGenerator } from './BadgeGenerator';
 import { ReceiptGenerator } from './ReceiptGenerator';

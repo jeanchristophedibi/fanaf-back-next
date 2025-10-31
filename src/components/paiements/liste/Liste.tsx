@@ -14,7 +14,8 @@ import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, 
 import { Checkbox } from "../../ui/checkbox";
 import { fanafApi } from "../../../services/fanafApi";
 import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
-import { getOrganisationById, type ModePaiement } from "../../data/mockData";
+import { type ModePaiement } from '../../data/types';
+import { getOrganisationById } from '../../data/helpers';
 import { toast } from "sonner";
 import { Skeleton } from "../../ui/skeleton";
 

@@ -19,7 +19,9 @@ import {
   FileText,
   Clock
 } from 'lucide-react';
-import { Participant } from './data/mockData';
+import { Participant } from './data/types';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 import { companiesDataService } from './data/companiesData';
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';

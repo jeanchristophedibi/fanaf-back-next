@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { companiesDataService } from '../components/data/companiesData';
-import type { Organisation } from '../components/data/mockData';
+import type { Organisation } from '../components/data/types';
 
 /**
  * Hook React Query pour récupérer les organisations avec cache

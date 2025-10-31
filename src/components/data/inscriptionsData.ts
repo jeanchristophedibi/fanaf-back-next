@@ -4,7 +4,7 @@
  */
 
 import { fanafApi } from '../../services/fanafApi';
-import type { Participant, Organisation, StatutParticipant, StatutInscription } from './mockData';
+import type { Participant, Organisation, StatutParticipant, StatutInscription } from './types';
 import { companiesDataService } from './companiesData';
 
 /**

@@ -35,7 +35,7 @@ import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import type { CanalEncaissement, ModePaiement } from '../data/mockData';
+import type { CanalEncaissement, ModePaiement } from '../data/types';
 
 // Mapper le mode de paiement de l'API vers le format local
 const mapPaymentMethod = (apiMethod: string): ModePaiement => {
@@ -61,7 +61,7 @@ const isPaymentCompleted = (state: string): boolean => {
 };
 
 export function FinancePage() {
-  const { participants: mockParticipants } = useDynamicInscriptions();
+  const { participants } = useDynamicInscriptions();
   const [showEnAttenteDialog, setShowEnAttenteDialog] = useState(false);
   const [selectedCanal, setSelectedCanal] = useState<'general' | CanalEncaissement>('general');
   
@@ -125,7 +125,7 @@ export function FinancePage() {
   // Créer un mapping participant_id -> statut depuis les participants
   const participantStatutMap = useMemo(() => {
     const map = new Map<string, 'membre' | 'non-membre' | 'vip' | 'speaker'>();
-    mockParticipants.forEach(p => {
+    participants.forEach(p => {
       // Essayer de trouver le participant par email ou référence
       // Filtrer les statuts valides (exclure 'referent' par exemple)
       if (p.statut === 'membre' || p.statut === 'non-membre' || p.statut === 'vip' || p.statut === 'speaker') {
@@ -134,7 +134,7 @@ export function FinancePage() {
       }
     });
     return map;
-  }, [mockParticipants]);
+  }, [participants]);
 
   // Mapper les paiements API avec le statut du participant
   const enrichedPayments = useMemo(() => {
@@ -189,7 +189,7 @@ export function FinancePage() {
       },
     };
 
-    // Utiliser les paiements API si disponibles, sinon fallback vers mockParticipants
+    // Utiliser les paiements API si disponibles, sinon fallback vers participants
     const useApiData = enrichedPayments.length > 0;
 
     if (useApiData) {
@@ -236,7 +236,7 @@ export function FinancePage() {
       });
     } else {
       // Fallback: Calcul basé sur les participants mock
-      mockParticipants.forEach((participant) => {
+      participants.forEach((participant) => {
         // Filtrer par canal si spécifié
         if (canal && participant.canalEncaissement !== canal) {
           return;
@@ -280,9 +280,9 @@ export function FinancePage() {
   };
 
   // Statistiques par canal
-  const statsGeneral = useMemo(() => calculateStatsByCanal(), [enrichedPayments, mockParticipants]);
-  const statsExterne = useMemo(() => calculateStatsByCanal('externe'), [enrichedPayments, mockParticipants]);
-  const statsAsapay = useMemo(() => calculateStatsByCanal('asapay'), [enrichedPayments, mockParticipants]);
+  const statsGeneral = useMemo(() => calculateStatsByCanal(), [enrichedPayments, participants]);
+  const statsExterne = useMemo(() => calculateStatsByCanal('externe'), [enrichedPayments, participants]);
+  const statsAsapay = useMemo(() => calculateStatsByCanal('asapay'), [enrichedPayments, participants]);
 
   // Formater les montants en FCFA
   const formatCurrency = (amount: number) => {

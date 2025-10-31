@@ -8,9 +8,13 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { Search, Filter, Eye, Download, Building2, UserPlus, User, QrCode, Package, History, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getParticipantsByOrganisation, getParticipantById } from './data/mockData';
+import { getParticipantsByOrganisation, getParticipantById } from './data/types';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import type { OrganisationSubSection } from '../app/dashboard/agence/types';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 import { BadgeReferentGenerator } from './BadgeReferentGenerator';
 import { AnimatedStat } from './AnimatedStat';
 import { HistoriqueRendezVousDialog } from './HistoriqueRendezVousDialog';

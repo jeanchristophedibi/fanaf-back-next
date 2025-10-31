@@ -10,7 +10,7 @@ import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
 
 export function WidgetSpeakers() {
-  const { participants: mockParticipants } = useDynamicInscriptions();
+  const { participants: allParticipants } = useDynamicInscriptions();
   const [apiParticipants, setApiParticipants] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -30,7 +30,7 @@ export function WidgetSpeakers() {
     load();
   }, []);
 
-  const participants = apiParticipants.length > 0 ? apiParticipants : mockParticipants.filter(p => p.statut === 'speaker');
+  const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'speaker');
 
   const stats = useMemo(() => {
     const speakers = participants.filter(p => p.statut === 'speaker');

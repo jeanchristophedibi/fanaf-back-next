@@ -3,14 +3,12 @@
 import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent } from "../ui/card";
 import { UserCheck } from "lucide-react";
-import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
 import { inscriptionsDataService } from "../data/inscriptionsData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
 
 export function WidgetMembres() {
-  const { participants: mockParticipants } = useDynamicInscriptions();
   const [apiParticipants, setApiParticipants] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,7 +27,7 @@ export function WidgetMembres() {
     load();
   }, []);
 
-  const participants = apiParticipants.length > 0 ? apiParticipants : mockParticipants.filter(p => p.statut === 'membre');
+  const participants = apiParticipants;
 
   const stats = useMemo(() => {
     const membres = participants.filter(p => p.statut === 'membre');

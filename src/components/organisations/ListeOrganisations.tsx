@@ -8,14 +8,11 @@ import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "../ui/dialog";
 import { Eye, Download, User, QrCode, History } from "lucide-react";
 import { List, type Column, type ListAction } from "../list/List";
-import { getParticipantsByOrganisation } from "../data/mockData";
-import type { Organisation } from "../data/mockData";
-import { companiesDataService } from "../data/companiesData";
-import { sponsorsDataService } from "../data/sponsorsData";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
 import { useOrganisationsQuery } from "../../hooks/useOrganisationsQuery";
 import { BadgeReferentGenerator } from "../BadgeReferentGenerator";
 import { HistoriqueRendezVousDialog } from "../HistoriqueRendezVousDialog";
+import { getParticipantsByOrganisation } from "../data/helpers";
 import type { OrganisationSubSection } from "../../app/dashboard/agence/types";
 
 const statutOrgColors = {
@@ -89,7 +86,7 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
       key: 'dateCreation',
       header: 'Date de création',
       sortable: true,
-      render: (o) => new Date(o.dateCreation).toLocaleDateString('fr-FR')
+      render: (o) => o.dateCreation ? new Date(o.dateCreation).toLocaleDateString('fr-FR') : '-'
     },
     {
       key: 'statut',
@@ -212,7 +209,14 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
   const exportHeaders = ['Nom', 'Email', 'Contact', 'Pays', 'Statut', 'Nombre de Participants'];
   const exportData = (org: (typeof organisations)[number]) => {
     const participants = getParticipantsByOrganisation(org.id);
-    return [org.nom, org.email, org.contact, org.pays, org.statut, String(participants.length)];
+    return [
+      org.nom,
+      org.email || '',
+      org.contact || '',
+      org.pays,
+      org.statut,
+      String(participants.length)
+    ];
   };
 
   const buildActions: ListAction<(typeof organisations)[number]>[] = [
@@ -245,9 +249,11 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
 
     if (!referent) return null;
 
-    // Trouver le participant correspondant au référent pour avoir son ID
+    // Trouver le participant correspondant au référent par email ou nom
     const referentParticipant = getParticipantsByOrganisation(organisationId).find(
-      p => p.statut === 'referent'
+      p => p.email?.toLowerCase() === referent.email?.toLowerCase() ||
+           (p.nom?.toLowerCase() === referent.nom?.toLowerCase() && 
+            p.prenom?.toLowerCase() === referent.prenom?.toLowerCase())
     );
 
     return (

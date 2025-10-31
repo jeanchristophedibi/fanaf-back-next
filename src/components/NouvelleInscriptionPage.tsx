@@ -12,7 +12,8 @@ import {
   CheckCircle, ChevronLeft, ChevronRight, Download, User, Users, Building2, 
   FileText, X, Plus, Award, Briefcase, Sparkles, Shield, Check
 } from 'lucide-react';
-import { Participant, Organisation, StatutParticipant, mockOrganisations } from './data/mockData';
+import { type Participant, type Organisation, type StatutParticipant } from './data/types';
+import { useOrganisationsQuery } from '../hooks/useOrganisationsQuery';
 import { ProformaInvoiceGenerator } from './ProformaInvoiceGenerator';
 import { SuccessBanner } from './inscriptions/nouvelle/SuccessBanner';
 import { StepsProgress } from './inscriptions/nouvelle/StepsProgress';
@@ -95,7 +96,8 @@ export const NouvelleInscriptionPage = () => {
   });
 
   const [organisationSelectionnee, setOrganisationSelectionnee] = useState<string>('');
-  const organisationsMembres = mockOrganisations.filter(org => org.statut === 'membre');
+  const { organisations: allOrganisations = [] } = useOrganisationsQuery();
+  const organisationsMembres = allOrganisations.filter(org => org.statut === 'membre');
   
   const handleOrganisationSelect = (orgId: string) => {
     setOrganisationSelectionnee(orgId);
@@ -545,13 +547,11 @@ export const NouvelleInscriptionPage = () => {
       }
 
       const existingParticipants = JSON.parse(localStorage.getItem('dynamicParticipants') || '[]');
-      const existingOrganisations = JSON.parse(localStorage.getItem('mockOrganisations') || '[]');
       
       existingParticipants.push(...participants);
-      existingOrganisations.push(organisation);
 
       localStorage.setItem('dynamicParticipants', JSON.stringify(existingParticipants));
-      localStorage.setItem('mockOrganisations', JSON.stringify(existingOrganisations));
+      // Note: Les organisations sont maintenant gérées par l'API, pas besoin de localStorage
       
       window.dispatchEvent(new Event('storage'));
 

@@ -9,7 +9,7 @@ import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Calendar, CheckCircle2, Clock, Users, User, Building, Download, UserPlus } from 'lucide-react';
-import { getOrganisationById, type Participant, type StatutParticipant } from '../../data/mockData';
+import { getOrganisationById, type Participant, type StatutParticipant } from '../../data/types';
 import { useDynamicInscriptions } from '../../hooks/useDynamicInscriptions';
 
 function getTypeInscription(participant: Participant): 'Groupée' | 'Individuelle' {

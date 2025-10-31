@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Calendar, Clock, CheckCircle2, XCircle } from 'lucide-react';
-import { type Participant } from './data/mockData';
+import { type Participant } from './data/types';
 
 interface CheckInHistorique {
   jour: string;

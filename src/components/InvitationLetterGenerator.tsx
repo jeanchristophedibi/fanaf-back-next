@@ -3,7 +3,9 @@ import { Mail, Download, Printer } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner';
-import { type Participant, getOrganisationById } from './data/mockData';
+import { type Participant, getOrganisationById } from './data/types';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 
 interface InvitationLetterGeneratorProps {
   participant: Participant;

@@ -3,11 +3,24 @@
 import { useMemo, useState, useEffect } from "react";
 import { Calendar, Users, Building2, CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
-import type { RendezVous } from "../data/mockData";
 import { networkingDataService } from "../data/networkingData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
+
+// Type pour RendezVous (temporaire jusqu'à ce qu'il soit défini dans types.ts)
+export interface RendezVous {
+  id: string;
+  date: string;
+  heureDebut: string;
+  heureFin: string;
+  demandeurId: string;
+  recepteurId: string;
+  type: 'participant' | 'sponsor';
+  statut: 'acceptée' | 'en-attente' | 'occupée' | 'annulée';
+  sujet?: string;
+  notes?: string;
+}
 
 export function WidgetNetworking() {
   const [rendezVous, setRendezVous] = useState<RendezVous[]>([]);

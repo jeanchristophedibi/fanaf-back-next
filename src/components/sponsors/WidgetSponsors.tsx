@@ -7,7 +7,7 @@ import { sponsorsDataService } from "../data/sponsorsData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
-import type { Organisation } from "../data/mockData";
+import type { Organisation } from '../data/types';
 
 export function WidgetSponsors() {
   const [sponsors, setSponsors] = useState<Organisation[]>([]);

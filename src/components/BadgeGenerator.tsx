@@ -3,7 +3,8 @@ import { Download, QrCode, User, Building2, Mail, Phone, MapPin, CheckCircle } f
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Badge } from './ui/badge';
-import { type Participant, getOrganisationById } from './data/mockData';
+import { type Participant } from './data/types';
+import { getOrganisationById } from './data/helpers';
 import QRCode from 'react-qr-code';
 
 interface BadgeGeneratorProps {

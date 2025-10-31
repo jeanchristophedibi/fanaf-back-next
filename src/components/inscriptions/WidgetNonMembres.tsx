@@ -10,7 +10,7 @@ import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
 
 export function WidgetNonMembres() {
-  const { participants: mockParticipants } = useDynamicInscriptions();
+  const { participants: allParticipants } = useDynamicInscriptions();
   const [apiParticipants, setApiParticipants] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -30,7 +30,7 @@ export function WidgetNonMembres() {
     loadData(); 
   }, []);
   
-  const participants = apiParticipants.length > 0 ? apiParticipants : mockParticipants.filter(p => p.statut === 'non-membre');
+  const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'non-membre');
 
   const stats = useMemo(() => {
     const nonMembres = participants.filter(p => p.statut === 'non-membre');

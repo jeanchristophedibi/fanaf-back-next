@@ -4,7 +4,7 @@
  */
 
 import { fanafApi } from '../../services/fanafApi';
-import type { RendezVous, StatutRendezVous } from './mockData';
+import type { RendezVous, StatutRendezVous } from './types';
 
 /**
  * Mappe les données de rendez-vous de l'API vers le format RendezVous

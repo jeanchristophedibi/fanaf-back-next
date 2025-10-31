@@ -4,7 +4,7 @@
  */
 
 import { fanafApi } from '../../services/fanafApi';
-import type { PlanVol } from './mockData';
+import type { PlanVol } from './types';
 import { inscriptionsDataService } from './inscriptionsData';
 
 /**

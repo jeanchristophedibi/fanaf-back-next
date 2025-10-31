@@ -7,7 +7,7 @@ import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "../ui/dialog";
 import { Eye, Download, ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
 import { List, type Column, type ListAction } from "../list/List";
-import type { Organisation } from "../data/mockData";
+import type { Organisation } from '../data/types';
 import { sponsorsDataService } from "../data/sponsorsData";
 
 interface ListeSponsorsProps {

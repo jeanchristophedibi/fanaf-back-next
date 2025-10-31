@@ -10,10 +10,10 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Eye, User, Mail, Phone, Globe, Building, Calendar, QrCode, Package, Download, X, Loader2 } from 'lucide-react';
-import { type Participant, type Organisation } from '../data/mockData';
+import { type Participant, type Organisation } from '../data/types';
+import { getOrganisationById } from '../data/helpers';
 import { inscriptionsDataService } from '../data/inscriptionsData';
 import { documentsDataService } from '../data/documentsData';
-import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { toast } from 'sonner';
 import { List, type Column, type ListAction } from '../list/List';
 import { WidgetStatsInscriptions } from './WidgetStatsInscriptions';
@@ -102,61 +102,32 @@ export function ListeInscriptions({
         loadData();
     }, [defaultStatuts]);
     
-    // Utiliser les données API si disponibles, sinon les données mock (pour compatibilité)
-    const { participants: mockParticipants } = useDynamicInscriptions({ includeOrganisations: false });
-    
     // S'assurer que les participants ont des IDs uniques (déduplication finale pour compatibilité avec mock)
     const participants = useMemo(() => {
-        const source = apiParticipants.length > 0 ? apiParticipants : mockParticipants;
+        const source = apiParticipants;
         
-        console.log(`[ListeInscriptions] Participants reçus: ${source.length} (API: ${apiParticipants.length}, Mock: ${mockParticipants.length})`);
+        console.log(`[ListeInscriptions] Participants reçus: ${source.length} (API: ${apiParticipants.length})`);
         
         // Pour les données API, la déduplication est déjà faite dans le service
-        if (apiParticipants.length > 0) {
-            // Vérifier que les participants ont bien tous des IDs et des propriétés essentielles
-            const invalidParticipants = apiParticipants.filter(p => !p.id || !p.email);
-            if (invalidParticipants.length > 0) {
-                console.warn(`[ListeInscriptions] ${invalidParticipants.length} participants invalides (sans ID ou email):`, invalidParticipants);
-            }
-            if (apiParticipants.length > 0) {
-                console.log(`[ListeInscriptions] Exemple de participant:`, {
-                    id: apiParticipants[0].id,
-                    nom: apiParticipants[0].nom,
-                    prenom: apiParticipants[0].prenom,
-                    email: apiParticipants[0].email,
-                    reference: apiParticipants[0].reference,
-                    statut: apiParticipants[0].statut,
-                    statutInscription: apiParticipants[0].statutInscription,
-                });
-            }
-            return apiParticipants;
+        // Vérifier que les participants ont bien tous des IDs et des propriétés essentielles
+        const invalidParticipants = source.filter(p => !p.id || !p.email);
+        if (invalidParticipants.length > 0) {
+            console.warn(`[ListeInscriptions] ${invalidParticipants.length} participants invalides (sans ID ou email):`, invalidParticipants);
+        }
+        if (source.length > 0) {
+            console.log(`[ListeInscriptions] Exemple de participant:`, {
+                id: source[0].id,
+                nom: source[0].nom,
+                prenom: source[0].prenom,
+                email: source[0].email,
+                reference: source[0].reference,
+                statut: source[0].statut,
+                statutInscription: source[0].statutInscription,
+            });
         }
         
-        // Pour les mock data, effectuer une déduplication basée sur email et référence
-        const uniqueParticipants = new Map<string, Participant>();
-        const usedEmails = new Set<string>();
-        const usedReferences = new Set<string>();
-        
-        source.forEach((participant) => {
-            const emailKey = participant.email?.toLowerCase().trim() || '';
-            const refKey = participant.reference?.trim() || '';
-            const key = emailKey || refKey || participant.id;
-            
-            // Dédupliquer par email ou référence pour les mock data
-            const isDuplicate = 
-                (emailKey && usedEmails.has(emailKey)) ||
-                (refKey && usedReferences.has(refKey)) ||
-                uniqueParticipants.has(key);
-            
-            if (!isDuplicate) {
-                uniqueParticipants.set(key, participant);
-                if (emailKey) usedEmails.add(emailKey);
-                if (refKey) usedReferences.add(refKey);
-            }
-        });
-        
-        return Array.from(uniqueParticipants.values());
-    }, [apiParticipants, mockParticipants]);
+        return source;
+    }, [apiParticipants]);
     
     // États pour les filtres multi-sélection (avant validation)
     const [tempStatutFilters, setTempStatutFilters] = useState<string[]>([]);

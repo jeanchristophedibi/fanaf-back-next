@@ -15,7 +15,9 @@ import {
   FileText,
   Receipt
 } from 'lucide-react';
-import { getOrganisationById, type Participant } from './data/mockData';
+import { getOrganisationById, type Participant } from './data/types';
+import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
+
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { toast } from 'sonner';
 import { BadgeGenerator } from './BadgeGenerator';

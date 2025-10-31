@@ -1,16 +1,6 @@
 import { useEffect, useState } from 'react';
-import { 
-  addRandomParticipant, 
-  addRandomOrganisation,
-  addRandomRendezVous,
-  addRandomReservation,
-  subscribeToDataUpdates, 
-  getCurrentParticipants,
-  getCurrentOrganisations,
-  getCurrentRendezVous,
-  getCurrentReservations
-} from '../data/mockData';
-import type { Participant, Organisation, RendezVous, ReservationStand } from '../data/mockData';
+import { inscriptionsDataService } from '../data/inscriptionsData';
+import type { Participant, Organisation } from '../data/types';
 
 interface UseDynamicDataOptions {
   enabled?: boolean;
@@ -20,6 +10,17 @@ interface UseDynamicDataOptions {
   includeReservations?: boolean;
 }
 
+// Types temporaires pour la compatibilité avec les fichiers existants
+interface RendezVous {
+  id: string;
+  [key: string]: any;
+}
+
+interface ReservationStand {
+  id: string;
+  [key: string]: any;
+}
+
 export function useDynamicInscriptions({ 
   enabled = false, // DÉSACTIVÉ : Plus de nouvelles inscriptions automatiques
   interval = 120000, // Par défaut, nouvelle donnée toutes les 2 minutes (120 secondes)
@@ -27,22 +28,11 @@ export function useDynamicInscriptions({
   includeRendezVous = false,
   includeReservations = false,
 }: UseDynamicDataOptions = {}) {
-  // State pour tracker les participants finalisés via localStorage
-  const [finalisedParticipantsIds, setFinalisedParticipantsIds] = useState<Set<string>>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('finalisedParticipantsIds');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    }
-    return new Set();
-  });
-
-  const [participants, setParticipants] = useState<Participant[]>(() => {
-    const currentParticipants = getCurrentParticipants();
-    return applyFinalisedStatus(currentParticipants, finalisedParticipantsIds);
-  });
-  const [organisations, setOrganisations] = useState<Organisation[]>(getCurrentOrganisations());
-  const [rendezVous, setRendezVous] = useState<RendezVous[]>(getCurrentRendezVous());
-  const [reservations, setReservations] = useState<ReservationStand[]>(getCurrentReservations());
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [organisations, setOrganisations] = useState<Organisation[]>([]);
+  const [rendezVous, setRendezVous] = useState<RendezVous[]>([]);
+  const [reservations, setReservations] = useState<ReservationStand[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [lastAddedParticipant, setLastAddedParticipant] = useState<Participant | null>(null);
   const [lastAddedOrganisation, setLastAddedOrganisation] = useState<Organisation | null>(null);
@@ -51,42 +41,56 @@ export function useDynamicInscriptions({
   
   const [totalAdded, setTotalAdded] = useState(0);
 
-  // Fonction helper pour appliquer le statut finalisé aux participants
-  function applyFinalisedStatus(participants: Participant[], finalisedIds: Set<string>): Participant[] {
-    return participants.map(p => {
-      if (finalisedIds.has(p.id) && p.statutInscription === 'non-finalisée') {
-        return { ...p, statutInscription: 'finalisée' as const };
-      }
-      return p;
-    });
-  }
-
+  // Charger les données depuis l'API
   useEffect(() => {
-    // S'abonner aux mises à jour
-    const unsubscribe = subscribeToDataUpdates(() => {
-      const currentParticipants = getCurrentParticipants();
-      setParticipants(applyFinalisedStatus(currentParticipants, finalisedParticipantsIds));
-      setOrganisations(getCurrentOrganisations());
-      setRendezVous(getCurrentRendezVous());
-      setReservations(getCurrentReservations());
-    });
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        // Charger les participants
+        const loadedParticipants = await inscriptionsDataService.loadParticipants();
+        setParticipants(loadedParticipants);
+        
+        // Charger les organisations si demandé
+        if (includeOrganisations) {
+          const loadedOrganisations = await inscriptionsDataService.loadOrganisations();
+          setOrganisations(loadedOrganisations);
+        }
+        
+        // TODO: Charger rendezVous et reservations depuis l'API quand disponibles
+        // Pour l'instant, on laisse les tableaux vides
+        setRendezVous([]);
+        setReservations([]);
+      } catch (error) {
+        console.error('Erreur lors du chargement des données:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    return unsubscribe;
-  }, [finalisedParticipantsIds]);
+    loadData();
+    
+    // Recharger périodiquement si enabled
+    if (enabled) {
+      const intervalId = setInterval(() => {
+        loadData();
+      }, interval);
+
+      return () => clearInterval(intervalId);
+    }
+  }, [enabled, interval, includeOrganisations, includeRendezVous, includeReservations]);
 
   // Écouter les changements de localStorage pour les paiements finalisés
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    const handlePaymentFinalized = () => {
-      // Recharger les IDs des participants finalisés depuis localStorage
-      const stored = localStorage.getItem('finalisedParticipantsIds');
-      const newFinalisedIds = stored ? new Set<string>(JSON.parse(stored)) : new Set<string>();
-      setFinalisedParticipantsIds(newFinalisedIds);
-      
-      // Mettre à jour la liste des participants avec les nouveaux statuts
-      const currentParticipants = getCurrentParticipants();
-      setParticipants(applyFinalisedStatus(currentParticipants, newFinalisedIds));
+    const handlePaymentFinalized = async () => {
+      // Recharger les participants après finalisation d'un paiement
+      try {
+        const loadedParticipants = await inscriptionsDataService.loadParticipants();
+        setParticipants(loadedParticipants);
+      } catch (error) {
+        console.error('Erreur lors du rechargement des participants:', error);
+      }
     };
 
     // Écouter l'événement personnalisé dispatché lors de la finalisation d'un paiement
@@ -96,52 +100,6 @@ export function useDynamicInscriptions({
       window.removeEventListener('paymentFinalized', handlePaymentFinalized);
     };
   }, []);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    // Ajouter des données aléatoires à intervalles réguliers
-    const intervalId = setInterval(() => {
-      // Décider quel type de donnée ajouter
-      const types: string[] = ['participant'];
-      
-      if (includeOrganisations) types.push('organisation');
-      if (includeRendezVous) types.push('rendezVous');
-      if (includeReservations) types.push('reservation');
-      
-      const selectedType = types[Math.floor(Math.random() * types.length)];
-      
-      switch (selectedType) {
-        case 'participant':
-          const newParticipant = addRandomParticipant();
-          setLastAddedParticipant(newParticipant);
-          setTimeout(() => setLastAddedParticipant(null), 3000);
-          break;
-          
-        case 'organisation':
-          const newOrganisation = addRandomOrganisation();
-          setLastAddedOrganisation(newOrganisation);
-          setTimeout(() => setLastAddedOrganisation(null), 3000);
-          break;
-          
-        case 'rendezVous':
-          const newRdv = addRandomRendezVous();
-          setLastAddedRendezVous(newRdv);
-          setTimeout(() => setLastAddedRendezVous(null), 3000);
-          break;
-          
-        case 'reservation':
-          const newReservation = addRandomReservation();
-          setLastAddedReservation(newReservation);
-          setTimeout(() => setLastAddedReservation(null), 3000);
-          break;
-      }
-      
-      setTotalAdded(prev => prev + 1);
-    }, interval);
-
-    return () => clearInterval(intervalId);
-  }, [enabled, interval, includeOrganisations, includeRendezVous, includeReservations]);
 
   return {
     participants,

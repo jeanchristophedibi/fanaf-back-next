@@ -23,9 +23,9 @@ export default function AdminAsaciInscriptionsPage() {
     <div className="animate-page-enter px-6">
       {/* Header */}
       <div className="mb-6 mt-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Liste des inscriptions</h1>
-        <p className="text-gray-600">
-          Vue d'ensemble complète de toutes les inscriptions
+        <h2 className="text-2xl text-gray-900 mb-2">Liste des inscriptions</h2>
+        <p className="text-sm text-gray-600">
+          Vue d'ensemble complète de toutes les inscriptions pour FANAF 2026
         </p>
       </div>
 

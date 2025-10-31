@@ -6,7 +6,7 @@ import { Badge } from "../../ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import { CheckCircle2, Upload, File, X } from "lucide-react";
 import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
-import { getOrganisationById, type ModePaiement } from "../../data/mockData";
+import { getOrganisationById, type ModePaiement } from '../../data/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../ui/alert-dialog";
 import { List, type Column } from "../../list/List";
 import { Label } from "../../ui/label";

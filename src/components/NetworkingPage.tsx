@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from './ui/button';
 import { List, CalendarDays } from 'lucide-react';
-import type { RendezVous } from './data/mockData';
+import type { RendezVous } from './data/types';
 import { networkingDataService } from './data/networkingData';
 import { CalendarView } from './networking/CalendarView';
 import { WidgetNetworking } from './networking/WidgetNetworking';

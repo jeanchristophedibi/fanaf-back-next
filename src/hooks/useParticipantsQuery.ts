@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { inscriptionsDataService } from '../components/data/inscriptionsData';
-import type { Participant } from '../components/data/mockData';
+import type { Participant } from '../components/data/types';
 import { useEffect, useState } from 'react';
 
 /**

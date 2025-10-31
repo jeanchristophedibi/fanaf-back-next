@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { CheckCircle2, CreditCard, Clock, User, Building, DollarSign } from 'lucide-react';
+import { Card, CardContent } from './ui/card';
+import { Clock, User, Building, DollarSign } from 'lucide-react';
 import { useFanafApi } from '../hooks/useFanafApi';
-import { getOrganisationById, type Participant, type ModePaiement } from './data/mockData';
+import { type Participant, type ModePaiement } from './data/types';
+import { getOrganisationById } from './data/helpers';
+
 import { toast } from 'sonner';
 import { CaisseSearchBar } from './paiements/caisse/CaisseSearchBar';
 import { CaissePagination } from './paiements/caisse/CaissePagination';
@@ -29,7 +29,7 @@ export function CaissePaiementsPage() {
   });
   const itemsPerPage = 10;
 
-  // Charger depuis l'API (registrations), fallback vers mocks si vide/erreur
+  // Charger depuis l'API (registrations), fallback vers si vide/erreur
   useEffect(() => {
     let mounted = true;
     (async () => {

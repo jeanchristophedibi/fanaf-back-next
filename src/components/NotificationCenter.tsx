@@ -11,7 +11,7 @@ import {
   type Notification,
   type TypeNotification,
   type PrioriteNotification 
-} from './data/mockData';
+} from './data/types';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface NotificationCenterProps {

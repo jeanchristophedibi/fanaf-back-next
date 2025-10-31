@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { DashboardHome } from '../../../components/dashboard/DashboardHome';
+import { PageLoader } from '../../../components/ui/PageLoader';
+import { usePageLoading } from '../../../components/hooks/usePageLoading';
 import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
 import { OrganisationsPage } from '../../../components/organisations/OrganisationsPage';
@@ -15,6 +17,7 @@ import type { NavItem } from './types';
 
 export default function AdminFanafDashboard() {
   const pathname = usePathname();
+  const { isLoading } = usePageLoading({ includeOrganisations: true, includeRendezVous: true });
 
   // Déterminer le contenu basé sur l'URL
   const getContent = () => {
@@ -79,8 +82,11 @@ export default function AdminFanafDashboard() {
   };
 
   return (
-    <div className="p-6">
-      {getContent()}
-    </div>
+    <>
+      <PageLoader isLoading={isLoading} />
+      <div className="p-6">
+        {getContent()}
+      </div>
+    </>
   );
 }

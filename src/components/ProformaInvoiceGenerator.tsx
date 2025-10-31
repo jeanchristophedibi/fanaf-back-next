@@ -1,5 +1,5 @@
 import React from 'react';
-import { Participant, Organisation } from './data/mockData';
+import { Participant, Organisation } from './data/types';
 
 interface ProformaInvoiceGeneratorProps {
   participant: Participant;

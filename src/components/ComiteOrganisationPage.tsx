@@ -8,8 +8,7 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from './ui/dialog';
 import { Label } from './ui/label';
 import { Search, Filter, Eye, Download, UserPlus, Users, ChevronLeft, ChevronRight } from 'lucide-react';
-import { mockMembresComite } from './data/mockData';
-import type { ProfilMembre } from './data/mockData';
+import type { ProfilMembre, MembreComite } from './data/types';
 
 const profilColors = {
   'caissier': 'bg-blue-100 text-blue-800',
@@ -22,6 +21,7 @@ const profilLabels = {
 };
 
 export function ComiteOrganisationPage() {
+  const [membresComite, setMembresComite] = useState<MembreComite[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProfil, setSelectedProfil] = useState<string>('tous');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -35,8 +35,14 @@ export function ComiteOrganisationPage() {
     profil: '' as ProfilMembre | '',
   });
 
+  // TODO: Charger les membres du comité depuis l'API quand l'endpoint sera disponible
+  useEffect(() => {
+    // Pour l'instant, état vide - sera remplacé par un appel API
+    setMembresComite([]);
+  }, []);
+
   const filteredMembres = useMemo(() => {
-    return mockMembresComite.filter(membre => {
+    return membresComite.filter((membre: MembreComite) => {
       const matchesSearch = 
         membre.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
         membre.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -47,7 +53,7 @@ export function ComiteOrganisationPage() {
       
       return matchesSearch && matchesProfil;
     });
-  }, [searchTerm, selectedProfil]);
+  }, [membresComite, searchTerm, selectedProfil]);
 
   // Pagination
   const totalPages = Math.ceil(filteredMembres.length / itemsPerPage);
@@ -63,12 +69,12 @@ export function ComiteOrganisationPage() {
   }, [searchTerm, selectedProfil]);
 
   const stats = useMemo(() => {
-    const total = mockMembresComite.length;
-    const caissiers = mockMembresComite.filter(m => m.profil === 'caissier').length;
-    const agentsScan = mockMembresComite.filter(m => m.profil === 'agent-scan').length;
+    const total = membresComite.length;
+    const caissiers = membresComite.filter((m: MembreComite) => m.profil === 'caissier').length;
+    const agentsScan = membresComite.filter((m: MembreComite) => m.profil === 'agent-scan').length;
     
     return { total, caissiers, agentsScan };
-  }, []);
+  }, [membresComite]);
 
   const handleCreateMembre = () => {
     console.log('Création nouveau membre:', newMembre);
@@ -83,7 +89,7 @@ export function ComiteOrganisationPage() {
     });
   };
 
-  const handleDownloadBadge = (membre: typeof mockMembresComite[0]) => {
+  const handleDownloadBadge = (membre: MembreComite) => {
     console.log('Téléchargement badge rouge pour:', membre.nom, membre.prenom);
     // Ici vous ajouteriez la logique pour générer et télécharger le badge rouge
   };
@@ -283,7 +289,7 @@ export function ComiteOrganisationPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedMembres.map((membre) => (
+                  paginatedMembres.map((membre: MembreComite) => (
                     <TableRow key={membre.id}>
                       <TableCell className="text-gray-900">{membre.nom}</TableCell>
                       <TableCell className="text-gray-900">{membre.prenom}</TableCell>
@@ -361,7 +367,7 @@ export function ComiteOrganisationPage() {
 
           {/* Résumé */}
           <div className="flex items-center justify-between text-sm text-gray-600">
-            <p>Affichage de {filteredMembres.length} membre(s) sur {mockMembresComite.length}</p>
+            <p>Affichage de {filteredMembres.length} membre(s) sur {membresComite.length}</p>
           </div>
         </CardContent>
       </Card>

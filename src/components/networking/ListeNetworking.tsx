@@ -8,7 +8,23 @@ import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Eye, Check, X, User, Download, Mail, Loader2 } from 'lucide-react';
-import { getParticipantById, getReferentSponsor, getOrganisationById, type RendezVous, type StatutRendezVous } from '../data/mockData';
+import { getParticipantById, getReferentSponsor, getOrganisationById } from '../data/helpers';
+
+// Types pour RendezVous (temporaires jusqu'à ce qu'ils soient définis dans types.ts)
+export interface RendezVous {
+  id: string;
+  date: string;
+  heureDebut: string;
+  heureFin: string;
+  demandeurId: string;
+  recepteurId: string;
+  type: 'participant' | 'sponsor';
+  statut: StatutRendezVous;
+  sujet?: string;
+  notes?: string;
+}
+
+export type StatutRendezVous = 'acceptée' | 'en-attente' | 'occupée' | 'annulée';
 import { networkingDataService } from '../data/networkingData';
 import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';

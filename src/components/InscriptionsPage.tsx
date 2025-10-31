@@ -11,7 +11,10 @@ import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 import { Separator } from './ui/separator';
 import { Search, Download, Eye, Plane, FileDown, User, Mail, Phone, Globe, Building, Calendar, FileText, Filter, X, AlertCircle, TrendingUp, History, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
-import { mockOrganisations, getOrganisationById, getPlanVolByType, getParticipantById, getPlanVolByParticipant, type StatutParticipant, type Participant } from './data/mockData';
+import { type StatutParticipant, type Participant } from './data/types';
+import { getOrganisationById, getParticipantById, getPlanVolByType, getPlanVolByParticipant } from './data/helpers';
+import { useOrganisationsQuery } from '../hooks/useOrganisationsQuery';
+
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { toast } from 'sonner';
 import { HistoriqueRendezVousDialog } from './HistoriqueRendezVousDialog';
@@ -55,7 +58,8 @@ interface InscriptionsPageProps {
 }
 
 export function InscriptionsPage({ subSection, filter, readOnly = false }: InscriptionsPageProps) {
-  const { participants: mockParticipants, rendezVous } = useDynamicInscriptions({ includeRendezVous: true });
+  const { participants, rendezVous } = useDynamicInscriptions({ includeRendezVous: true });
+  const { organisations } = useOrganisationsQuery();
   const activeFilter = filter || subSection;
   const [searchTerm, setSearchTerm] = useState('');
   const [historiqueParticipantId, setHistoriqueParticipantId] = useState<string | null>(null);
@@ -266,7 +270,7 @@ export function InscriptionsPage({ subSection, filter, readOnly = false }: Inscr
   };
 
   // Liste unique des pays pour le filtre
-  const uniquePays = Array.from(new Set(mockParticipants.map(p => p.pays))).sort();
+  const uniquePays = Array.from(new Set(participants.map(p => p.pays))).sort();
   
   // Liste unique des pays pour le filtre Plan de Vol
   const uniquePaysVol = useMemo(() => {
@@ -330,7 +334,7 @@ export function InscriptionsPage({ subSection, filter, readOnly = false }: Inscr
   const filteredParticipants = useMemo(() => {
     if (activeFilter === 'planvol') return [];
 
-    let filtered = mockParticipants.filter(p => p.statut === activeFilter);
+    let filtered = participants.filter(p => p.statut === activeFilter);
 
     // Filtre par recherche universelle
     if (searchTerm) {
@@ -364,7 +368,7 @@ export function InscriptionsPage({ subSection, filter, readOnly = false }: Inscr
     }
 
     return filtered;
-  }, [subSection, searchTerm, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
+  }, [participants, subSection, searchTerm, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
 
   // Regrouper les plans de vol par participant
   const groupedPlansVol = useMemo(() => {
@@ -649,7 +653,7 @@ export function InscriptionsPage({ subSection, filter, readOnly = false }: Inscr
                     <div>
                       <Label className="text-sm mb-3 block text-gray-900">Organisation</Label>
                       <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                        {mockOrganisations.slice(0, 8).map((org) => (
+                        {organisations.slice(0, 8).map((org: any) => (
                           <div key={org.id} className="flex items-center space-x-2">
                             <Checkbox
                               id={`org-${org.id}`}
@@ -1010,7 +1014,7 @@ export function InscriptionsPage({ subSection, filter, readOnly = false }: Inscr
                     <div>
                       <Label className="text-sm mb-3 block text-gray-900">Organisation</Label>
                       <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                        {mockOrganisations.slice(0, 8).map((org) => (
+                        {organisations.slice(0, 8).map((org: any) => (
                           <div key={org.id} className="flex items-center space-x-2">
                             <Checkbox
                               id={`org-planvol-${org.id}`}

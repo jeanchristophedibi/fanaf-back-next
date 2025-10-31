@@ -9,14 +9,28 @@ import { Card } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Alert, AlertDescription } from './ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import {
-  mockParticipants,
-  mockCheckIns,
-  getOrganisationById,
-  getCheckInByParticipant,
-  type Participant,
-  type CheckIn,
-} from './data/mockData';
+import { type Participant } from './data/types';
+import { getOrganisationById } from './data/helpers';
+import { inscriptionsDataService } from './data/inscriptionsData';
+import { useParticipantsQuery } from '../hooks/useParticipantsQuery';
+
+
+// Type pour CheckIn (temporaire jusqu'à ce qu'il soit défini dans types.ts)
+export interface CheckIn {
+  id: string;
+  participantId: string;
+  dateCheckIn: string;
+  heureCheckIn: string;
+  scanPar: string;
+  autorise: boolean;
+  nombreScans: number;
+  statutRemontee: 'normal' | 'problematique';
+  raisonRefus?: string;
+}
+
+function getCheckInByParticipant(participantId: string, checkIns: CheckIn[]): CheckIn | undefined {
+  return checkIns.find(ci => ci.participantId === participantId);
+}
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -27,7 +41,8 @@ interface CheckInScannerProps {
 export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
-  const [checkIns, setCheckIns] = useState<CheckIn[]>(mockCheckIns);
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const { participants = [], isLoading } = useParticipantsQuery();
   const [lastScan, setLastScan] = useState<{ participant: Participant; success: boolean; reason?: string } | null>(null);
   const [selectedDay, setSelectedDay] = useState<string>('all');
   const [filterStatut, setFilterStatut] = useState<string>('all');
@@ -63,7 +78,7 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
       autorise: autorise,
       raisonRefus: raisonRefus || undefined,
       nombreScans: nombreScans,
-      statutRemontee: autorise ? 'normal' : 'signale',
+      statutRemontee: autorise ? 'normal' : 'problematique',
     };
 
     setCheckIns([newCheckIn, ...checkIns]);
@@ -84,12 +99,12 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
     setTimeout(() => setLastScan(null), 3000);
   };
 
-  const filteredParticipants = mockParticipants.filter(
+  const filteredParticipants = (participants || []).filter(
     (p) =>
-      p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.email.toLowerCase().includes(searchTerm.toLowerCase())
+      p.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Statistiques globales
@@ -124,7 +139,7 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
 
     const csvHeader = 'Date,Heure,Nom,Prénom,Email,Organisation,Statut,Accès,Raison Refus,Nombre Scans\n';
     const csvRows = checkInsToExport.map(ci => {
-      const participant = mockParticipants.find(p => p.id === ci.participantId);
+      const participant = participants.find(p => p.id === ci.participantId);
       if (!participant) return '';
       
       const organisation = getOrganisationById(participant.organisationId);
@@ -185,14 +200,14 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
 
     if (filterType !== 'all') {
       filtered = filtered.filter(ci => {
-        const participant = mockParticipants.find(p => p.id === ci.participantId);
+        const participant = participants.find(p => p.id === ci.participantId);
         return participant?.statut === filterType;
       });
     }
 
     if (filterOrganisation !== 'all') {
       filtered = filtered.filter(ci => {
-        const participant = mockParticipants.find(p => p.id === ci.participantId);
+        const participant = participants.find(p => p.id === ci.participantId);
         return participant?.organisationId === filterOrganisation;
       });
     }
@@ -204,7 +219,7 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
   const uniqueOrganisations = Array.from(
     new Set(
       checkIns.map(ci => {
-        const participant = mockParticipants.find(p => p.id === ci.participantId);
+        const participant = participants.find(p => p.id === ci.participantId);
         return participant?.organisationId;
       }).filter(Boolean)
     )
@@ -340,7 +355,7 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
               <div>
                 <p className="text-xs text-blue-700 uppercase tracking-wide">Présents</p>
                 <p className="text-2xl text-blue-900">{uniqueCheckedInParticipants}</p>
-                <p className="text-xs text-blue-600">sur {mockParticipants.length}</p>
+                <p className="text-xs text-blue-600">sur {participants.length}</p>
               </div>
             </div>
             {!showHistorique && (
@@ -399,7 +414,7 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
               </div>
               <div>
                 <p className="text-xs text-orange-700 uppercase tracking-wide">En attente</p>
-                <p className="text-2xl text-orange-900">{mockParticipants.length - uniqueCheckedInParticipants}</p>
+                <p className="text-2xl text-orange-900">{participants.length - uniqueCheckedInParticipants}</p>
                 <p className="text-xs text-orange-600">participants</p>
               </div>
             </div>
@@ -413,7 +428,7 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
               <div>
                 <p className="text-xs text-purple-700 uppercase tracking-wide">Taux</p>
                 <p className="text-2xl text-purple-900">
-                  {Math.round((uniqueCheckedInParticipants / mockParticipants.length) * 100)}%
+                  {Math.round((uniqueCheckedInParticipants / participants.length) * 100)}%
                 </p>
                 <p className="text-xs text-purple-600">présence</p>
               </div>
@@ -687,7 +702,7 @@ export function CheckInScanner({ readOnly = false }: CheckInScannerProps) {
                           </div>
                         ) : (
                           getFilteredCheckIns(day).map((checkIn) => {
-                            const participant = mockParticipants.find((p) => p.id === checkIn.participantId);
+                            const participant = participants.find((p) => p.id === checkIn.participantId);
                             if (!participant) return null;
 
                             const organisation = getOrganisationById(participant.organisationId);

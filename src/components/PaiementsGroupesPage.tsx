@@ -22,7 +22,8 @@ import {
 } from './ui/dialog';
 import { Search, Users, CheckCircle2, Filter, X, AlertCircle, FileText } from 'lucide-react';
 import { useFanafApi } from '../hooks/useFanafApi';
-import { getOrganisationById, type Participant, type ModePaiement } from './data/mockData';
+import { type Participant, type ModePaiement } from './data/types';
+import { getOrganisationById } from './data/helpers';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { GroupDocumentsGenerator } from './GroupDocumentsGenerator';

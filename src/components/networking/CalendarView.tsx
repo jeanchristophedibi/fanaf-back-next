@@ -8,18 +8,27 @@ import { Card } from '../ui/card';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
-import { getOrganisationById } from '../data/mockData';
-import {
-  getParticipantById,
-  getReferentSponsor,
-  updateRendezVous,
-  type RendezVous,
-  type StatutRendezVous,
-} from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
+import { getOrganisationById, getParticipantById, getReferentSponsor, updateRendezVous } from '../data/helpers';
+
+// Types pour RendezVous (temporaires jusqu'à ce qu'ils soient définis dans types.ts)
+export type StatutRendezVous = 'acceptée' | 'en-attente' | 'occupée' | 'annulée';
+
+export interface RendezVous {
+  id: string;
+  date: string;
+  heureDebut: string;
+  heureFin: string;
+  demandeurId: string;
+  recepteurId: string;
+  type: 'participant' | 'sponsor';
+  statut: StatutRendezVous;
+  sujet?: string;
+  notes?: string;
+}
 
 interface CalendarViewProps {
   rendezVous: RendezVous[];

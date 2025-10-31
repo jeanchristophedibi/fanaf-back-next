@@ -4,7 +4,7 @@
  */
 
 import { fanafApi } from '../../services/fanafApi';
-import type { Organisation } from './mockData';
+import type { Organisation } from './types';
 
 /**
  * Mappe les données de sponsor de l'API vers le format Organisation

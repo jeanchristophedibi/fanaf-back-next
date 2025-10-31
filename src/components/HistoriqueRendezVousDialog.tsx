@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Calendar, Clock, User, Building2, Send, Inbox, Mail, Phone, ArrowLeft } from 'lucide-react';
-import { getParticipantById, getReferentSponsor, getOrganisationById, type RendezVous } from './data/mockData';
+import { type RendezVous } from './data/types';
+import { getParticipantById, getReferentSponsor, getOrganisationById } from './data/helpers';
 
 interface HistoriqueRendezVousDialogProps {
   isOpen: boolean;

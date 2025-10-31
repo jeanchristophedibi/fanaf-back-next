@@ -15,7 +15,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { useDynamicInscriptions } from '../../../components/hooks/useDynamicInscriptions';
-import { getOrganisationById } from '../../../components/data/mockData';
+import { getOrganisationById } from '../../../components/data/helpers';
 import { AnimatedStat } from '../../../components/AnimatedStat';
 
 export default function OperateurBadgeDashboard() {

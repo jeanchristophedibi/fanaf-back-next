@@ -10,7 +10,7 @@ import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
 
 export function WidgetVIP() {
-  const { participants: mockParticipants } = useDynamicInscriptions();
+  const { participants: allParticipants } = useDynamicInscriptions();
   const [apiParticipants, setApiParticipants] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,7 +29,7 @@ export function WidgetVIP() {
     load();
   }, []);
 
-  const participants = apiParticipants.length > 0 ? apiParticipants : mockParticipants.filter(p => p.statut === 'vip');
+  const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'vip');
 
   const stats = useMemo(() => {
     const vip = participants.filter(p => p.statut === 'vip');
