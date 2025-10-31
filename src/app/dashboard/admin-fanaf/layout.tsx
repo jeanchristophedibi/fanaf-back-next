@@ -7,7 +7,6 @@ import { usePathname, useRouter } from 'next/navigation';
 
 export type NavItem =
   | 'home'
-  | 'check-in'
   | 'inscriptions-liste'
   | 'inscriptions-membre'
   | 'inscriptions-non-membre'
@@ -31,7 +30,6 @@ export default function AdminFanafLayout({ children }: { children: React.ReactNo
 
   // Déterminer l'élément actif basé sur l'URL
   const getActiveNav = (): string => {
-    if (pathname?.includes('/check-in')) return 'check-in';
     
     // Inscriptions
     if (pathname?.includes('/inscriptions/planvol')) return 'inscriptions-planvol';
@@ -67,9 +65,6 @@ export default function AdminFanafLayout({ children }: { children: React.ReactNo
     switch (nav) {
       case 'home':
         router.push('/dashboard/admin-fanaf');
-        break;
-      case 'check-in':
-        router.push('/dashboard/admin-fanaf/check-in');
         break;
       // Inscriptions
       case 'inscriptions-liste':

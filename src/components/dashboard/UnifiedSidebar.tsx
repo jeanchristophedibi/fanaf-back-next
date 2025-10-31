@@ -73,7 +73,6 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
         return {
           mainNavItems: [
             { id: 'home', label: 'Accueil', icon: Home },
-            { id: 'check-in', label: 'Check-in', icon: ScanLine },
           ],
           showInscriptions: true,
           showTresorerie: true,

@@ -2,7 +2,6 @@ export type NavItem =
   | 'home'
   | 'finance'
   | 'finance-paiements'
-  | 'check-in'
   | 'inscriptions-liste'
   | 'inscriptions-membre'
   | 'inscriptions-non-membre'

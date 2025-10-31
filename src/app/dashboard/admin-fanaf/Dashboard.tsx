@@ -6,7 +6,6 @@ import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
 import { OrganisationsPage } from '../../../components/organisations/OrganisationsPage';
 import { NetworkingPage } from '../../../components/NetworkingPage';
-import { CheckInScanner } from '../../../components/CheckInScanner';
 import { FinancePage } from '../../../components/finance/FinancePage';
 import { ListePaiementsPage } from '../../../components/ListePaiementsPage';
 import { HistoriqueDemandesPage } from '../../../components/HistoriqueDemandesPage';
@@ -29,9 +28,6 @@ export default function AdminFanafDashboard({ onSwitchProfile }: AdminFanafDashb
       
       case 'finance-paiements':
         return <ListePaiementsPage />;
-      
-      case 'check-in':
-        return <CheckInScanner readOnly />;
 
       case 'inscriptions-liste':
         return <ListeInscriptionsPage readOnly userProfile="fanaf" />;
@@ -87,7 +83,6 @@ export default function AdminFanafDashboard({ onSwitchProfile }: AdminFanafDashb
       case 'home': return 'Tableau de bord';
       case 'finance': return 'Encaissement';
       case 'finance-paiements': return 'Liste des paiements';
-      case 'check-in': return 'Check-in Participants';
       case 'inscriptions-liste': return 'Liste des inscriptions';
       case 'inscriptions-membre': return 'Inscriptions - Membres';
       case 'inscriptions-non-membre': return 'Inscriptions - Non-membres';

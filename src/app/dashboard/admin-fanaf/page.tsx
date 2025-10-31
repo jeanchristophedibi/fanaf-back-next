@@ -8,7 +8,6 @@ import { InscriptionsPage } from '../../../components/InscriptionsPage';
 import { ListeInscriptionsPage } from '../../../components/ListeInscriptionsPage';
 import { OrganisationsPage } from '../../../components/organisations/OrganisationsPage';
 import { NetworkingPage } from '../../../components/NetworkingPage';
-import { CheckInScanner } from '../../../components/CheckInScanner';
 import { FinancePage } from '../../../components/finance/FinancePage';
 import { ListePaiementsPage } from '../../../components/ListePaiementsPage';
 import { HistoriqueDemandesPage } from '../../../components/HistoriqueDemandesPage';
@@ -21,10 +20,6 @@ export default function AdminFanafDashboard() {
 
   // Déterminer le contenu basé sur l'URL
   const getContent = () => {
-    if (pathname?.includes('/check-in')) {
-      return <CheckInScanner readOnly />;
-    }
-    
     if (pathname?.includes('/finance')) {
       if (pathname?.includes('/paiements')) {
         return <ListePaiementsPage />;

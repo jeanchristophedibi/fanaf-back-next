@@ -20,7 +20,6 @@ admin-fanaf/
 Le dashboard supporte les sections suivantes :
 
 - **Accueil** (`home`) - Vue d'ensemble
-- **Check-in** (`check-in`) - Scanner QR code des participants
 - **Encaissement**
   - Vue d'ensemble (`finance`)
   - Liste des paiements (`finance-paiements`)
@@ -69,7 +68,6 @@ Ce dashboard utilise les composants partagés depuis `../../components/` :
 - ListeInscriptionsPage
 - OrganisationsPage
 - NetworkingPage
-- CheckInScanner
 - FinancePage
 - ListePaiementsPage
 - HistoriqueDemandesPage
