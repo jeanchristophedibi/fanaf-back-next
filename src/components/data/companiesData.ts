@@ -312,10 +312,12 @@ export class CompaniesDataService {
     
     // Si non trouvé, essayer de chercher dans le cache (peut-être un problème de casse ou format)
     if (!org && this.organisationsCache.length > 0) {
+      const idStr = String(id || '');
+      const idLower = idStr.toLowerCase();
       org = this.organisationsCache.find(o => 
         o.id === id || 
-        o.id?.toLowerCase() === id.toLowerCase() ||
-        String(o.id) === String(id)
+        (typeof o.id === 'string' && o.id.toLowerCase() === idLower) ||
+        String(o.id) === idStr
       );
       // Si trouvé, l'ajouter au Map pour un accès futur plus rapide
       if (org) {

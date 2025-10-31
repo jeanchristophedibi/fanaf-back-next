@@ -30,14 +30,25 @@ export function mapApiRegistrationToParticipant(apiData: any): Participant {
   
   // Déterminer le statut d'inscription basé sur 'statut_inscription' de l'API
   // La nouvelle API utilise 'statut_inscription' directement ('finalisée' ou 'non-finalisée')
-  const statutInscriptionApi = apiData.statut_inscription || apiData.status_inscription || apiData.registration_status || apiData.status;
+  // Ou peut être dans registration.status ('completed' ou 'pending')
+  let statutInscriptionApi = apiData.statut_inscription || apiData.status_inscription || apiData.registration_status || apiData.status;
+  
+  // Si pas de statut au niveau principal, chercher dans registration
+  if (!statutInscriptionApi && apiData.registration) {
+    statutInscriptionApi = apiData.registration.status || 
+                           apiData.registration.registration_status ||
+                           apiData.registration.status_label;
+  }
   
   let statutInscription: StatutInscription = 'non-finalisée';
   if (statutInscriptionApi === 'finalisée' || 
       statutInscriptionApi === 'finalized' || 
       statutInscriptionApi === 'completed' || 
+      statutInscriptionApi === 'Confirmée' ||
       statutInscriptionApi === 'paid' ||
-      apiData.date_paiement) {
+      apiData.date_paiement ||
+      apiData.registration?.confirmed_at ||
+      apiData.registration?.confirmed_at_raw) {
     statutInscription = 'finalisée';
   }
   
@@ -107,13 +118,106 @@ export function mapApiRegistrationToParticipant(apiData: any): Participant {
   }
 
   // Utiliser l'ID de l'API tel quel s'il existe, sinon générer un ID déterministe
-  // Ne pas préfixer les IDs de l'API qui commencent déjà par "reg_"
+  // La nouvelle structure utilise des IDs comme "use_LevZ6zyVlDRoW" qu'on garde tels quels
+  // Ne pas préfixer les IDs de l'API qui commencent déjà par "reg_" ou "use_"
   let participantId = apiData.id || apiData.participant_id || apiData.participantId;
+  
+  // Si pas d'ID au niveau principal, chercher dans registration.user
+  if (!participantId && apiData.registration?.user?.id) {
+    participantId = apiData.registration.user.id;
+  }
+  
   if (!participantId || participantId === '') {
     participantId = generateUniqueId();
-  } else if (typeof participantId === 'string' && participantId.startsWith('use_')) {
-    // Corriger les IDs qui ont le préfixe "use_" - peut-être une erreur de parsing
-    participantId = participantId.replace(/^use_/, 'reg_');
+  }
+  // On garde les IDs avec préfixe "use_" tels quels car c'est la structure de l'API
+
+  // Extraire l'organisation depuis l'objet company si disponible
+  // La nouvelle structure a company.id ou organisation_id au niveau principal
+  let organisationId = apiData.organisation_id || apiData.organization_id || apiData.organisationId || 
+                       apiData.association_id || apiData.associationId || apiData.org_id || apiData.orgId || '';
+  
+  // Si company est un objet avec un id, utiliser company.id
+  if (!organisationId && apiData.company) {
+    if (typeof apiData.company === 'object' && apiData.company.id) {
+      organisationId = apiData.company.id;
+    } else if (typeof apiData.company === 'string') {
+      organisationId = apiData.company;
+    }
+  }
+  
+  // Extraire le pays depuis l'objet country si disponible
+  // La nouvelle structure a country.name (objet) ou pays (string) au niveau principal
+  // Country peut être un objet {name: "...", code: "..."} ou un tableau vide [] ou null
+  let pays = '';
+  
+  // Priorité 1: pays direct (string)
+  if (typeof apiData.pays === 'string' && apiData.pays.trim() !== '') {
+    pays = apiData.pays;
+  }
+  // Priorité 2: country.name si country est un objet
+  else if (apiData.country && typeof apiData.country === 'object' && !Array.isArray(apiData.country)) {
+    if (apiData.country.name && typeof apiData.country.name === 'string') {
+      pays = apiData.country.name;
+    }
+  }
+  // Priorité 3: country depuis registration.user.country si country principal est vide
+  else if (!pays && apiData.registration?.user?.country) {
+    const userCountry = apiData.registration.user.country;
+    if (userCountry && typeof userCountry === 'object' && !Array.isArray(userCountry)) {
+      if (userCountry.name && typeof userCountry.name === 'string') {
+        pays = userCountry.name;
+      }
+    }
+  }
+  // Priorité 4: country_name ou country (si string)
+  else if (!pays && typeof apiData.country_name === 'string' && apiData.country_name.trim() !== '') {
+    pays = apiData.country_name;
+  }
+  else if (!pays && typeof apiData.country === 'string' && apiData.country.trim() !== '') {
+    pays = apiData.country;
+  }
+  
+  // Extraire date_paiement depuis registration.confirmed_at_raw si disponible
+  let datePaiement = apiData.date_paiement || apiData.confirmed_at || apiData.payment_date || apiData.paymentDate || apiData.paid_at;
+  if (!datePaiement && apiData.registration) {
+    datePaiement = apiData.registration.confirmed_at_raw || 
+                   apiData.registration.confirmed_at || 
+                   apiData.registration.date_paiement;
+  }
+  
+  // Extraire badge_genere depuis registration.badge_path si disponible
+  // Vérifie aussi dans registration.user.registration.badge_path
+  let badgeGenere = apiData.badge_genere === true || 
+                    apiData.badge_generated === true || 
+                    apiData.badgeGenere === true || 
+                    apiData.has_badge === true;
+  
+  if (!badgeGenere && apiData.registration) {
+    // Vérifier registration.badge_path
+    const badgePath = apiData.registration.badge_path;
+    badgeGenere = !!(badgePath && 
+                     badgePath !== 'Non disponible' &&
+                     badgePath !== '' &&
+                     (badgePath.startsWith('http') || badgePath.startsWith('/')));
+    
+    // Si pas trouvé, vérifier dans registration.user.registration.badge_path
+    if (!badgeGenere && apiData.registration.user?.registration?.badge_path) {
+      const userBadgePath = apiData.registration.user.registration.badge_path;
+      badgeGenere = !!(userBadgePath && 
+                       userBadgePath !== 'Non disponible' &&
+                       userBadgePath !== '' &&
+                       (userBadgePath.startsWith('http') || userBadgePath.startsWith('/')));
+    }
+    
+    // Vérifier aussi registration.user.badge_url
+    if (!badgeGenere && apiData.registration.user?.badge_url) {
+      const badgeUrl = apiData.registration.user.badge_url;
+      badgeGenere = !!(badgeUrl && 
+                       badgeUrl !== 'Non disponible' &&
+                       badgeUrl !== '' &&
+                       (badgeUrl.startsWith('http') || badgeUrl.startsWith('/')));
+    }
   }
 
   const participant: Participant = {
@@ -122,30 +226,48 @@ export function mapApiRegistrationToParticipant(apiData: any): Participant {
     prenom: prenom || '',
     reference: apiData.reference || apiData.registration_number || apiData.id || '',
     email: apiData.email || '',
-    telephone: apiData.phone || apiData.telephone || apiData.phone_number || '',
-    pays: apiData.country || apiData.pays || apiData.country_name || '',
-    fonction: apiData.function || apiData.fonction || apiData.position || apiData.job_title,
-    // L'API utilise 'company' au lieu de organisation_id, on devra mapper ça séparément
-    organisationId: apiData.organisation_id || apiData.organization_id || apiData.organisationId || 
-                     apiData.association_id || apiData.associationId || apiData.org_id || apiData.orgId || apiData.company || '',
+    telephone: apiData.telephone || apiData.phone || apiData.contact || apiData.phone_number || '',
+    pays: pays || '',
+    fonction: apiData.fonction || apiData.function || apiData.position || apiData.job_title,
+    organisationId: organisationId || '',
     statut,
     statutInscription,
     dateInscription,
-    datePaiement: apiData.date_paiement || apiData.confirmed_at || apiData.payment_date || apiData.paymentDate || apiData.paid_at,
+    datePaiement: datePaiement || undefined,
     modePaiement: apiData.mode_paiement || apiData.payment_method ? 
       (apiData.mode_paiement || apiData.payment_method || '').toLowerCase().replace(/_/g, '-').replace(' ', '-') as any : undefined,
     canalEncaissement: apiData.canal_encaissement || apiData.payment_channel || apiData.paymentChannel,
-    badgeGenere: apiData.badge_genere === true || apiData.badge_generated === true || apiData.badgeGenere === true || apiData.has_badge === true,
+    badgeGenere: badgeGenere,
     checkIn: apiData.check_in === true || apiData.checked_in === true || apiData.checkIn === true || apiData.has_checked_in === true,
     checkInDate: apiData.check_in_date || apiData.checkInDate || apiData.checked_in_at,
   };
 
   // Gestion des inscriptions groupées: si groupe_id existe, renseigner les infos de groupe
-  if (apiData.groupe_id || apiData.group_id) {
-    const groupId = apiData.groupe_id || apiData.group_id || apiData.groupId || apiData.groupeId ||
-      apiData.group_reference || apiData.reference || undefined;
-    const groupName = apiData.nom_groupe || apiData.group_name || apiData.groupe_nom || apiData.groupName || apiData.groupeName ||
-      apiData.company || undefined;
+  // La nouvelle structure peut avoir les infos de groupe dans registration.user
+  let groupId = apiData.groupe_id || apiData.group_id || apiData.groupId || apiData.groupeId;
+  let groupName = apiData.nom_groupe || apiData.group_name || apiData.groupe_nom || apiData.groupName || apiData.groupeName;
+  
+  // Si pas de groupe au niveau principal, chercher dans registration.user
+  if (!groupId && apiData.registration?.user) {
+    const user = apiData.registration.user;
+    // Si l'utilisateur est chef de groupe, utiliser sa référence ou son ID comme groupeId
+    if (user.is_head_group === true) {
+      groupId = apiData.reference || apiData.registration?.reference || user.registration?.reference || apiData.id;
+      // Utiliser le nom de l'entreprise comme nom de groupe
+      if (!groupName && user.company?.name) {
+        groupName = user.company.name;
+      } else if (!groupName && apiData.company?.name) {
+        groupName = apiData.company.name;
+      }
+    }
+  }
+  
+  // Utiliser le nom de l'entreprise comme nom de groupe si disponible
+  if (!groupName && apiData.company?.name) {
+    groupName = apiData.company.name;
+  }
+  
+  if (groupId || groupName) {
     if (groupId) participant.groupeId = String(groupId);
     if (groupName) participant.nomGroupe = String(groupName);
     // Ajouter un marqueur souple pour les consommateurs qui inspectent p.type
