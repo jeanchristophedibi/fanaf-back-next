@@ -1,7 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -13,12 +12,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from './ui/pagination';
 import { Search, Download, Filter, Users, UserCheck, Award, Mic, Eye, FileDown, User, Mail, Phone, Globe, Building, Calendar, FileText, X, QrCode, Package, Receipt, CheckCircle2, Clock } from 'lucide-react';
 import { getOrganisationById, type Participant } from './data/mockData';
-import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
+import { useParticipantsQuery } from '../hooks/useParticipantsQuery';
+import { useOrganisationsQuery } from '../hooks/useOrganisationsQuery';
 import { AnimatedStat } from './AnimatedStat';
 import { toast } from 'sonner';
 import { BadgeGenerator } from './BadgeGenerator';
 import { ReceiptGenerator } from './ReceiptGenerator';
 import { WidgetStatsInscriptions } from './inscriptions/WidgetStatsInscriptions';
+import { LoaderOverlay } from './ui/LoaderOverlay';
 import JSZip from 'jszip';
 
 const statutColors = {
@@ -49,7 +50,13 @@ interface ListeInscriptionsPageProps {
 }
 
 export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence' }: ListeInscriptionsPageProps = {}) {
-  const { participants, organisations } = useDynamicInscriptions({ includeOrganisations: true });
+  // Utiliser React Query pour les participants et organisations avec cache optimisé
+  const { participants, isLoading: isLoadingParticipants, isError: isErrorParticipants } = useParticipantsQuery({ includeOrganisations: true });
+  const { organisations, isLoading: isLoadingOrganisations, isError: isErrorOrganisations } = useOrganisationsQuery();
+  
+  const isLoading = isLoadingParticipants || isLoadingOrganisations;
+  const isError = isErrorParticipants || isErrorOrganisations;
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -272,6 +279,7 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
     setAppliedStatutInscriptionFilters(tempStatutInscriptionFilters);
     setAppliedOrganisationFilters(tempOrganisationFilters);
     setAppliedPaysFilters(tempPaysFilters);
+    setCurrentPage(1); // Réinitialiser la page lors de l'application des filtres
     setShowFilters(false);
     toast.success('Filtres appliqués');
   };
@@ -286,6 +294,7 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
     setAppliedStatutInscriptionFilters([]);
     setAppliedOrganisationFilters([]);
     setAppliedPaysFilters([]);
+    setCurrentPage(1); // Réinitialiser la page lors de la réinitialisation des filtres
     toast.success('Filtres réinitialisés');
   };
 
@@ -344,10 +353,11 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
   const endIndex = startIndex + itemsPerPage;
   const paginatedParticipants = filteredParticipants.slice(startIndex, endIndex);
 
-  // Réinitialiser la page lors d'un changement de filtre
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, appliedStatutFilters, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
+  // Réinitialiser la page lors d'un changement de recherche (via handler)
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // Réinitialiser la page lors de la recherche
+  };
 
   const exportToCSV = () => {
     const headers = ['Référence', 'Nom', 'Prénom', 'Email', 'Contact', 'Organisation', 'Pays', 'Statut Participant', 'Statut Inscription', 'Mode de paiement', 'Date Inscription'];
@@ -615,6 +625,18 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
     }
   };
 
+  // Gestion des erreurs uniquement (pas de loader)
+  if (isError) {
+    return (
+      <div className="animate-page-enter flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Erreur lors du chargement des données</p>
+          <Button onClick={() => window.location.reload()}>Réessayer</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-page-enter">
 
@@ -717,7 +739,7 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
               <Input
                 placeholder="Rechercher par nom, prénom, email, référence, téléphone, pays, organisation..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-8 h-8 text-sm"
               />
             </div>
@@ -1099,6 +1121,7 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
           </div>
         )}
       </div>
+      <LoaderOverlay isLoading={isLoading} message="Chargement des inscriptions..." subMessage="Récupération des données en cours" />
     </div>
   );
 }

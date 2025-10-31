@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
 import { AuthGuard } from '../../../components/auth/AuthGuard';
 import { usePathname, useRouter } from 'next/navigation';
@@ -23,9 +23,9 @@ export default function AdminAsaciLayout({ children }: { children: React.ReactNo
     return 'home';
   };
 
-  const activeNav = getActiveNav();
+  const activeNav = useMemo(() => getActiveNav(), [pathname]);
 
-  const handleNavChange = (nav: string) => {
+  const handleNavChange = useCallback((nav: string) => {
     switch (nav) {
       case 'home':
         router.push('/dashboard/admin-asaci');
@@ -40,7 +40,7 @@ export default function AdminAsaciLayout({ children }: { children: React.ReactNo
         router.push('/dashboard/admin-asaci/paiements/liste');
         break;
     }
-  };
+  }, [router]);
 
   return (
     <AuthGuard>

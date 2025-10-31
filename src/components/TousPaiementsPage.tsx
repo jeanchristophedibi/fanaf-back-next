@@ -20,14 +20,12 @@ import {
   SelectValue,
 } from './ui/select';
 import { Search, FileText, Download, ChevronLeft, ChevronRight, MoreVertical, Receipt, BadgeCheck, Mail, Filter, X } from 'lucide-react';
-import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { useFanafApi } from '../hooks/useFanafApi';
 import { getOrganisationById, type Participant, type StatutParticipant, type ModePaiement } from './data/mockData';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 export function TousPaiementsPage() {
-  const { participants: mockParticipants } = useDynamicInscriptions();
   const { api } = useFanafApi();
   const [apiPayments, setApiPayments] = useState<any[]>([]);
   const [apiLoading, setApiLoading] = useState<boolean>(true);
@@ -102,11 +100,9 @@ export function TousPaiementsPage() {
         };
       });
     }
-    // Fallback: participants finalisés (mocks)
-    return mockParticipants.filter(p => 
-      p.statutInscription === 'finalisée' || finalisedParticipants.has(p.id)
-    );
-  }, [apiPayments, mockParticipants, finalisedParticipants]);
+    // Retourner un tableau vide si pas de paiements depuis l'API
+    return [];
+  }, [apiPayments, finalisedParticipants]);
 
   // Obtenir les listes uniques pour les filtres
   const uniqueOrganisations = useMemo(() => {

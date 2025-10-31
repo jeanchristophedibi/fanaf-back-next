@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import '../index.css'
+import { QueryProvider } from '../providers/QueryProvider'
 
 export const metadata: Metadata = {
   title: 'FANAF 2026 - Back Office',
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   )
 }

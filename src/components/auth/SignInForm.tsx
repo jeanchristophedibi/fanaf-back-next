@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Eye, EyeOff, Lock, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';
 import loginImage from '../../assets/images/img-1.jpg';
@@ -170,13 +170,30 @@ function SignInFormContent() {
 
             <Button 
               type="submit" 
-              className="w-full bg-orange-600 hover:bg-orange-700"
+              className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-70 disabled:cursor-not-allowed"
               disabled={loading}
             >
-              {loading ? 'Connexion...' : 'Se connecter'}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Connexion en cours...
+                </>
+              ) : (
+                'Se connecter'
+              )}
             </Button>
           </form>
 
+          {/* Overlay de chargement pendant la connexion */}
+          {loading && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
+              <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center space-y-4">
+                <Loader2 className="w-12 h-12 text-orange-600 animate-spin" />
+                <p className="text-gray-900 font-medium">Connexion en cours...</p>
+                <p className="text-sm text-gray-500">Veuillez patienter</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -186,10 +203,10 @@ function SignInFormContent() {
 export default function SignInForm() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement...</p>
+          <Loader2 className="w-12 h-12 text-orange-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Chargement de la page de connexion...</p>
         </div>
       </div>
     }>

@@ -125,14 +125,21 @@ export function useFanafApi(options: UseFanafApiOptions = {}) {
   const fetchBadgeScansCounters = useCallback(async () => {
     if (!enabled) return;
     setLoading(true);
-    setError(null);
+    // Ne pas réinitialiser l'erreur globale pour les badge scans (non-critique)
     try {
       const counters = await fanafApi.getBadgeScansCounters();
       setBadgeScansCounters(counters);
       return counters;
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de la récupération des compteurs de scans');
-      console.error('Erreur fetchBadgeScansCounters:', err);
+      // Erreurs réseau pour badge scans sont ignorées silencieusement (non-critique)
+      const isNetworkError = err?.message?.includes('connexion') || 
+                            err?.message?.includes('Failed to fetch') ||
+                            err?.message?.includes('NetworkError');
+      if (!isNetworkError) {
+        console.warn('[useFanafApi] Erreur badge scans counters (non-critique):', err?.message || err);
+      }
+      // Ne pas mettre l'erreur globale pour les badge scans (feature optionnelle)
+      return null;
     } finally {
       setLoading(false);
     }

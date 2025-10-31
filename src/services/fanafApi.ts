@@ -86,6 +86,10 @@ class FanafApiService {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
         headers,
+      }).catch((fetchError) => {
+        // Gérer les erreurs réseau (CORS, connexion refusée, timeout, etc.)
+        console.warn(`[fanafApi] Erreur réseau lors de l'appel à ${endpoint}:`, fetchError);
+        throw new Error(`Erreur de connexion: ${fetchError.message || 'Impossible de joindre le serveur'}`);
       });
 
       // Tenter de parser la réponse, même en cas d'erreur HTTP

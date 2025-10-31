@@ -13,6 +13,7 @@ import type { Organisation } from "../data/mockData";
 import { companiesDataService } from "../data/companiesData";
 import { sponsorsDataService } from "../data/sponsorsData";
 import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
+import { useOrganisationsQuery } from "../../hooks/useOrganisationsQuery";
 import { BadgeReferentGenerator } from "../BadgeReferentGenerator";
 import { HistoriqueRendezVousDialog } from "../HistoriqueRendezVousDialog";
 import type { OrganisationSubSection } from "../../app/dashboard/agence/types";
@@ -38,30 +39,14 @@ interface ListeOrganisationsProps {
 export function ListeOrganisations({ subSection, filter, readOnly = false }: ListeOrganisationsProps) {
   // Rendez-vous toujours depuis le hook existant
   const { rendezVous } = useDynamicInscriptions({ includeRendezVous: true });
-  // Organisations depuis le service centralisé companiesDataService
-  const [organisations, setOrganisations] = useState<Organisation[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Organisations via React Query avec cache optimisé
+  const { organisations, isLoading, isError } = useOrganisationsQuery();
   const activeFilter = filter || subSection;
   const [searchTerm, setSearchTerm] = useState('');
   const [paysFilter, setPaysFilter] = useState<string>('tous');
   const [historiqueParticipantId, setHistoriqueParticipantId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  
-  // Charger les organisations via le service au montage
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        setIsLoading(true);
-        const orgs = await companiesDataService.loadOrganisations();
-        if (mounted) setOrganisations(orgs);
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
 
   const filteredOrganisations = useMemo(() => {
     let filtered = [...organisations];
@@ -368,7 +353,6 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
         readOnly={readOnly}
         enableSelection={true}
         buildActions={buildActions}
-        loading={isLoading}
       />
 
       {/* Dialogue historique rendez-vous */}

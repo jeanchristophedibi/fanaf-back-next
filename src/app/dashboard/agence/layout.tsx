@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
 import { AuthGuard } from '../../../components/auth/AuthGuard';
 import { usePathname, useRouter } from 'next/navigation';
@@ -57,9 +57,9 @@ export default function AgenceLayout({ children }: { children: React.ReactNode }
     return 'home';
   };
 
-  const activeNav = getActiveNav();
+  const activeNav = useMemo(() => getActiveNav(), [pathname]);
 
-  const handleNavChange = (nav: string) => {
+  const handleNavChange = useCallback((nav: string) => {
     switch (nav) {
       case 'home':
         router.push('/dashboard/agence');
@@ -118,7 +118,7 @@ export default function AgenceLayout({ children }: { children: React.ReactNode }
       default:
         router.push('/dashboard/agence');
     }
-  };
+  }, [router]);
 
   return (
     <AuthGuard>

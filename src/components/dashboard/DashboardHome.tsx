@@ -11,6 +11,7 @@ import { loadDashboardCounts } from '../data/DashboardData';
 import { Skeleton } from '../ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useFanafApi } from '../../hooks/useFanafApi';
+import { LoaderOverlay } from '../ui/LoaderOverlay';
 
 interface DashboardHomeProps {
   userProfile?: 'agence' | 'fanaf' | 'agent';
@@ -66,8 +67,11 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
         setOrganisationsCounts(counts.organisations);
         setNetworkingCounts(counts.networking);
         setTotals(counts.totals);
-        // Fetch check-in counters in parallel after base data
-        fetchBadgeScansCounters();
+        // Fetch check-in counters in parallel after base data (ignore errors silently)
+        fetchBadgeScansCounters().catch((err) => {
+          // Ignorer les erreurs de badge scans counters (API peut ne pas être disponible)
+          console.warn('[DashboardHome] Impossible de charger les badges scans counters:', err?.message || err);
+        });
       } catch (e: any) {
         if (!mounted) return;
         setError(e?.message || 'Erreur lors du chargement des données');
@@ -278,6 +282,7 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
           )}
         </TabsContent>
       </Tabs>
+      <LoaderOverlay isLoading={loading} message="Chargement du tableau de bord..." subMessage="Récupération des données en cours" />
     </div>
   );
 }

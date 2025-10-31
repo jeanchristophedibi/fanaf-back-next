@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { CheckCircle2, CreditCard, Clock, User, Building, DollarSign } from 'lucide-react';
-import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { useFanafApi } from '../hooks/useFanafApi';
 import { getOrganisationById, type Participant, type ModePaiement } from './data/mockData';
 import { toast } from 'sonner';
@@ -13,7 +12,6 @@ import { FinalizePaiementDialog } from './paiements/caisse/FinalizePaiementDialo
 import { CaissePendingTable } from './paiements/caisse/CaissePendingTable';
 
 export function CaissePaiementsPage() {
-  const { participants: mockParticipants } = useDynamicInscriptions();
   const { api } = useFanafApi();
   const [apiParticipants, setApiParticipants] = useState<any[]>([]);
   const [apiLoading, setApiLoading] = useState<boolean>(true);
@@ -54,7 +52,7 @@ export function CaissePaiementsPage() {
     return () => { mounted = false; };
   }, [api]);
 
-  const participantsSource = apiParticipants.length > 0 ? apiParticipants : mockParticipants;
+  const participantsSource = apiParticipants;
 
   // Filtrer uniquement les inscriptions en attente (non finalisées) et qui ne sont pas exonérées
   // Exclure aussi les participants qui ont été finalisés localement

@@ -21,7 +21,6 @@ import {
   DialogTitle,
 } from './ui/dialog';
 import { Search, Users, CheckCircle2, Filter, X, AlertCircle, FileText } from 'lucide-react';
-import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
 import { useFanafApi } from '../hooks/useFanafApi';
 import { getOrganisationById, type Participant, type ModePaiement } from './data/mockData';
 import { motion, AnimatePresence } from 'motion/react';
@@ -29,7 +28,6 @@ import { toast } from 'sonner';
 import { GroupDocumentsGenerator } from './GroupDocumentsGenerator';
 
 export function PaiementsGroupesPage() {
-  const { participants: mockParticipants } = useDynamicInscriptions();
   const { api } = useFanafApi();
   const [apiParticipants, setApiParticipants] = useState<any[]>([]);
   const [apiLoading, setApiLoading] = useState<boolean>(true);
@@ -78,7 +76,7 @@ export function PaiementsGroupesPage() {
     return () => { mounted = false; };
   }, [api]);
 
-  const baseParticipants = apiParticipants.length > 0 ? apiParticipants : mockParticipants;
+  const baseParticipants = apiParticipants;
 
   // Filtrer les participants non finalisés (membres et non-membres uniquement)
   const participantsEnAttente = useMemo(() => {

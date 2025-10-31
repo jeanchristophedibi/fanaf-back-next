@@ -1,22 +1,23 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
 
 type NavItem = 'dashboard' | 'paiements-attente' | 'paiements';
 
 export default function OperateurCaisseLayout({ children }: { children: React.ReactNode }) {
-  const [activeNav, setActiveNav] = useState<NavItem>('dashboard');
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  // Charger activeNav depuis localStorage une seule fois au montage
+  const [activeNav, setActiveNav] = useState<NavItem>(() => {
+    if (typeof window === 'undefined') return 'dashboard';
     try {
       const stored = localStorage.getItem('operateur_caisse_active_nav');
-      if (stored) setActiveNav(stored as NavItem);
-    } catch (_) {}
-  }, []);
+      return stored ? (stored as NavItem) : 'dashboard';
+    } catch (_) {
+      return 'dashboard';
+    }
+  });
 
-  const handleNavChange = (nav: string) => {
+  const handleNavChange = useCallback((nav: string) => {
     const mapped = (nav as NavItem) || 'dashboard';
     setActiveNav(mapped);
     if (typeof window === 'undefined') return;
@@ -25,7 +26,7 @@ export default function OperateurCaisseLayout({ children }: { children: React.Re
       // informer les enfants
       window.dispatchEvent(new Event('storage'));
     } catch (_) {}
-  };
+  }, []);
 
   return (
     <UnifiedLayout
