@@ -195,61 +195,63 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
 
               <NetworkingSection statsNetworking={networkingCounts} basePath={baseNetworkingPath} />
 
-              {/* Check-in widgets (full width, last section) */}
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium">Check-in</CardTitle>
-                    <ScanLine className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="p-3 rounded-lg bg-gray-50">
-                        <p className="text-xs text-gray-500">Total</p>
-                        <p className="text-2xl text-gray-900">{badgeScansCounters?.counts?.total ?? '-'}</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-green-50">
-                        <p className="text-xs text-green-700">Succès</p>
-                        <div className="flex items-center gap-1">
-                          <CheckCircle className="w-4 h-4 text-green-600" />
-                          <p className="text-xl text-green-900">{badgeScansCounters?.counts?.success ?? '-'}</p>
+              {/* Check-in widgets (full width, last section) - Pas affiché pour le profil fanaf */}
+              {userProfile !== 'fanaf' && (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium">Check-in</CardTitle>
+                      <ScanLine className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-3 rounded-lg bg-gray-50">
+                          <p className="text-xs text-gray-500">Total</p>
+                          <p className="text-2xl text-gray-900">{badgeScansCounters?.counts?.total ?? '-'}</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-green-50">
+                          <p className="text-xs text-green-700">Succès</p>
+                          <div className="flex items-center gap-1">
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                            <p className="text-xl text-green-900">{badgeScansCounters?.counts?.success ?? '-'}</p>
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-red-50">
+                          <p className="text-xs text-red-700">Échecs</p>
+                          <div className="flex items-center gap-1">
+                            <XCircle className="w-4 h-4 text-red-600" />
+                            <p className="text-xl text-red-900">{badgeScansCounters?.counts?.failed ?? '-'}</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="p-3 rounded-lg bg-red-50">
-                        <p className="text-xs text-red-700">Échecs</p>
-                        <div className="flex items-center gap-1">
-                          <XCircle className="w-4 h-4 text-red-600" />
-                          <p className="text-xl text-red-900">{badgeScansCounters?.counts?.failed ?? '-'}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Derniers scans (succès)</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {badgeScansCounters?.groups?.success?.slice(0, 8).map((scan: any) => (
-                        <div key={scan.id} className="flex items-center justify-between text-sm border-b last:border-b-0 py-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                            <span className="text-gray-900 truncate">User #{scan.user_id}</span>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Derniers scans (succès)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {badgeScansCounters?.groups?.success?.slice(0, 8).map((scan: any) => (
+                          <div key={scan.id} className="flex items-center justify-between text-sm border-b last:border-b-0 py-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              <span className="text-gray-900 truncate">User #{scan.user_id}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-gray-500">
+                              <span className="hidden sm:inline truncate max-w-[140px]">Reg #{scan.registration_id}</span>
+                              <span className="truncate max-w-[160px]">{new Date(scan.scan_at).toLocaleString('fr-FR')}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3 text-gray-500">
-                            <span className="hidden sm:inline truncate max-w-[140px]">Reg #{scan.registration_id}</span>
-                            <span className="truncate max-w-[160px]">{new Date(scan.scan_at).toLocaleString('fr-FR')}</span>
-                          </div>
-                        </div>
-                      )) || (
-                        <div className="text-sm text-gray-500">Aucun scan récent</div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+                        )) || (
+                          <div className="text-sm text-gray-500">Aucun scan récent</div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </>
           )}
         </TabsContent>
