@@ -12,33 +12,43 @@ import { companiesDataService } from './companiesData';
  */
 export function mapApiRegistrationToParticipant(apiData: any): Participant {
   // Mapper la catégorie API vers le statut Participant
-  // L'API peut avoir 'type' qui est 'individual' ou 'group', mais ce n'est pas le statut membre
-  // On essaie de déduire le statut membre depuis d'autres champs si disponibles
-  const category = apiData.category || apiData.participant_type || apiData.statut;
+  // La nouvelle API utilise 'membership' (member/not_member) et 'vip' (boolean)
+  // L'API a aussi 'type' qui est 'individual' ou 'group' (pour distinguer les inscriptions individuelles vs groupées)
+  const membership = apiData.membership || apiData.category || apiData.participant_type || apiData.statut;
+  const isVip = apiData.vip === true || apiData.vip === 'true' || apiData.is_vip === true;
   const apiType = apiData.type; // 'individual' ou 'group'
   let statut: StatutParticipant = 'non-membre';
   
-  if (category === 'member' || category === 'membre') {
-    statut = 'membre';
-  } else if (category === 'not_member' || category === 'non-membre' || category === 'not-member') {
-    statut = 'non-membre';
-  } else if (category === 'vip') {
+  // Priorité: vip > membership > catégorie
+  if (isVip) {
     statut = 'vip';
-  } else if (category === 'speaker') {
+  } else if (membership === 'member' || membership === 'membre') {
+    statut = 'membre';
+  } else if (membership === 'not_member' || membership === 'non-membre' || membership === 'not-member') {
+    statut = 'non-membre';
+  } else if (apiData.category === 'speaker' || apiData.statut === 'speaker') {
     statut = 'speaker';
   }
   // Si pas de catégorie spécifique, par défaut non-membre
   
-  // Déterminer le statut d'inscription basé sur 'status' de l'API
+  // Déterminer le statut d'inscription basé sur 'status' et 'payment_status' de l'API
   // 'status' peut être 'completed' ou 'pending'
-  const apiStatus = apiData.status || apiData.payment_status || apiData.status_paiement || apiData.paymentStatus;
+  // 'payment_status' peut être 'paid' ou 'unpaid'
+  const apiStatus = apiData.status; // 'completed' ou 'pending'
+  const paymentStatus = apiData.payment_status; // 'paid' ou 'unpaid'
   const registrationStatus = apiData.registration_status || apiData.status_inscription || apiData.registrationStatus;
   
   let statutInscription: StatutInscription = 'non-finalisée';
-  if (apiStatus === 'completed' || apiStatus === 'paid' || apiStatus === 'payé' || 
-      apiStatus === 'finalized' || registrationStatus === 'finalized' || 
-      registrationStatus === 'finalisée' || apiData.is_paid === true || 
-      apiData.isPaid === true || apiData.confirmed_at) {
+  if (apiStatus === 'completed' || 
+      paymentStatus === 'paid' || 
+      apiStatus === 'paid' || 
+      apiStatus === 'payé' || 
+      apiStatus === 'finalized' || 
+      registrationStatus === 'finalized' || 
+      registrationStatus === 'finalisée' || 
+      apiData.is_paid === true || 
+      apiData.isPaid === true || 
+      apiData.confirmed_at) {
     statutInscription = 'finalisée';
   }
   
@@ -137,7 +147,7 @@ export function mapApiRegistrationToParticipant(apiData: any): Participant {
     // L'API utilise 'company' au lieu de organisation_id, on devra mapper ça séparément
     organisationId: apiData.organisation_id || apiData.organization_id || apiData.organisationId || 
                      apiData.association_id || apiData.associationId || apiData.organizationId || 
-                     apiData.org_id || apiData.orgId || apiData.company || '', // Temporaire: utiliser company comme ID
+                     apiData.org_id || apiData.orgId || apiData.company || '', // company contient le nom de l'entreprise
     statut,
     statutInscription,
     dateInscription,
@@ -229,6 +239,7 @@ export async function fetchRegistrations(
           
           // Extraire les données de la réponse
           // Ordre de vérification important: response.data.data AVANT response.data
+          // Nouvelle structure API: { data: { data: [...], current_page, last_page, ... }, meta: {...} }
           let data: any[] = [];
           
           if (Array.isArray(response)) {
@@ -237,7 +248,7 @@ export async function fetchRegistrations(
             console.log(`[fetchRegistrations] Réponse est un tableau direct, ${data.length} éléments`);
           } else if (response?.data?.data && Array.isArray(response.data.data)) {
             // Structure imbriquée: response.data.data (double data) - PRIORITÉ
-            // C'est la structure Laravel avec pagination
+            // C'est la structure Laravel avec pagination: { data: { data: [...], current_page, last_page, ... }, meta: {...} }
             data = response.data.data;
             // Les métadonnées sont dans response.data (current_page, last_page, total, etc.)
             if (response.data.last_page !== undefined) {
@@ -252,11 +263,11 @@ export async function fetchRegistrations(
               hasMore = currentPage < totalPages;
               console.log(`[fetchRegistrations] Pagination détectée (structure imbriquée): page ${currentPage}/${totalPages}, total: ${totalInCategory}, per_page réel: ${perPage}`);
             } else if (response.meta) {
-              // Fallback sur meta si disponible
+              // Fallback sur meta si disponible (nouvelle structure avec meta)
               totalPages = response.meta.last_page || 1;
               totalInCategory = response.meta.total || 0;
-              const currentPage = response.meta.current_page || page;
-              const actualPerPage = response.meta.per_page;
+              const currentPage = response.meta.current_page || response.data.current_page || page;
+              const actualPerPage = response.meta.per_page || response.data.per_page;
               if (actualPerPage && actualPerPage !== perPage) {
                 console.log(`[fetchRegistrations] L'API limite à ${actualPerPage} éléments par page (demandé: ${perPage})`);
                 perPage = actualPerPage;

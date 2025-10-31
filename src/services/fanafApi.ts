@@ -12,11 +12,30 @@ interface ApiResponse<T> {
 }
 
 interface PaginatedResponse<T> {
-  data: T[];
-  meta?: {
-    total?: number;
-    per_page?: number;
+  data: {
     current_page?: number;
+    data: T[];
+    first_page_url?: string;
+    from?: number;
+    last_page?: number;
+    last_page_url?: string;
+    links?: Array<{
+      url: string | null;
+      label: string;
+      page: number | null;
+      active: boolean;
+    }>;
+    next_page_url?: string | null;
+    path?: string;
+    per_page?: number;
+    prev_page_url?: string | null;
+    to?: number;
+    total?: number;
+  };
+  meta?: {
+    current_page?: number;
+    per_page?: number;
+    total?: number;
     last_page?: number;
   };
 }
@@ -321,6 +340,13 @@ class FanafApiService {
     return this.fetchApi<PaginatedResponse<any>>(endpoint);
   }
 
+  /**
+   * Récupérer les types de sponsor
+   */
+  async getSponsorTypes(): Promise<any> {
+    return this.fetchApi<any>('/api/v1/admin/sponsor-types');
+  }
+
   // ==================== NETWORKING ====================
 
   /**
@@ -373,6 +399,7 @@ class FanafApiService {
   /**
    * Récupérer les inscriptions/registrations
    * @param category - member | not_member | vip (optionnel - si non fourni, récupère tout)
+   * @returns Promise avec la structure paginée Laravel: { data: { data: [...], current_page, last_page, ... }, meta: {...} }
    */
   async getRegistrations(params?: {
     category?: 'member' | 'not_member' | 'vip';

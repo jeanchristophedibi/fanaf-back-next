@@ -69,11 +69,14 @@ export function PaiementsGroupesPage() {
       try {
         const regsRes = await api.getRegistrations({ per_page: 200, page: 1 });
         const regsAny: any = regsRes as any;
-        const regsArray = Array.isArray(regsAny?.data)
-          ? regsAny.data
-          : Array.isArray(regsAny)
-            ? regsAny
-            : [];
+        // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
+        const regsArray = Array.isArray(regsAny?.data?.data)
+          ? regsAny.data.data
+          : Array.isArray(regsAny?.data)
+            ? regsAny.data
+            : Array.isArray(regsAny)
+              ? regsAny
+              : [];
         return regsArray;
       } catch (_) {
         return [];
@@ -94,10 +97,10 @@ export function PaiementsGroupesPage() {
       const getStatus = (p: any) => (p.statutInscription || p.registration_status || '').toLowerCase();
       const getCategory = (p: any) => (p.statut || p.category || '').toLowerCase();
       const getId = (p: any) => p.id || p._id || p.registration_id || p.reference;
-      return (baseParticipants || []).filter(p =>
+      return (baseParticipants || []).filter((p: Participant) =>
         (getStatus(p) === 'non-finalisée' || getStatus(p) === 'pending' || !getStatus(p)) &&
         (getCategory(p) === 'membre' || getCategory(p) === 'member' || getCategory(p) === 'non-membre' || getCategory(p) === 'not_member')
-      ).map((p: any) => ({ ...p, id: getId(p), statut: getCategory(p) || p.statut }));
+      ).map((p: Participant) => ({ ...p, id: getId(p), statut: getCategory(p) || p.statut }));
     },
     enabled: true,
     staleTime: 0,
@@ -110,7 +113,7 @@ export function PaiementsGroupesPage() {
     queryKey: ['paiementsGroupes', 'uniqueOrganisations', participantsEnAttente],
     queryFn: () => {
       const orgs = new Set<string>();
-      participantsEnAttente.forEach(p => {
+      participantsEnAttente.forEach((p: Participant) => {
         const org = getOrganisationById(p.organisationId);
         if (org) orgs.add(org.nom);
       });
@@ -217,15 +220,15 @@ export function PaiementsGroupesPage() {
 
     // Si le participant appartient à un groupe, sélectionner/désélectionner tout le groupe
     if (participant.groupeId) {
-      const groupMembers = participantsEnAttente.filter(p => p.groupeId === participant.groupeId);
-      const allSelected = groupMembers.every(p => selectedParticipants.has(p.id));
+      const groupMembers = participantsEnAttente.filter((p: Participant) => p.groupeId === participant.groupeId);
+      const allSelected = groupMembers.every((p: Participant) => selectedParticipants.has(p.id));
 
       if (allSelected) {
         // Désélectionner tout le groupe
-        groupMembers.forEach(p => newSelection.delete(p.id));
+        groupMembers.forEach((p: Participant) => newSelection.delete(p.id));
       } else {
         // Sélectionner tout le groupe
-        groupMembers.forEach(p => newSelection.add(p.id));
+        groupMembers.forEach((p: Participant) => newSelection.add(p.id));
       }
     } else {
       // Participant sans groupe - toggle individuel
@@ -242,13 +245,13 @@ export function PaiementsGroupesPage() {
   // Sélectionner tous les participants d'un groupe
   const handleSelectGroup = (groupeId: string) => {
     const newSelection = new Set(selectedParticipants);
-    const groupMembers = participantsEnAttente.filter(p => p.groupeId === groupeId);
-    const allSelected = groupMembers.every(p => selectedParticipants.has(p.id));
+    const groupMembers = participantsEnAttente.filter((p: Participant) => p.groupeId === groupeId);
+    const allSelected = groupMembers.every((p: Participant) => selectedParticipants.has(p.id));
 
     if (allSelected) {
-      groupMembers.forEach(p => newSelection.delete(p.id));
+      groupMembers.forEach((p: Participant) => newSelection.delete(p.id));
     } else {
-      groupMembers.forEach(p => newSelection.add(p.id));
+      groupMembers.forEach((p: Participant) => newSelection.add(p.id));
     }
 
     setSelectedParticipants(newSelection);
@@ -342,8 +345,8 @@ export function PaiementsGroupesPage() {
 
   // Vérifier si tous les membres d'un groupe sont sélectionnés
   const isGroupFullySelected = (groupeId: string) => {
-    const groupMembers = participantsEnAttente.filter(p => p.groupeId === groupeId);
-    return groupMembers.every(p => selectedParticipants.has(p.id));
+    const groupMembers = participantsEnAttente.filter((p: Participant) => p.groupeId === groupeId);
+    return groupMembers.every((p: Participant) => selectedParticipants.has(p.id));
   };
 
   return (
@@ -576,7 +579,7 @@ export function PaiementsGroupesPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                      {groupMembers.map((participant) => {
+                      {groupMembers.map((participant: Participant) => {
                         const org = getOrganisationById(participant.organisationId);
                         const montant = participant.statut === 'membre' ? 350000 : 400000;
 

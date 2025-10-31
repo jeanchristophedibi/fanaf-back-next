@@ -20,7 +20,8 @@ export function useFanafApi(options: UseFanafApiOptions = {}) {
     queryKey: ['fanafApi', 'participants'],
     queryFn: async () => {
       const response = await fanafApi.getParticipants();
-      return response.data || [];
+      // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
+      return response?.data?.data || response?.data || [];
     },
     enabled: enabled && autoFetch,
     staleTime: 60 * 1000,
@@ -32,7 +33,8 @@ export function useFanafApi(options: UseFanafApiOptions = {}) {
     queryKey: ['fanafApi', 'associations'],
     queryFn: async () => {
       const response = await fanafApi.getAssociations();
-      return response.data || [];
+      // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
+      return response?.data?.data || response?.data || [];
     },
     enabled: enabled && autoFetch,
     staleTime: 60 * 1000,
@@ -44,7 +46,8 @@ export function useFanafApi(options: UseFanafApiOptions = {}) {
     queryKey: ['fanafApi', 'networkingRequests'],
     queryFn: async () => {
       const response = await fanafApi.getNetworkingRequests();
-      return response.data || [];
+      // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
+      return response?.data?.data || response?.data || [];
     },
     enabled: enabled && autoFetch,
     staleTime: 60 * 1000,
@@ -56,7 +59,8 @@ export function useFanafApi(options: UseFanafApiOptions = {}) {
     queryKey: ['fanafApi', 'registrations'],
     queryFn: async () => {
       const response = await fanafApi.getRegistrations();
-      return response.data || [];
+      // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
+      return response?.data?.data || response?.data || [];
     },
     enabled: false, // Non auto-fetché par défaut
     staleTime: 60 * 1000,
@@ -68,7 +72,8 @@ export function useFanafApi(options: UseFanafApiOptions = {}) {
     queryKey: ['fanafApi', 'flightPlans'],
     queryFn: async () => {
       const response = await fanafApi.getFlightPlans();
-      return response.data || [];
+      // Nouvelle structure API: { data: { data: [...], ... }, meta: {...} }
+      return response?.data?.data || response?.data || [];
     },
     enabled: false, // Non auto-fetché par défaut
     staleTime: 60 * 1000,

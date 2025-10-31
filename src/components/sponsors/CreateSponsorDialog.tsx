@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -9,6 +10,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { UserPlus, User, Image as ImageIcon, Upload } from "lucide-react";
 import { Separator } from "../ui/separator";
+import { useFanafApi } from "../../hooks/useFanafApi";
 
 interface CreateSponsorDialogProps {
   open: boolean;
@@ -44,6 +46,37 @@ interface ReferentFormData {
 }
 
 export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: CreateSponsorDialogProps) {
+  const { api } = useFanafApi();
+
+  // Charger les types de sponsor depuis l'API
+  const { data: sponsorTypes = [], isLoading: isLoadingTypes } = useQuery({
+    queryKey: ['sponsorTypes'],
+    queryFn: async () => {
+      try {
+        const response = await api.getSponsorTypes();
+        // Gérer différentes structures de réponse possibles
+        if (Array.isArray(response)) {
+          return response;
+        } else if (response?.data) {
+          // Si response.data est un tableau
+          if (Array.isArray(response.data)) {
+            return response.data;
+          }
+          // Si response.data.data existe (structure paginée)
+          if (Array.isArray(response.data.data)) {
+            return response.data.data;
+          }
+        }
+        return [];
+      } catch (error) {
+        console.error('Erreur lors du chargement des types de sponsor:', error);
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000, // Cache pendant 5 minutes
+    gcTime: 10 * 60 * 1000, // Garder en cache pendant 10 minutes
+  });
+
   const [formData, setFormData] = useState<SponsorFormData>({
     nomSponsor: '',
     emailSponsor: '',
@@ -205,16 +238,26 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
                 <Select
                   value={formData.typeSponsor}
                   onValueChange={(value) => setFormData({ ...formData, typeSponsor: value })}
+                  disabled={isLoadingTypes}
                 >
                   <SelectTrigger id="typeSponsor">
-                    <SelectValue placeholder="Sélectionner un type" />
+                    <SelectValue placeholder={isLoadingTypes ? "Chargement..." : "Sélectionner un type"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ARGENT">ARGENT</SelectItem>
-                    <SelectItem value="GOLD">GOLD</SelectItem>
-                    <SelectItem value="PLATINE">PLATINE</SelectItem>
-                    <SelectItem value="DIAMANT">DIAMANT</SelectItem>
-                    <SelectItem value="BRONZE">BRONZE</SelectItem>
+                    {sponsorTypes.length === 0 && !isLoadingTypes ? (
+                      <SelectItem value="" disabled>Aucun type disponible</SelectItem>
+                    ) : (
+                      sponsorTypes.map((type: any) => {
+                        // Gérer différentes structures possibles de l'API
+                        const value = type.id || type.value || type.name || type.code || String(type);
+                        const label = type.name || type.label || type.code || String(type);
+                        return (
+                          <SelectItem key={value} value={String(value)}>
+                            {label}
+                          </SelectItem>
+                        );
+                      })
+                    )}
                   </SelectContent>
                 </Select>
               </div>
