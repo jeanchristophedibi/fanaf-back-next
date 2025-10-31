@@ -4,8 +4,8 @@ import { useState, useMemo, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "../ui/dialog";
-import { Eye, Download, ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Download, ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
+import { SponsorDetailsDialog } from "./SponsorDetailsDialog";
 import { List, type Column, type ListAction } from "../list/List";
 import type { Organisation } from '../data/types';
 import { sponsorsDataService } from "../data/sponsorsData";
@@ -85,41 +85,7 @@ export function ListeSponsors({ readOnly = false }: ListeSponsorsProps) {
     {
       key: 'actions',
       header: 'Actions',
-      render: (s) => (
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50">
-              <Eye className="w-4 h-4" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{s.nom}</DialogTitle>
-              <DialogDescription>
-                Informations détaillées sur le sponsor
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Email</p>
-                  <p className="text-gray-900">{s.email || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Type de sponsor</p>
-                  <Badge className={`bg-amber-100 text-amber-800 mt-1`}>
-                    {s.secteurActivite || 'N/A'}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Date de création</p>
-                  <p className="text-gray-900">{s.dateCreation ? new Date(s.dateCreation).toLocaleDateString('fr-FR') : '-'}</p>
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )
+      render: (s) => <SponsorDetailsDialog sponsor={s} />
     }
   ];
 
