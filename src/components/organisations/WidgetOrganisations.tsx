@@ -3,12 +3,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Building2, Users, Briefcase, Award } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
-import { useDynamicInscriptions } from "../hooks/useDynamicInscriptions";
+import { useOrganisationsQuery } from "../../hooks/useOrganisationsQuery";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
 
 export function WidgetOrganisations() {
-  const { organisations } = useDynamicInscriptions({ includeOrganisations: true });
+  const { organisations = [] } = useOrganisationsQuery();
 
   // Query pour les statistiques
   const statsQuery = useQuery({
