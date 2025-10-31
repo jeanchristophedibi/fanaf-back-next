@@ -19,9 +19,8 @@ export function Sidebar({ activeNav, onNavChange, onSwitchProfile }: OperateurCa
 
   const mainNavItems = [
     { id: 'home' as NavItem, label: 'Accueil', icon: Home },
-    { id: 'inscriptions' as NavItem, label: 'Liste des inscriptions', icon: FileText },
-    { id: 'participants' as NavItem, label: 'Liste des participants', icon: Users },
-    { id: 'documents' as NavItem, label: 'Documents participants', icon: FileText },
+    { id: 'paiements-attente' as NavItem, label: 'Paiements en attente', icon: CreditCard },
+    { id: 'paiements' as NavItem, label: 'Liste des paiements', icon: FileText },
   ];
 
   const paiementsSubItems = [

@@ -104,7 +104,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'operateur-caisse':
         return {
           mainNavItems: [
-            { id: 'dashboard', label: 'Accueil', icon: Home, badge: null, badgeColor: null },
+            { id: 'home', label: 'Accueil', icon: Home, badge: null, badgeColor: null },
           ],
           showInscriptions: false,
           showOrganisations: false,
@@ -117,7 +117,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'operateur-badge':
         return {
           mainNavItems: [
-            { id: 'dashboard', label: 'Accueil', icon: Home, badge: null, badgeColor: 'bg-green-500' },
+            { id: 'home', label: 'Accueil', icon: Home, badge: null, badgeColor: 'bg-green-500' },
             { id: 'documents', label: 'Documents participants', icon: FileText, badge: 0, badgeColor: 'bg-green-500' },
           ],
           showInscriptions: false,

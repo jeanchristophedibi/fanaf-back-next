@@ -15,6 +15,7 @@ export default function OperateurCaisseLayout({ children }: { children: React.Re
 
   // Déterminer l'élément actif basé sur l'URL
   const getActiveNav = (): NavItem => {
+    if (pathname?.includes('/')) return 'home';
     if (pathname?.includes('/paiements/attente')) return 'paiements-attente';
     if (pathname?.includes('/paiements/liste')) return 'paiements';
     return 'home';

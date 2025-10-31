@@ -1,8 +1,8 @@
 'use client';
 
-import OperateurBadgeMain from './Main';
+import OperateurBadgeDashboard from './Dashboard';
 
 export default function OperateurBadgePage() {
-  return <OperateurBadgeMain />;
+  return <OperateurBadgeDashboard />;
 }
 
