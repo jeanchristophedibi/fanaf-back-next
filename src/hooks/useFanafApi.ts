@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fanafApi } from '../services/fanafApi';
 
 interface UseFanafApiOptions {
@@ -9,167 +9,213 @@ interface UseFanafApiOptions {
 }
 
 /**
- * Hook pour utiliser l'API FANAF 2026
+ * Hook pour utiliser l'API FANAF 2026 avec React Query
  */
 export function useFanafApi(options: UseFanafApiOptions = {}) {
   const { enabled = true, autoFetch = false } = options;
+  const queryClient = useQueryClient();
 
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [associations, setAssociations] = useState<any[]>([]);
-  const [networkingRequests, setNetworkingRequests] = useState<any[]>([]);
-  const [registrations, setRegistrations] = useState<any[]>([]);
-  const [flightPlans, setFlightPlans] = useState<any[]>([]);
-  const [badgeScansCounters, setBadgeScansCounters] = useState<any>(null);
-  const [flightPlansStats, setFlightPlansStats] = useState<any>(null);
+  // Query pour participants
+  const participantsQuery = useQuery({
+    queryKey: ['fanafApi', 'participants'],
+    queryFn: async () => {
+      const response = await fanafApi.getParticipants();
+      return response.data || [];
+    },
+    enabled: enabled && autoFetch,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Query pour associations
+  const associationsQuery = useQuery({
+    queryKey: ['fanafApi', 'associations'],
+    queryFn: async () => {
+      const response = await fanafApi.getAssociations();
+      return response.data || [];
+    },
+    enabled: enabled && autoFetch,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
 
-  // Fetch functions
-  const fetchParticipants = useCallback(async (params?: { page?: number; per_page?: number; category?: 'member' | 'not_member' | 'vip' }) => {
+  // Query pour networking requests
+  const networkingRequestsQuery = useQuery({
+    queryKey: ['fanafApi', 'networkingRequests'],
+    queryFn: async () => {
+      const response = await fanafApi.getNetworkingRequests();
+      return response.data || [];
+    },
+    enabled: enabled && autoFetch,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  // Query pour registrations
+  const registrationsQuery = useQuery({
+    queryKey: ['fanafApi', 'registrations'],
+    queryFn: async () => {
+      const response = await fanafApi.getRegistrations();
+      return response.data || [];
+    },
+    enabled: false, // Non auto-fetché par défaut
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  // Query pour flight plans
+  const flightPlansQuery = useQuery({
+    queryKey: ['fanafApi', 'flightPlans'],
+    queryFn: async () => {
+      const response = await fanafApi.getFlightPlans();
+      return response.data || [];
+    },
+    enabled: false, // Non auto-fetché par défaut
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  // Query pour flight plans stats
+  const flightPlansStatsQuery = useQuery({
+    queryKey: ['fanafApi', 'flightPlansStats'],
+    queryFn: async () => {
+      return await fanafApi.getFlightPlansStats();
+    },
+    enabled: enabled && autoFetch,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  // Query pour badge scans counters
+  const badgeScansCountersQuery = useQuery({
+    queryKey: ['fanafApi', 'badgeScansCounters'],
+    queryFn: async () => {
+      try {
+        return await fanafApi.getBadgeScansCounters();
+      } catch (err: any) {
+        // Erreurs réseau pour badge scans sont ignorées silencieusement (non-critique)
+        const isNetworkError = err?.message?.includes('connexion') || 
+                              err?.message?.includes('Failed to fetch') ||
+                              err?.message?.includes('NetworkError');
+        if (!isNetworkError) {
+          console.warn('[useFanafApi] Erreur badge scans counters (non-critique):', err?.message || err);
+        }
+        return null;
+      }
+    },
+    enabled: enabled && autoFetch,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  // Fetch functions utilisant React Query
+  const fetchParticipants = async (params?: { page?: number; per_page?: number; category?: 'member' | 'not_member' | 'vip' }) => {
     if (!enabled) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fanafApi.getParticipants(params);
-      setParticipants(response.data || []);
-      return response;
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la récupération des participants');
-      console.error('Erreur fetchParticipants:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled]);
+    return queryClient.fetchQuery({
+      queryKey: ['fanafApi', 'participants', params],
+      queryFn: async () => {
+        const response = await fanafApi.getParticipants(params);
+        return response;
+      },
+    });
+  };
 
-  const fetchAssociations = useCallback(async (params?: { page?: number; per_page?: number }) => {
+  const fetchAssociations = async (params?: { page?: number; per_page?: number }) => {
     if (!enabled) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fanafApi.getAssociations(params);
-      setAssociations(response.data || []);
-      return response;
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la récupération des associations');
-      console.error('Erreur fetchAssociations:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled]);
+    return queryClient.fetchQuery({
+      queryKey: ['fanafApi', 'associations', params],
+      queryFn: async () => {
+        const response = await fanafApi.getAssociations(params);
+        return response;
+      },
+    });
+  };
 
-  const fetchNetworkingRequests = useCallback(async (params?: { page?: number; per_page?: number; type?: 'participant' | 'sponsor'; status?: string }) => {
+  const fetchNetworkingRequests = async (params?: { page?: number; per_page?: number; type?: 'participant' | 'sponsor'; status?: string }) => {
     if (!enabled) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fanafApi.getNetworkingRequests(params);
-      setNetworkingRequests(response.data || []);
-      return response;
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la récupération des demandes de rendez-vous');
-      console.error('Erreur fetchNetworkingRequests:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled]);
+    return queryClient.fetchQuery({
+      queryKey: ['fanafApi', 'networkingRequests', params],
+      queryFn: async () => {
+        const response = await fanafApi.getNetworkingRequests(params);
+        return response;
+      },
+    });
+  };
 
-  const fetchRegistrations = useCallback(async (params?: { category?: 'member' | 'not_member' | 'vip'; per_page?: number; page?: number }) => {
+  const fetchRegistrations = async (params?: { category?: 'member' | 'not_member' | 'vip'; per_page?: number; page?: number }) => {
     if (!enabled) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fanafApi.getRegistrations(params);
-      setRegistrations(response.data || []);
-      return response;
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la récupération des inscriptions');
-      console.error('Erreur fetchRegistrations:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled]);
+    return queryClient.fetchQuery({
+      queryKey: ['fanafApi', 'registrations', params],
+      queryFn: async () => {
+        const response = await fanafApi.getRegistrations(params);
+        return response;
+      },
+    });
+  };
 
-  const fetchFlightPlans = useCallback(async (params?: { page?: number; per_page?: number }) => {
+  const fetchFlightPlans = async (params?: { page?: number; per_page?: number }) => {
     if (!enabled) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fanafApi.getFlightPlans(params);
-      setFlightPlans(response.data || []);
-      return response;
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la récupération des plans de vol');
-      console.error('Erreur fetchFlightPlans:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled]);
+    return queryClient.fetchQuery({
+      queryKey: ['fanafApi', 'flightPlans', params],
+      queryFn: async () => {
+        const response = await fanafApi.getFlightPlans(params);
+        return response;
+      },
+    });
+  };
 
-  const fetchFlightPlansStats = useCallback(async () => {
+  const fetchFlightPlansStats = async () => {
     if (!enabled) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const stats = await fanafApi.getFlightPlansStats();
-      setFlightPlansStats(stats);
-      return stats;
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la récupération des stats des plans de vol');
-      console.error('Erreur fetchFlightPlansStats:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled]);
+    return queryClient.fetchQuery({
+      queryKey: ['fanafApi', 'flightPlansStats'],
+      queryFn: async () => {
+        return await fanafApi.getFlightPlansStats();
+      },
+    });
+  };
 
-  const fetchBadgeScansCounters = useCallback(async () => {
-    if (!enabled) return;
-    setLoading(true);
-    // Ne pas réinitialiser l'erreur globale pour les badge scans (non-critique)
+  const fetchBadgeScansCounters = async () => {
+    if (!enabled) return null;
     try {
-      const counters = await fanafApi.getBadgeScansCounters();
-      setBadgeScansCounters(counters);
-      return counters;
+      return queryClient.fetchQuery({
+        queryKey: ['fanafApi', 'badgeScansCounters'],
+        queryFn: async () => {
+          return await fanafApi.getBadgeScansCounters();
+        },
+      });
     } catch (err: any) {
-      // Erreurs réseau pour badge scans sont ignorées silencieusement (non-critique)
       const isNetworkError = err?.message?.includes('connexion') || 
                             err?.message?.includes('Failed to fetch') ||
                             err?.message?.includes('NetworkError');
       if (!isNetworkError) {
         console.warn('[useFanafApi] Erreur badge scans counters (non-critique):', err?.message || err);
       }
-      // Ne pas mettre l'erreur globale pour les badge scans (feature optionnelle)
       return null;
-    } finally {
-      setLoading(false);
     }
-  }, [enabled]);
+  };
 
-  // Auto-fetch on mount if enabled
-  useEffect(() => {
-    if (autoFetch && enabled) {
-      // Fetch initial data
-      fetchParticipants();
-      fetchAssociations();
-      fetchNetworkingRequests();
-      fetchBadgeScansCounters();
-      fetchFlightPlansStats();
-    }
-  }, [autoFetch, enabled]);
+  // Calculer loading et error agrégés
+  const loading = participantsQuery.isLoading || associationsQuery.isLoading || 
+                  networkingRequestsQuery.isLoading || flightPlansStatsQuery.isLoading || 
+                  badgeScansCountersQuery.isLoading;
+  
+  const error = participantsQuery.error || associationsQuery.error || 
+                networkingRequestsQuery.error || flightPlansStatsQuery.error;
 
   return {
     // Data
-    participants,
-    associations,
-    networkingRequests,
-    registrations,
-    flightPlans,
-    badgeScansCounters,
-    flightPlansStats,
+    participants: participantsQuery.data || [],
+    associations: associationsQuery.data || [],
+    networkingRequests: networkingRequestsQuery.data || [],
+    registrations: registrationsQuery.data || [],
+    flightPlans: flightPlansQuery.data || [],
+    badgeScansCounters: badgeScansCountersQuery.data || null,
+    flightPlansStats: flightPlansStatsQuery.data || null,
 
     // State
     loading,
-    error,
+    error: error ? (error as Error).message : null,
 
     // Fetch functions
     fetchParticipants,

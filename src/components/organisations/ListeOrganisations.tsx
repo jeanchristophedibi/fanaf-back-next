@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState } from "react";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Badge } from "../ui/badge";
@@ -45,7 +45,7 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const filteredOrganisations = useMemo(() => {
+  const filteredOrganisations = (() => {
     let filtered = [...organisations];
 
     if (activeFilter && activeFilter !== 'all' && activeFilter !== 'liste') {
@@ -55,26 +55,26 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
       filtered = filtered.filter(o => o.pays === paysFilter);
     }
     return filtered;
-  }, [organisations, activeFilter, paysFilter]);
+  })();
 
   // Pagination
   const totalPages = Math.ceil(filteredOrganisations.length / itemsPerPage);
-  const paginatedOrganisations = useMemo(() => {
+  const paginatedOrganisations = (() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredOrganisations.slice(startIndex, endIndex);
-  }, [filteredOrganisations, currentPage]);
+  })();
 
-  // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
+  // Réinitialiser la page quand les filtres changent - géré directement dans les handlers
+  const handleFilterChange = () => {
     setCurrentPage(1);
-  }, [searchTerm, paysFilter, activeFilter]);
+  };
 
   // Récupérer la liste unique des pays
-  const paysList = useMemo(() => {
+  const paysList = (() => {
     const pays = new Set(organisations.map(o => o.pays));
     return Array.from(pays).sort();
-  }, [organisations]);
+  })();
 
   // Colonnes pour List
   const columns: Column<(typeof organisations)[number]>[] = [
@@ -192,7 +192,10 @@ export function ListeOrganisations({ subSection, filter, readOnly = false }: Lis
   // Filtre composant pour List
   const filterComponent = (
     <div className="flex items-center gap-2">
-      <Select value={paysFilter} onValueChange={setPaysFilter}>
+      <Select value={paysFilter} onValueChange={(value) => {
+        setPaysFilter(value);
+        handleFilterChange();
+      }}>
         <SelectTrigger>
           <SelectValue placeholder="Pays" />
         </SelectTrigger>

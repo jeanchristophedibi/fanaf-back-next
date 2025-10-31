@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useDynamicInscriptions } from './useDynamicInscriptions';
+import { useParticipantsQuery } from '../../hooks/useParticipantsQuery';
 import { useOrganisationsQuery } from '../../hooks/useOrganisationsQuery';
 
 interface UsePageLoadingOptions {
@@ -11,7 +10,7 @@ interface UsePageLoadingOptions {
 
 /**
  * Hook pour gérer l'état de chargement global d'une page
- * Combine les états de chargement de tous les hooks de données
+ * Combine les états de chargement de tous les hooks de données avec React Query
  */
 export function usePageLoading(options: UsePageLoadingOptions = {}) {
   const {
@@ -19,37 +18,10 @@ export function usePageLoading(options: UsePageLoadingOptions = {}) {
     includeRendezVous = false,
   } = options;
 
-  // Utiliser le hook useDynamicInscriptions qui retourne déjà isLoading
-  // Mais on doit charger les données explicitement pour détecter le chargement
-  const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
-  
-  // Charger les participants explicitement pour détecter le chargement initial
-  useEffect(() => {
-    import('../data/inscriptionsData').then(({ inscriptionsDataService }) => {
-      let mounted = true;
-      
-      const loadParticipants = async () => {
-        setIsLoadingParticipants(true);
-        try {
-          await inscriptionsDataService.loadParticipants();
-        } catch (error) {
-          console.error('Erreur lors du chargement des participants:', error);
-        } finally {
-          if (mounted) {
-            // Petit délai pour éviter le flash
-            setTimeout(() => {
-              if (mounted) {
-                setIsLoadingParticipants(false);
-              }
-            }, 300);
-          }
-        }
-      };
-      
-      loadParticipants();
-      return () => { mounted = false; };
-    });
-  }, []);
+  // Utiliser React Query pour charger les participants
+  const { isLoading: isLoadingParticipants } = useParticipantsQuery({
+    enabled: true,
+  });
 
   const { isLoading: isLoadingOrganisations } = useOrganisationsQuery({
     enabled: includeOrganisations,

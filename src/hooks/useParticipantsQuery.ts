@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { inscriptionsDataService } from '../components/data/inscriptionsData';
 import type { Participant } from '../components/data/types';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 /**
  * Hook React Query pour récupérer les participants depuis l'API uniquement
@@ -46,30 +46,11 @@ export function useParticipantsQuery(options?: {
     refetchOnReconnect: false,
   });
 
-  // Charger les participants finalisés depuis localStorage au montage et écouter les changements
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    const stored = localStorage.getItem('finalisedParticipantsIds');
-    if (stored) {
-      setFinalisedParticipantsIds(new Set(JSON.parse(stored)));
-    }
-
-    const handlePaymentFinalized = () => {
-      const stored = localStorage.getItem('finalisedParticipantsIds');
-      if (stored) {
-        const newFinalisedIds = new Set<string>(JSON.parse(stored));
-        setFinalisedParticipantsIds(newFinalisedIds);
-        // Invalider la query pour forcer le rechargement avec les nouveaux statuts
-        queryClient.invalidateQueries({ queryKey: ['participants'] });
-      }
-    };
-
-    window.addEventListener('paymentFinalized', handlePaymentFinalized);
-    return () => {
-      window.removeEventListener('paymentFinalized', handlePaymentFinalized);
-    };
-  }, [queryClient]);
+  // Écouter les changements via React Query uniquement
+  // Les événements paymentFinalized doivent invalider directement les queries React Query
+  // Note: Le localStorage est lu une seule fois lors de l'initialisation du state
+  // Pour les mises à jour en temps réel, utilisez queryClient.invalidateQueries({ queryKey: ['participants'] })
+  // depuis l'endroit où vous dispatch l'événement paymentFinalized
 
   return {
     ...query,

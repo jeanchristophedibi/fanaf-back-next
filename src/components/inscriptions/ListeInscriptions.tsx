@@ -1,6 +1,9 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useParticipantsQuery } from '../../hooks/useParticipantsQuery';
+import { useOrganisationsQuery } from '../../hooks/useOrganisationsQuery';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -35,75 +38,61 @@ export function ListeInscriptions({
   showStats = false,
   onlyNonFinalisees = false,
 }: ListeInscriptionsProps = {}) {
-    // État pour les données de l'API
-    const [apiParticipants, setApiParticipants] = useState<Participant[]>([]);
-    const [organisations, setOrganisations] = useState<Organisation[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [apiError, setApiError] = useState<string | null>(null);
-    const [badgeByEmail, setBadgeByEmail] = useState<Record<string, string>>({});
+    // Mapper les statuts vers les catégories API si nécessaire
+    const categoriesToFetch: Array<'member' | 'not_member' | 'vip'> = [];
+    
+    if (defaultStatuts && defaultStatuts.length > 0) {
+        if (defaultStatuts.includes('membre')) {
+            categoriesToFetch.push('member');
+        }
+        if (defaultStatuts.includes('non-membre')) {
+            categoriesToFetch.push('not_member');
+        }
+        if (defaultStatuts.includes('vip')) {
+            categoriesToFetch.push('vip');
+        }
+    } else {
+        categoriesToFetch.push('member', 'not_member', 'vip');
+    }
+
+    // Utiliser React Query pour charger les données
+    const { participants: apiParticipants, isLoading: isLoadingParticipants, isError: isErrorParticipants } = useParticipantsQuery({
+        categories: categoriesToFetch.length > 0 ? categoriesToFetch : undefined
+    });
+    
+    const { organisations, isLoading: isLoadingOrganisations, isError: isErrorOrganisations } = useOrganisationsQuery();
+
+    // Query pour charger les documents (badges/liens)
+    const documentsQuery = useQuery({
+        queryKey: ['documents', 'badges'],
+        queryFn: async () => {
+            try {
+                const docs = await documentsDataService.loadDocuments();
+                const map: Record<string, string> = {};
+                docs.forEach((d) => {
+                    if (d.email && d.badgeUrl) {
+                        map[d.email.toLowerCase()] = d.badgeUrl;
+                    }
+                });
+                return map;
+            } catch (e) {
+                console.warn('[ListeInscriptions] Documents API non disponible:', e);
+                return {};
+            }
+        },
+        staleTime: 5 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
+    });
+
+    const badgeByEmail = documentsQuery.data || {};
+    
+    const isLoading = isLoadingParticipants || isLoadingOrganisations;
+    const apiError = isErrorParticipants || isErrorOrganisations ? 'Erreur lors du chargement des données' : null;
+    
     const [selectedParticipants, setSelectedParticipants] = useState<Participant[]>([]);
     
-    // Charger les données (participants et organisations) depuis l'API
-    useEffect(() => {
-        const loadData = async () => {
-            setIsLoading(true);
-            setApiError(null);
-            
-            try {
-                // Charger les organisations en premier
-                const loadedOrganisations = await inscriptionsDataService.loadOrganisations();
-                setOrganisations(loadedOrganisations);
-                
-                // Mapper les statuts vers les catégories API si nécessaire
-                const categoriesToFetch: Array<'member' | 'not_member' | 'vip'> = [];
-                
-                if (defaultStatuts && defaultStatuts.length > 0) {
-                    if (defaultStatuts.includes('membre')) {
-                        categoriesToFetch.push('member');
-                    }
-                    if (defaultStatuts.includes('non-membre')) {
-                        categoriesToFetch.push('not_member');
-                    }
-                    if (defaultStatuts.includes('vip')) {
-                        categoriesToFetch.push('vip');
-                    }
-                } else {
-                    categoriesToFetch.push('member', 'not_member', 'vip');
-                }
-                
-                // Charger les participants
-                const loadedParticipants = await inscriptionsDataService.loadParticipants(
-                    categoriesToFetch.length > 0 ? categoriesToFetch : undefined
-                );
-                setApiParticipants(loadedParticipants);
-
-                // Charger les documents (badges/liens) et indexer par email
-                try {
-                    const docs = await documentsDataService.loadDocuments();
-                    const map: Record<string, string> = {};
-                    docs.forEach((d) => {
-                        if (d.email && d.badgeUrl) {
-                            map[d.email.toLowerCase()] = d.badgeUrl;
-                        }
-                    });
-                    setBadgeByEmail(map);
-                } catch (e) {
-                    console.warn('[ListeInscriptions] Documents API non disponible:', e);
-                }
-            } catch (err: any) {
-                console.error('Erreur lors du chargement des données:', err);
-                setApiError(err.message || 'Erreur lors du chargement des données');
-                toast.error(err.message || 'Erreur lors du chargement des données');
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        
-        loadData();
-    }, [defaultStatuts]);
-    
     // S'assurer que les participants ont des IDs uniques (déduplication finale pour compatibilité avec mock)
-    const participants = useMemo(() => {
+    const participants = (() => {
         const source = apiParticipants;
         
         console.log(`[ListeInscriptions] Participants reçus: ${source.length} (API: ${apiParticipants.length})`);
@@ -127,32 +116,28 @@ export function ListeInscriptions({
         }
         
         return source;
-    }, [apiParticipants]);
+    })();
     
     // États pour les filtres multi-sélection (avant validation)
-    const [tempStatutFilters, setTempStatutFilters] = useState<string[]>([]);
     const [tempStatutInscriptionFilters, setTempStatutInscriptionFilters] = useState<string[]>([]);
     const [tempOrganisationFilters, setTempOrganisationFilters] = useState<string[]>([]);
     const [tempPaysFilters, setTempPaysFilters] = useState<string[]>([]);
     
     // États pour les filtres appliqués (après validation)
-    const [appliedStatutFilters, setAppliedStatutFilters] = useState<string[]>([]);
     const [appliedStatutInscriptionFilters, setAppliedStatutInscriptionFilters] = useState<string[]>([]);
     const [appliedOrganisationFilters, setAppliedOrganisationFilters] = useState<string[]>([]);
     const [appliedPaysFilters, setAppliedPaysFilters] = useState<string[]>([]);
     
     const [showFilters, setShowFilters] = useState(false);
     const [isDownloadingBadges, setIsDownloadingBadges] = useState(false);
-    // Initialiser à true pour éviter les erreurs d'hydratation (sera mis à jour dans useEffect)
-    const [showBadgeNotification, setShowBadgeNotification] = useState(true);
-    
-    // Initialiser l'état depuis localStorage après le montage pour éviter les erreurs d'hydratation
-    useEffect(() => {
+    // Initialiser depuis localStorage directement (React Query gère le cache)
+    const [showBadgeNotification, setShowBadgeNotification] = useState(() => {
         if (typeof window !== 'undefined') {
             const stored = localStorage.getItem('badgeNotificationDismissed');
-            setShowBadgeNotification(stored !== 'true');
+            return stored !== 'true';
         }
-    }, []);
+        return true;
+    });
     
     const statutColors: Record<string, string> = {
         'membre': 'bg-purple-100 text-purple-800',
@@ -178,16 +163,9 @@ export function ListeInscriptions({
         && Array.isArray(restrictStatutOptions) && restrictStatutOptions.length > 0;
 
     // Appliquer des statuts par défaut au chargement si fournis
-    useEffect(() => {
-        if (defaultStatuts && defaultStatuts.length > 0) {
-            setTempStatutFilters(defaultStatuts);
-            setAppliedStatutFilters(defaultStatuts);
-        } else if (!defaultStatuts || defaultStatuts.length === 0) {
-            // Si aucun defaultStatuts, réinitialiser les filtres
-            setTempStatutFilters([]);
-            setAppliedStatutFilters([]);
-        }
-    }, [defaultStatuts]);
+    // Initialiser les filtres avec defaultStatuts si fourni
+    const [tempStatutFilters, setTempStatutFilters] = useState<string[]>(defaultStatuts || []);
+    const [appliedStatutFilters, setAppliedStatutFilters] = useState<string[]>(defaultStatuts || []);
     
     const getStatutPaiementLabel = (p: Participant) => {
         if (p.statut === 'vip' || p.statut === 'speaker') return 'exonéré';
@@ -230,7 +208,7 @@ export function ListeInscriptions({
     };
     
     // Filtrer les participants selon les filtres appliqués
-    const filteredParticipants = useMemo(() => {
+    const filteredParticipants = (() => {
         // Debug: vérifier les statuts des participants
         const statutsCounts = participants.reduce((acc, p) => {
             acc[p.statut] = (acc[p.statut] || 0) + 1;
@@ -244,7 +222,7 @@ export function ListeInscriptions({
             appliedPaysFilters
         });
         
-    const filtered = participants.filter(participant => {
+        const filtered = participants.filter(participant => {
             const org = inscriptionsDataService.getOrganisationById(participant.organisationId);
             const matchesStatut = appliedStatutFilters.length === 0 || appliedStatutFilters.includes(participant.statut);
             const matchesStatutInscription = appliedStatutInscriptionFilters.length === 0 || 
@@ -252,9 +230,9 @@ export function ListeInscriptions({
                 (appliedStatutInscriptionFilters.includes('exonéré') && (participant.statut === 'vip' || participant.statut === 'speaker'));
             const matchesOrganisation = appliedOrganisationFilters.length === 0 || appliedOrganisationFilters.includes(participant.organisationId);
             const matchesPays = appliedPaysFilters.length === 0 || appliedPaysFilters.includes(participant.pays);
-      const matchesOnlyNonFinalisees = !onlyNonFinalisees || participant.statutInscription === 'non-finalisée';
+            const matchesOnlyNonFinalisees = !onlyNonFinalisees || participant.statutInscription === 'non-finalisée';
             
-      return matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays && matchesOnlyNonFinalisees;
+            return matchesStatut && matchesStatutInscription && matchesOrganisation && matchesPays && matchesOnlyNonFinalisees;
         });
         
         // Logs de debug pour comprendre pourquoi la liste est vide
@@ -275,7 +253,7 @@ export function ListeInscriptions({
         });
         
         return filtered;
-    }, [participants, appliedStatutFilters, appliedStatutInscriptionFilters, appliedOrganisationFilters, appliedPaysFilters]);
+    })();
     
     const uniquePays = [...new Set(participants.map(p => p.pays))].sort();
     const badgesGenerables = filteredParticipants.filter(p => p.statutInscription === 'finalisée').length;
@@ -301,7 +279,7 @@ export function ListeInscriptions({
     };
     
     // Calculer les stats basées sur les participants chargés (API ou mock)
-    const stats = useMemo(() => ({
+    const stats = {
         total: participants.length,
         membres: participants.filter(p => p.statut === 'membre').length,
         nonMembres: participants.filter(p => p.statut === 'non-membre').length,
@@ -309,7 +287,7 @@ export function ListeInscriptions({
         speakers: participants.filter(p => p.statut === 'speaker').length,
         finalises: participants.filter(p => p.statutInscription === 'finalisée').length,
         enAttente: participants.filter(p => p.statutInscription === 'non-finalisée' && p.statut !== 'vip' && p.statut !== 'speaker').length,
-    }), [participants]);
+    };
     
     // Composant Dialog pour les détails du participant
     const ParticipantDetailsDialog = ({ participant }: { participant: Participant }) => {

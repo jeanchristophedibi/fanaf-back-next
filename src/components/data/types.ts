@@ -62,6 +62,7 @@ export interface RendezVous {
   statut: StatutRendezVous;
   sujet?: string;
   notes?: string;
+  commentaire?: string;
 }
 
 export interface PlanVol {

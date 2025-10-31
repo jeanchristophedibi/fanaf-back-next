@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '../ui/dialog';
@@ -22,6 +23,7 @@ export interface RendezVous {
   statut: StatutRendezVous;
   sujet?: string;
   notes?: string;
+  commentaire?: string;
 }
 
 export type StatutRendezVous = 'acceptée' | 'en-attente' | 'occupée' | 'annulée';
@@ -43,42 +45,41 @@ interface ListeNetworkingProps {
 }
 
 export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetworkingProps) {
-  // Rendez-vous depuis le service centralisé networkingDataService
-  const [rendezVous, setRendezVous] = useState<RendezVous[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
   const [statutFilter, setStatutFilter] = useState<string>('tous');
   const [selectedRendezVous, setSelectedRendezVous] = useState<RendezVous[]>([]);
   
-  // Charger les rendez-vous via le service au montage
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        setIsLoading(true);
-        const filters: { type?: 'participant' | 'sponsor'; status?: string } = {};
-        
-        // Appliquer le filtre de type si spécifié
-        if (activeFilter === 'participant') {
-          filters.type = 'participant';
-        } else if (activeFilter === 'sponsor') {
-          filters.type = 'sponsor';
-        }
-        // Si statutFilter est spécifié, l'ajouter
-        if (statutFilter !== 'tous') {
-          filters.status = statutFilter;
-        }
-        
-        const requests = await networkingDataService.loadNetworkingRequests(filters);
-        if (mounted) setRendezVous(requests);
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [activeFilter, statutFilter]);
+  // Charger tous les rendez-vous via React Query - partage le cache avec les autres composants
+  const { data: allRendezVous = [], isLoading } = useQuery({
+    queryKey: ['networkingRequests'],
+    queryFn: async () => {
+      return await networkingDataService.loadNetworkingRequests();
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  // Filtrer les rendez-vous côté client
+  const rendezVous = (() => {
+    let filtered = [...allRendezVous];
+    
+    // Filtre par type
+    if (activeFilter === 'participant') {
+      filtered = filtered.filter(r => r.type === 'participant');
+    } else if (activeFilter === 'sponsor') {
+      filtered = filtered.filter(r => r.type === 'sponsor');
+    }
+    
+    // Filtre par statut
+    if (statutFilter !== 'tous') {
+      filtered = filtered.filter(r => r.statut === statutFilter);
+    }
+    
+    return filtered;
+  })();
 
   // Enrichir les rendez-vous avec des champs de recherche calculés
-  const rendezVousWithSearch = useMemo(() => {
+  const rendezVousWithSearch = (() => {
     return rendezVous.map(rdv => {
       const apiDemandeur: any = (rdv as any).demandeur;
       const apiRecepteur: any = (rdv as any).recepteur;
@@ -95,7 +96,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       const recepteurEmail = rdv.type === 'sponsor'
         ? referentSponsor?.email || ''
         : recepteur?.email || '';
-      const recepteurOrg = rdv.type === 'sponsor' ? (referentSponsor?.organisationNom || '') : '';
+      const recepteurOrg = rdv.type === 'sponsor' ? (getOrganisationById(rdv.recepteurId)?.nom || '') : '';
 
       return {
         ...rdv,
@@ -105,10 +106,10 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
         _searchRecepteur: `${recepteurName} ${recepteurEmail} ${recepteurOrg}`.trim().toLowerCase(),
       } as any;
     });
-  }, [rendezVous]);
+  })();
 
   // Filtrer les rendez-vous selon activeFilter et statutFilter
-  const filteredRendezVous = useMemo(() => {
+  const filteredRendezVous = (() => {
     let filtered = [...rendezVousWithSearch];
 
     // Filtre par type (ignorer 'historique' pour la liste)
@@ -125,7 +126,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
     }
 
     return filtered;
-  }, [rendezVousWithSearch, activeFilter, statutFilter]);
+  })();
 
   // État pour gérer l'ouverture du dialog par ligne
   const [openDialogId, setOpenDialogId] = useState<string | null>(null);
@@ -164,12 +165,8 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
           commentaire: commentaire || undefined,
         });
         
-        // Mettre à jour l'état local
-        setRendezVous(prev => prev.map(rdv => 
-          rdv.id === rendezVous.id 
-            ? { ...rdv, statut: newStatut, commentaire: commentaire || undefined }
-            : rdv
-        ));
+        // Invalider les queries React Query pour forcer le rechargement
+        queryClient.invalidateQueries({ queryKey: ['networkingRequests'] });
         
         setIsOpen(false);
         
@@ -273,7 +270,9 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
                         <>
                           <p className="text-gray-900">{referentSponsor.prenom} {referentSponsor.nom}</p>
                           <p className="text-sm text-orange-600">{referentSponsor.fonction}</p>
-                          <p className="text-sm text-gray-600">{referentSponsor.organisationNom}</p>
+                          {getOrganisationById(rendezVous.recepteurId) && (
+                            <p className="text-sm text-gray-600">{getOrganisationById(rendezVous.recepteurId)?.nom}</p>
+                          )}
                         </>
                       )}
                     </>
@@ -296,7 +295,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
               </div>
               <div>
                 <Label className="text-gray-700">Heure</Label>
-                <p className="mt-1 text-gray-900">{rendezVous.heure}</p>
+                <p className="mt-1 text-gray-900">{rendezVous.heureDebut} - {rendezVous.heureFin}</p>
               </div>
             </div>
 
@@ -409,7 +408,9 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
             <div>
               <p className="text-gray-900">{referentSponsor.prenom} {referentSponsor.nom}</p>
               <p className="text-xs text-orange-600">{referentSponsor.fonction}</p>
-              <p className="text-xs text-gray-500">{referentSponsor.organisationNom}</p>
+              {getOrganisationById(rdv.recepteurId) && (
+                <p className="text-xs text-gray-500">{getOrganisationById(rdv.recepteurId)?.nom}</p>
+              )}
             </div>
           );
         }
@@ -432,7 +433,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       header: 'Heure',
       sortable: true,
       render: (rdv) => (
-        <span className="text-gray-600">{rdv.heure}</span>
+        <span className="text-gray-600">{rdv.heureDebut} - {rdv.heureFin}</span>
       )
     },
     {
@@ -477,7 +478,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
     const recepteurNom = apiRecepteur?.name
       ? apiRecepteur.name
       : (recepteur ? `${recepteur.prenom} ${recepteur.nom}` : referentSponsor ? `${referentSponsor.prenom} ${referentSponsor.nom}` : '');
-    const organisationNom = apiRecepteur?.company || (referentSponsor?.organisationNom || '');
+    const organisationNom = apiRecepteur?.company || (getOrganisationById(rdv.recepteurId)?.nom || '');
 
     return [
       rdv.type,
@@ -485,7 +486,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       recepteurNom,
       organisationNom,
       new Date(rdv.date).toLocaleDateString('fr-FR'),
-      rdv.heure,
+      `${rdv.heureDebut} - ${rdv.heureFin}`,
       rdv.statut,
       rdv.commentaire || ''
     ];
@@ -497,7 +498,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
   };
 
   // Actions par ligne
-  const rowActions: RowAction<RendezVous>[] = useMemo(() => [
+  const rowActions: RowAction<RendezVous>[] = [
     {
       label: 'Voir',
       icon: <Eye className="w-4 h-4" />,
@@ -516,7 +517,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
         try {
           await fanafApi.acceptNetworkingRequest(rdv.id);
           networkingDataService.updateRequest(rdv.id, { statut: 'acceptée' });
-          setRendezVous(prev => prev.map(r => r.id === rdv.id ? { ...r, statut: 'acceptée' } : r));
+          queryClient.invalidateQueries({ queryKey: ['networkingRequests'] });
           toast.success('Rendez-vous accepté');
         } catch (error: any) {
           toast.error(error?.message || 'Erreur lors de l\'acceptation');
@@ -534,7 +535,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
         try {
           await fanafApi.refuseNetworkingRequest(rdv.id);
           networkingDataService.updateRequest(rdv.id, { statut: 'occupée' });
-          setRendezVous(prev => prev.map(r => r.id === rdv.id ? { ...r, statut: 'occupée' } : r));
+          queryClient.invalidateQueries({ queryKey: ['networkingRequests'] });
           toast.success('Rendez-vous refusé');
         } catch (error: any) {
           toast.error(error?.message || 'Erreur lors du refus');
@@ -545,7 +546,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       title: 'Refuser',
       shouldShow: (rdv) => !readOnly && (activeFilter === 'sponsor' || rdv.type === 'sponsor'),
     },
-  ], [readOnly, activeFilter]);
+  ];
 
   // Actions en masse
   const buildActions: ListAction<RendezVous>[] = [

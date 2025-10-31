@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from './ui/button';
 import { List, CalendarDays } from 'lucide-react';
 import type { RendezVous } from './data/types';
@@ -16,37 +17,32 @@ interface NetworkingPageProps {
 }
 
 export function NetworkingPage({ subSection, filter, readOnly = false }: NetworkingPageProps) {
-  // Rendez-vous depuis le service centralisé networkingDataService
-  const [rendezVousData, setRendezVousData] = useState<RendezVous[]>([]);
   const activeFilter = filter || subSection;
   const [statutFilter, setStatutFilter] = useState<string>('tous');
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
 
-  // Charger les rendez-vous via le service au montage
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const filters: { type?: 'participant' | 'sponsor' } = {};
-        
-        // Appliquer le filtre de type si spécifié
-        if (activeFilter === 'participant') {
-          filters.type = 'participant';
-        } else if (activeFilter === 'sponsor') {
-          filters.type = 'sponsor';
-        }
-        
-        const requests = await networkingDataService.loadNetworkingRequests(filters);
-        if (mounted) setRendezVousData(requests);
-      } catch (error) {
-        console.error('Erreur lors du chargement des rendez-vous:', error);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [activeFilter]);
+  // Charger tous les rendez-vous via React Query - partage le cache avec les autres composants
+  const { data: allRendezVous = [], isLoading } = useQuery({
+    queryKey: ['networkingRequests'],
+    queryFn: async () => {
+      return await networkingDataService.loadNetworkingRequests();
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  // Filtrer les rendez-vous côté client
+  const rendezVousData = (() => {
+    if (activeFilter === 'participant') {
+      return allRendezVous.filter(r => r.type === 'participant');
+    } else if (activeFilter === 'sponsor') {
+      return allRendezVous.filter(r => r.type === 'sponsor');
+    }
+    return allRendezVous;
+  })();
 
   // Rendez-vous pour la vue calendrier - affiche toujours les rendez-vous acceptés + les filtres actifs
-  const calendarRendezVous = useMemo(() => {
+  const calendarRendezVous = (() => {
     let filtered = [...rendezVousData];
 
     // Filtre par sous-section (type)
@@ -63,7 +59,7 @@ export function NetworkingPage({ subSection, filter, readOnly = false }: Network
     }
 
     return filtered;
-  }, [rendezVousData, activeFilter, statutFilter]);
+  })();
 
   const getTitle = () => {
     switch (activeFilter) {

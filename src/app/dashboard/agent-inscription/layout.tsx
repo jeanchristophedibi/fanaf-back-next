@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback } from 'react';
+import React from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
 import { AuthGuard } from '../../../components/auth/AuthGuard';
 import { usePathname, useRouter } from 'next/navigation';
@@ -17,9 +17,9 @@ export default function AgentInscriptionLayout({ children }: { children: React.R
     return 'home';
   };
 
-  const activeNav = useMemo(() => getActiveNav(), [pathname]);
+  const activeNav = getActiveNav();
 
-  const handleNavChange = useCallback((nav: string) => {
+  const handleNavChange = (nav: string) => {
     switch (nav) {
       case 'home':
         router.push('/dashboard/agent-inscription');
@@ -33,7 +33,7 @@ export default function AgentInscriptionLayout({ children }: { children: React.R
       default:
         router.push('/dashboard/agent-inscription');
     }
-  }, [router]);
+  };
 
   return (
     <AuthGuard>

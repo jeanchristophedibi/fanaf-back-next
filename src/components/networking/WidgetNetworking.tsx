@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Calendar, Users, Building2, CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { networkingDataService } from "../data/networkingData";
@@ -23,25 +23,18 @@ export interface RendezVous {
 }
 
 export function WidgetNetworking() {
-  const [rendezVous, setRendezVous] = useState<RendezVous[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Charger les rendez-vous via React Query - utilise la même queryKey que les autres composants pour partager le cache
+  const { data: rendezVous = [], isLoading } = useQuery({
+    queryKey: ['networkingRequests'],
+    queryFn: async () => {
+      return await networkingDataService.loadNetworkingRequests();
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const requests = await networkingDataService.loadNetworkingRequests();
-        if (mounted) setRendezVous(requests);
-      } catch (error) {
-        console.error('Erreur lors du chargement des rendez-vous:', error);
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  const stats = useMemo(() => {
+  // Calculer les stats
+  const stats = (() => {
     const rdvParticipants = rendezVous.filter(r => r.type === 'participant');
     const rdvSponsors = rendezVous.filter(r => r.type === 'sponsor');
     const rdvAcceptes = rendezVous.filter(r => r.statut === 'acceptée').length;
@@ -54,7 +47,7 @@ export function WidgetNetworking() {
       enAttente: rdvEnAttente,
       total: rendezVous.length
     };
-  }, [rendezVous]);
+  })();
 
   if (isLoading) {
     return (

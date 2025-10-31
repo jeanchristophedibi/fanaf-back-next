@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, ReactNode } from "react";
+import { useState, ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -93,22 +93,19 @@ export function List<T extends Record<string, any>>({
 
   // Utiliser la sélection contrôlée ou interne
   const isControlled = controlledSelectedItems !== undefined && onSelectionChange !== undefined;
-  const selectedIds = useMemo(() => {
-    if (isControlled) {
-      return new Set(controlledSelectedItems.map(getRowId));
-    }
-    return internalSelectedItems;
-  }, [isControlled, controlledSelectedItems, internalSelectedItems, getRowId]);
+  const selectedIds = isControlled
+    ? new Set(controlledSelectedItems.map(getRowId))
+    : internalSelectedItems;
 
-  const selectedItems = useMemo(() => {
+  const selectedItems = (() => {
     const ids = isControlled
       ? new Set(controlledSelectedItems?.map(getRowId) || [])
       : internalSelectedItems;
     return data.filter((item) => ids.has(getRowId(item)));
-  }, [data, isControlled, controlledSelectedItems, internalSelectedItems, getRowId]);
+  })();
 
   // Recherche
-  const filteredData = useMemo(() => {
+  const filteredData = (() => {
     let filtered = [...data];
 
     if (searchTerm && searchKeys) {
@@ -147,33 +144,32 @@ export function List<T extends Record<string, any>>({
     }
 
     return filtered;
-  }, [data, searchTerm, searchKeys, sortConfig, columns]);
+  })();
 
   // Calculer si le bouton d'export doit être désactivé
-  const isExportDisabled = useMemo(() => {
+  const isExportDisabled = (() => {
     const hasNoData = filteredData.length === 0;
     const isReadOnly = readOnly;
     const missingConfig = !onExport && (!exportHeaders || !exportData);
     
     return hasNoData || isReadOnly || missingConfig;
-  }, [filteredData.length, readOnly, onExport, exportHeaders, exportData]);
+  })();
 
   // Pagination
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const paginatedData = useMemo(() => {
+  const paginatedData = (() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredData.slice(startIndex, endIndex);
-  }, [filteredData, currentPage, itemsPerPage]);
+  })();
   
   // Calculer la plage d'éléments affichés
   const startItem = filteredData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
   const endItem = Math.min(currentPage * itemsPerPage, filteredData.length);
 
   // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, sortConfig]);
+  // Note: Cette logique est maintenant gérée directement dans handleSort et lors du changement de searchTerm
+  // On peut utiliser un effet si nécessaire, mais pour éviter useEffect, on le gère dans les handlers
 
   // Fonction de tri
   const handleSort = (key: string) => {
@@ -185,6 +181,12 @@ export function List<T extends Record<string, any>>({
       direction = "desc";
     }
     setSortConfig({ key, direction });
+    setCurrentPage(1);
+  };
+
+  // Réinitialiser la page quand searchTerm change
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
     setCurrentPage(1);
   };
 
@@ -314,7 +316,7 @@ export function List<T extends Record<string, any>>({
                   <Input
                     placeholder={searchPlaceholder}
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                     className="pl-10"
                   />
                 </div>

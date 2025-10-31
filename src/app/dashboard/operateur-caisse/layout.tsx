@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
 
 type NavItem = 'dashboard' | 'paiements-attente' | 'paiements';
@@ -17,7 +17,7 @@ export default function OperateurCaisseLayout({ children }: { children: React.Re
     }
   });
 
-  const handleNavChange = useCallback((nav: string) => {
+  const handleNavChange = (nav: string) => {
     const mapped = (nav as NavItem) || 'dashboard';
     setActiveNav(mapped);
     if (typeof window === 'undefined') return;
@@ -26,7 +26,7 @@ export default function OperateurCaisseLayout({ children }: { children: React.Re
       // informer les enfants
       window.dispatchEvent(new Event('storage'));
     } catch (_) {}
-  }, []);
+  };
 
   return (
     <UnifiedLayout

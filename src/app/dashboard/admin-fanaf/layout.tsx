@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback } from 'react';
+import React from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
 import { AuthGuard } from '../../../components/auth/AuthGuard';
 import { usePathname, useRouter } from 'next/navigation';
@@ -61,9 +61,9 @@ export default function AdminFanafLayout({ children }: { children: React.ReactNo
     return 'home';
   };
 
-  const activeNav = useMemo(() => getActiveNav(), [pathname]);
+  const activeNav = getActiveNav();
 
-  const handleNavChange = useCallback((nav: string) => {
+  const handleNavChange = (nav: string) => {
     switch (nav) {
       case 'home':
         router.push('/dashboard/admin-fanaf');
@@ -126,7 +126,7 @@ export default function AdminFanafLayout({ children }: { children: React.ReactNo
       default:
         router.push('/dashboard/admin-fanaf');
     }
-  }, [router]);
+  };
 
   return (
     <AuthGuard>
