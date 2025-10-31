@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { UserPlus, User, Image as ImageIcon, Upload } from "lucide-react";
 import { Separator } from "../ui/separator";
 import { useFanafApi } from "../../hooks/useFanafApi";
+import { AlertCircle, CheckCircle } from "lucide-react";
 
 interface CreateSponsorDialogProps {
   open: boolean;
@@ -34,7 +35,7 @@ interface SponsorFormData {
   nomSponsor: string;
   emailSponsor: string;
   typeSponsor: string;
-  logo: string;
+  logoFile?: File;
 }
 
 interface ReferentFormData {
@@ -81,7 +82,6 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
     nomSponsor: '',
     emailSponsor: '',
     typeSponsor: '',
-    logo: ''
   });
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -95,29 +95,125 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
     fonction: ''
   });
 
-  const [hasReferent, setHasReferent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Mutation pour créer le sponsor
+  const createSponsorMutation = useMutation({
+    mutationFn: async (data: {
+      name: string;
+      sponsor_type_id: string;
+      sponsor_logo?: File | string;
+      sponsor_email?: string;
+      referent?: {
+        email: string;
+        first_name: string;
+        last_name: string;
+        username: string;
+        phone: string;
+        job_title: string;
+        civility: string;
+      };
+    }) => {
+      // Créer le sponsor
+      const sponsorResponse = await api.createSponsor({
+        name: data.name,
+        sponsor_type_id: data.sponsor_type_id,
+        sponsor_logo: data.sponsor_logo,
+        sponsor_email: data.sponsor_email,
+      });
+
+      console.log('Réponse API createSponsor:', sponsorResponse);
+
+      // Si un référent est fourni, le créer
+      // L'ID du sponsor peut être dans sponsorResponse.data.id, sponsorResponse.id, ou sponsorResponse.data.data.id
+      const sponsorId = sponsorResponse?.data?.id || 
+                        sponsorResponse?.data?.data?.id || 
+                        sponsorResponse?.id ||
+                        (sponsorResponse?.data && typeof sponsorResponse.data === 'object' && 'id' in sponsorResponse.data ? sponsorResponse.data.id : null);
+
+      if (data.referent && sponsorId) {
+        console.log('Création du référent pour le sponsor:', sponsorId);
+        await api.createSponsorReferent(sponsorId, data.referent);
+      } else if (data.referent && !sponsorId) {
+        console.warn('Impossible de créer le référent: ID du sponsor introuvable dans la réponse', sponsorResponse);
+      }
+
+      return sponsorResponse;
+    },
+    onSuccess: () => {
+      setSuccess(true);
+      // Invalider tous les caches liés aux sponsors pour rafraîchir les listes et widgets
+      queryClient.invalidateQueries({ queryKey: ['sponsors'] });
+      queryClient.invalidateQueries({ queryKey: ['listeSponsors'] });
+      queryClient.invalidateQueries({ queryKey: ['widgetSponsors'] });
+      // Reset form après un délai
+      setTimeout(() => {
+        resetForm();
+        setSuccess(false);
+        onOpenChange(false);
+      }, 2000);
+    },
+    onError: (err: any) => {
+      const errorMessage = err?.message || err?.response?.data?.message || 'Erreur lors de la création du sponsor';
+      setError(errorMessage);
+      setSuccess(false);
+      console.error('Erreur détaillée:', err);
+    },
+  });
+
+  const resetForm = () => {
+    setFormData({
+      nomSponsor: '',
+      emailSponsor: '',
+      typeSponsor: '',
+    });
+    setReferentData({
+      nom: '',
+      prenom: '',
+      email: '',
+      telephone: '',
+      fonction: ''
+    });
+    setLogoPreview(null);
+    setError(null);
+    setSuccess(false);
+  };
 
   const isFormValid = () => {
     const sponsorValid = formData.nomSponsor.trim() !== '' &&
-           formData.emailSponsor.trim() !== '' &&
            formData.typeSponsor.trim() !== '';
     
-    if (!hasReferent) return sponsorValid;
-    
-    return sponsorValid &&
-           referentData.nom.trim() !== '' &&
-           referentData.prenom.trim() !== '' &&
-           referentData.email.trim() !== '' &&
-           referentData.telephone.trim() !== '' &&
+    // Si le référent est rempli, valider tous ses champs
+    const referentFilled = referentData.nom.trim() !== '' ||
+           referentData.prenom.trim() !== '' ||
+           referentData.email.trim() !== '' ||
+           referentData.telephone.trim() !== '' ||
            referentData.fonction.trim() !== '';
+    
+    if (referentFilled) {
+      // Si au moins un champ du référent est rempli, tous doivent l'être
+      return sponsorValid &&
+             referentData.nom.trim() !== '' &&
+             referentData.prenom.trim() !== '' &&
+             referentData.email.trim() !== '' &&
+             referentData.telephone.trim() !== '' &&
+             referentData.fonction.trim() !== '';
+    }
+    
+    return sponsorValid;
   };
 
   const handleLogoFile = (file: File) => {
     if (file && file.type.startsWith('image/')) {
+      // Garder le File original pour l'API
+      setFormData({ ...formData, logoFile: file });
+      
+      // Créer une preview base64 pour l'affichage
       const reader = new FileReader();
       reader.onloadend = () => {
         setLogoPreview(reader.result as string);
-        setFormData({ ...formData, logo: reader.result as string });
       };
       reader.readAsDataURL(file);
     }
@@ -149,57 +245,71 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
     }
   };
 
-  const handleCreateSponsor = () => {
-    if (isFormValid()) {
-      onCreateSponsor({
-        nom: formData.nomSponsor,
-        email: formData.emailSponsor,
-        type: formData.typeSponsor,
-        logo: formData.logo.trim() !== '' ? formData.logo : undefined,
-        referent: hasReferent && 
-          referentData.nom.trim() !== '' &&
-          referentData.prenom.trim() !== '' &&
-          referentData.email.trim() !== '' &&
-          referentData.telephone.trim() !== '' &&
-          referentData.fonction.trim() !== ''
-          ? {
-              nom: referentData.nom,
-              prenom: referentData.prenom,
-              email: referentData.email,
-              telephone: referentData.telephone,
-              fonction: referentData.fonction
-            }
-          : undefined
+  const handleCreateSponsor = async () => {
+    if (!isFormValid()) return;
+
+    setError(null);
+    setSuccess(false);
+
+    // Générer un username à partir de l'email du référent si fourni
+    const generateUsername = (email: string): string => {
+      return email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+    };
+
+    // Préparer les données du référent si tous les champs sont remplis
+    const referentFilled = referentData.nom.trim() !== '' &&
+      referentData.prenom.trim() !== '' &&
+      referentData.email.trim() !== '' &&
+      referentData.telephone.trim() !== '' &&
+      referentData.fonction.trim() !== '';
+    
+    const referentDataForApi = referentFilled
+      ? {
+          email: referentData.email,
+          first_name: referentData.prenom,
+          last_name: referentData.nom,
+          username: generateUsername(referentData.email),
+          phone: referentData.telephone,
+          job_title: referentData.fonction,
+          civility: 'M', // Valeur par défaut, pourrait être ajusté avec un champ dans le formulaire
+        }
+      : undefined;
+
+    // Le logo en fichier ne peut pas être envoyé directement (limite 1024 caractères)
+    // Il faudrait uploader le fichier d'abord pour obtenir une URL
+    // Pour l'instant, on n'envoie pas le logo si c'est un fichier
+    const logoForApi = formData.logoFile ? undefined : undefined; // Ne pas envoyer le logo pour l'instant
+    
+    try {
+      await createSponsorMutation.mutateAsync({
+        name: formData.nomSponsor,
+        sponsor_type_id: formData.typeSponsor,
+        sponsor_logo: logoForApi, // undefined si c'est un fichier
+        sponsor_email: formData.emailSponsor.trim() !== '' ? formData.emailSponsor : undefined,
+        referent: referentDataForApi,
       });
-      // Reset form
-      setFormData({
-        nomSponsor: '',
-        emailSponsor: '',
-        typeSponsor: '',
-        logo: ''
-      });
-      setReferentData({
-        nom: '',
-        prenom: '',
-        email: '',
-        telephone: '',
-        fonction: ''
-      });
-      setHasReferent(false);
-      setLogoPreview(null);
-      onOpenChange(false);
+      
+      // Si un logo a été sélectionné mais non envoyé, informer l'utilisateur
+      if (formData.logoFile) {
+        console.warn('Le logo n\'a pas été envoyé car il nécessite un upload séparé. Il pourra être ajouté après la création du sponsor.');
+      }
+    } catch (error) {
+      // L'erreur est déjà gérée par onError de la mutation
+      console.error('Erreur lors de la création du sponsor:', error);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button className="bg-orange-600 hover:bg-orange-700 text-white">
-          <UserPlus className="w-4 h-4 mr-2" />
-          Créer un sponsor
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+    <>
+      <Button 
+        className="bg-orange-600 hover:bg-orange-700 text-white"
+        onClick={() => onOpenChange(true)}
+      >
+        <UserPlus className="w-4 h-4 mr-2" />
+        Créer un sponsor
+      </Button>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Créer un nouveau sponsor</DialogTitle>
           <DialogDescription>
@@ -223,11 +333,11 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="emailSponsor">Email *</Label>
+                <Label htmlFor="emailSponsor">Email</Label>
                 <Input
                   id="emailSponsor"
                   type="email"
-                  placeholder="contact@sponsor.com"
+                  placeholder="contact@sponsor.com (optionnel)"
                   value={formData.emailSponsor}
                   onChange={(e) => setFormData({ ...formData, emailSponsor: e.target.value })}
                 />
@@ -263,7 +373,14 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="logoSponsor">Logo du sponsor</Label>
+                <Label htmlFor="logoSponsor">
+                  Logo du sponsor
+                  {formData.logoFile && (
+                    <span className="text-xs text-orange-600 ml-2">
+                      (Le logo sera ajouté après la création du sponsor)
+                    </span>
+                  )}
+                </Label>
                 {!logoPreview ? (
                   <div
                     onDragOver={handleDragOver}
@@ -320,7 +437,7 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
                         size="sm"
                         onClick={() => {
                           setLogoPreview(null);
-                          setFormData({ ...formData, logo: '' });
+                          setFormData({ ...formData, logoFile: undefined });
                         }}
                       >
                         Supprimer
@@ -337,17 +454,13 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
           {/* Section référent */}
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <Checkbox
-                id="hasReferent"
-                checked={hasReferent}
-                onCheckedChange={(checked) => setHasReferent(checked === true)}
-              />
+
               <Label htmlFor="hasReferent" className="text-gray-900 font-medium cursor-pointer">
                 Ajouter un référent (contact pour les rendez-vous)
               </Label>
             </div>
 
-            {hasReferent && (
+
               <div className="mt-4 space-y-4 pl-7 border-l-2 border-orange-200">
                 <div className="flex items-center gap-2 mb-3">
                   <User className="w-4 h-4 text-orange-600" />
@@ -407,24 +520,40 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
                   </div>
                 </div>
               </div>
-            )}
+
           </div>
 
+          {/* Messages d'erreur et de succès */}
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+              <p className="text-sm text-green-800">Sponsor créé avec succès !</p>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 border-t pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }}>
               Annuler
             </Button>
             <Button 
               className="bg-orange-600 hover:bg-orange-700 text-white"
               onClick={handleCreateSponsor}
-              disabled={!isFormValid()}
+              disabled={!isFormValid() || createSponsorMutation.isPending}
             >
-              Créer le sponsor
+              {createSponsorMutation.isPending ? 'Création...' : 'Créer le sponsor'}
             </Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 

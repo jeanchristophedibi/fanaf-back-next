@@ -348,6 +348,167 @@ class FanafApiService {
     return this.fetchApi<any>('/api/v1/admin/sponsor-types');
   }
 
+  /**
+   * Créer un sponsor spécial
+   */
+  async createSponsor(data: {
+    name: string;
+    sponsor_type_id: string;
+    sponsor_logo?: File | string;
+    sponsor_website_url?: string;
+    sponsor_email?: string;
+  }): Promise<any> {
+    const token = this.getToken();
+    if (!token) {
+      throw new Error('Token d\'authentification manquant');
+    }
+
+    const formData = new FormData();
+    formData.append('name', data.name);
+    formData.append('sponsor_type_id', data.sponsor_type_id);
+    
+    // L'API attend sponsor_logo comme une URL (chaîne de max 1024 caractères)
+    // Si c'est un fichier, on ne peut pas l'envoyer directement en base64 car c'est trop long
+    // On doit soit uploader le fichier séparément d'abord, soit l'omettre pour l'instant
+    if (data.sponsor_logo) {
+      if (data.sponsor_logo instanceof File) {
+        // Pour un fichier, on ne peut pas l'envoyer en base64 (trop long)
+        // Il faudrait uploader le fichier séparément d'abord pour obtenir une URL
+        // Pour l'instant, on omettra le logo ou on pourrait ajouter un endpoint d'upload séparé
+        console.warn('Le logo sous forme de fichier ne peut pas être envoyé directement. Upload séparé requis.');
+        // Ne pas ajouter le logo pour l'instant - l'utilisateur pourra l'ajouter après création
+        // TODO: Implémenter un endpoint d'upload de fichier pour obtenir une URL
+      } else if (typeof data.sponsor_logo === 'string') {
+        // Si c'est déjà une URL, l'envoyer directement
+        if (data.sponsor_logo.startsWith('http') || data.sponsor_logo.startsWith('/')) {
+          // Vérifier que l'URL n'est pas trop longue (max 1024 caractères)
+          if (data.sponsor_logo.length > 1024) {
+            console.warn('L\'URL du logo dépasse 1024 caractères, elle ne sera pas envoyée');
+          } else {
+            formData.append('sponsor_logo', data.sponsor_logo);
+          }
+        } else if (data.sponsor_logo.startsWith('data:')) {
+          // Base64 data URL - trop long pour être envoyé directement
+          // Il faudrait uploader le fichier séparément d'abord
+          console.warn('Le logo en base64 est trop long pour être envoyé directement. Upload séparé requis.');
+        } else {
+          // Autre format de string - l'envoyer tel quel si pas trop long
+          if (data.sponsor_logo.length <= 1024) {
+            formData.append('sponsor_logo', data.sponsor_logo);
+          } else {
+            console.warn('Le logo dépasse 1024 caractères, il ne sera pas envoyé');
+          }
+        }
+      }
+    }
+    
+    if (data.sponsor_website_url) {
+      formData.append('sponsor_website_url', data.sponsor_website_url);
+    }
+    
+    if (data.sponsor_email) {
+      formData.append('sponsor_email', data.sponsor_email);
+    }
+
+    // Debug: afficher les données envoyées (sans le fichier)
+    console.log('FormData envoyé:', {
+      name: data.name,
+      sponsor_type_id: data.sponsor_type_id,
+      sponsor_email: data.sponsor_email,
+      sponsor_website_url: data.sponsor_website_url,
+      has_logo: !!data.sponsor_logo,
+      logo_type: data.sponsor_logo instanceof File ? 'File' : typeof data.sponsor_logo,
+      url: `${API_BASE_URL}/api/v1/admin/sponsors/special-create`,
+    });
+
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/api/v1/admin/sponsors/special-create`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          // Ne pas définir Content-Type pour FormData, le navigateur le fait automatiquement
+        },
+        body: formData,
+      });
+    } catch (fetchError: any) {
+      console.error('Erreur réseau lors de la création du sponsor:', {
+        error: fetchError,
+        message: fetchError?.message,
+        name: fetchError?.name,
+        stack: fetchError?.stack,
+        url: `${API_BASE_URL}/api/v1/admin/sponsors/special-create`,
+      });
+      throw new Error(`Erreur de connexion: ${fetchError?.message || 'Impossible de joindre le serveur. Vérifiez votre connexion internet.'}`);
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Erreur lors de la création du sponsor' }));
+      
+      // Log pour déboguer les erreurs
+      console.error('Erreur API createSponsor:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorData: errorData,
+      });
+      
+      // Pour les erreurs 422 (validation), Laravel retourne les erreurs de validation dans errorData.errors
+      if (response.status === 422 && errorData.errors) {
+        const formatErrorMessage = (messages: any): string => {
+          if (Array.isArray(messages)) {
+            return messages.join(', ');
+          } else if (typeof messages === 'object' && messages !== null) {
+            // Si c'est un objet, formater récursivement
+            return Object.entries(messages)
+              .map(([key, value]: [string, any]) => {
+                if (Array.isArray(value)) {
+                  return `${key}: ${value.join(', ')}`;
+                } else if (typeof value === 'object') {
+                  return `${key}: ${formatErrorMessage(value)}`;
+                }
+                return `${key}: ${String(value)}`;
+              })
+              .join('; ');
+          }
+          return String(messages);
+        };
+
+        const validationErrors = Object.entries(errorData.errors)
+          .map(([field, messages]: [string, any]) => {
+            const fieldMessages = formatErrorMessage(messages);
+            return `${field}: ${fieldMessages}`;
+          })
+          .join('; ');
+        
+        const errorMessage = validationErrors || errorData.message || 'Erreur de validation';
+        throw new Error(`Erreur de validation: ${errorMessage}`);
+      }
+      
+      throw new Error(errorData.message || errorData.error || `Erreur ${response.status}: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Créer un référent pour un sponsor
+   */
+  async createSponsorReferent(sponsorId: string, data: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    username: string;
+    phone: string;
+    job_title: string;
+    civility: string;
+  }): Promise<any> {
+    return this.fetchApi<any>(`/api/v1/admin/sponsors/${sponsorId}/referent`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // ==================== NETWORKING ====================
 
   /**
