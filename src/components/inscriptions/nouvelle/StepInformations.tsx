@@ -6,7 +6,7 @@ import { Label } from '../../ui/label';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { User, Mail, Phone, MapPin, IdCard } from 'lucide-react';
 
 interface ParticipantPrincipalState {

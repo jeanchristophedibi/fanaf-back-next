@@ -4,7 +4,7 @@ import React from 'react';
 import { Card } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { User, Users, X } from 'lucide-react';
 
 type TypeInscription = 'individuel' | 'groupe' | '';

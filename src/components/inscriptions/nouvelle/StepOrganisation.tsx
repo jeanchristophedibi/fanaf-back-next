@@ -5,7 +5,7 @@ import { Card } from '../../ui/card';
 import { Label } from '../../ui/label';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Building2, Mail, Phone, MapPin, Briefcase, Hash } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command';
