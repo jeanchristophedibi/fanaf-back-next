@@ -6,7 +6,8 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Checkbox } from "../ui/checkbox";
-import { UserPlus, User } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { UserPlus, User, Image as ImageIcon, Upload } from "lucide-react";
 import { Separator } from "../ui/separator";
 
 interface CreateSponsorDialogProps {
@@ -16,6 +17,7 @@ interface CreateSponsorDialogProps {
     nom: string; 
     email: string; 
     type: string;
+    logo?: string;
     referent?: {
       nom: string;
       prenom: string;
@@ -30,6 +32,7 @@ interface SponsorFormData {
   nomSponsor: string;
   emailSponsor: string;
   typeSponsor: string;
+  logo: string;
 }
 
 interface ReferentFormData {
@@ -44,8 +47,12 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
   const [formData, setFormData] = useState<SponsorFormData>({
     nomSponsor: '',
     emailSponsor: '',
-    typeSponsor: ''
+    typeSponsor: '',
+    logo: ''
   });
+
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const [referentData, setReferentData] = useState<ReferentFormData>({
     nom: '',
@@ -72,12 +79,50 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
            referentData.fonction.trim() !== '';
   };
 
+  const handleLogoFile = (file: File) => {
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+        setFormData({ ...formData, logo: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleLogoFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleLogoFile(file);
+    }
+  };
+
   const handleCreateSponsor = () => {
     if (isFormValid()) {
       onCreateSponsor({
         nom: formData.nomSponsor,
         email: formData.emailSponsor,
         type: formData.typeSponsor,
+        logo: formData.logo.trim() !== '' ? formData.logo : undefined,
         referent: hasReferent && 
           referentData.nom.trim() !== '' &&
           referentData.prenom.trim() !== '' &&
@@ -97,7 +142,8 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
       setFormData({
         nomSponsor: '',
         emailSponsor: '',
-        typeSponsor: ''
+        typeSponsor: '',
+        logo: ''
       });
       setReferentData({
         nom: '',
@@ -107,6 +153,7 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
         fonction: ''
       });
       setHasReferent(false);
+      setLogoPreview(null);
       onOpenChange(false);
     }
   };
@@ -131,7 +178,7 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
           {/* Informations du sponsor */}
           <div>
             <h3 className="text-gray-900 mb-4">Informations du sponsor</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="nomSponsor">Nom du sponsor *</Label>
                 <Input
@@ -155,12 +202,89 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
               
               <div className="space-y-2">
                 <Label htmlFor="typeSponsor">Type de sponsor *</Label>
-                <Input
-                  id="typeSponsor"
-                  placeholder="Ex: ARGENT, GOLD, PLATINE"
+                <Select
                   value={formData.typeSponsor}
-                  onChange={(e) => setFormData({ ...formData, typeSponsor: e.target.value })}
-                />
+                  onValueChange={(value) => setFormData({ ...formData, typeSponsor: value })}
+                >
+                  <SelectTrigger id="typeSponsor">
+                    <SelectValue placeholder="Sélectionner un type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ARGENT">ARGENT</SelectItem>
+                    <SelectItem value="GOLD">GOLD</SelectItem>
+                    <SelectItem value="PLATINE">PLATINE</SelectItem>
+                    <SelectItem value="DIAMANT">DIAMANT</SelectItem>
+                    <SelectItem value="BRONZE">BRONZE</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="logoSponsor">Logo du sponsor</Label>
+                {!logoPreview ? (
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                      isDragging
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-gray-300 hover:border-orange-400 bg-gray-50'
+                    }`}
+                  >
+                    <ImageIcon className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+                    <p className="text-sm text-gray-600 mb-2">
+                      Glissez-déposez une image ici
+                    </p>
+                    <p className="text-xs text-gray-500 mb-4">ou</p>
+                    <label htmlFor="logoFile" className="cursor-pointer">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        asChild
+                      >
+                        <span>
+                          <Upload className="w-4 h-4" />
+                          Parcourir les fichiers
+                        </span>
+                      </Button>
+                      <input
+                        id="logoFile"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleLogoChange}
+                      />
+                    </label>
+                    <p className="text-xs text-gray-400 mt-3">
+                      PNG, JPG, GIF jusqu'à 10MB
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 border rounded-lg bg-gray-50">
+                    <p className="text-xs text-gray-500 mb-3">Aperçu du logo :</p>
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={logoPreview}
+                        alt="Logo preview"
+                        className="max-h-24 max-w-full object-contain rounded"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setLogoPreview(null);
+                          setFormData({ ...formData, logo: '' });
+                        }}
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

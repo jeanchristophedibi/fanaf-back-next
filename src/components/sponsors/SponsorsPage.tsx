@@ -16,6 +16,7 @@ export function SponsorsPage({ readOnly = false }: SponsorsPageProps) {
     nom: string; 
     email: string; 
     type: string;
+    logo?: string;
     referent?: {
       nom: string;
       prenom: string;
