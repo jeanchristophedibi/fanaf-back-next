@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card } from '../../ui/card';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Shield, Briefcase, Check } from 'lucide-react';
 
 export type StatutParticipant = 'membre' | 'non-membre' | 'vip' | 'speaker';
