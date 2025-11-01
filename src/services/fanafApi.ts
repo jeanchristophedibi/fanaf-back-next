@@ -365,6 +365,8 @@ class FanafApiService {
         
         // Logger différemment selon le type d'erreur
         const isNotFound = response.status === 404;
+        const isServerError = response.status >= 500;
+        const isHtmlResponse = responseData?.error === 'HTML_RESPONSE';
         
         if (isAuthError && isLoginAttempt) {
           // Pour les tentatives de connexion échouées, logger en warn (moins bruyant)
@@ -372,6 +374,10 @@ class FanafApiService {
         } else if (isNotFound) {
           // Pour les erreurs 404, logger en warn (endpoint peut ne pas exister)
           console.warn(`Endpoint non trouvé [${endpoint}]:`, errorMessage);
+        } else if (isServerError && isHtmlResponse) {
+          // Pour les erreurs serveur avec HTML (500+), logger en warn
+          // car c'est souvent une erreur côté serveur qui sera corrigée par l'équipe backend
+          console.warn(`Erreur serveur [${endpoint}]:`, errorMessage);
         } else if (!isAuthError) {
           // Pour les autres erreurs, logger en erreur
           console.error(`Erreur API [${endpoint}]:`, errorMessage);

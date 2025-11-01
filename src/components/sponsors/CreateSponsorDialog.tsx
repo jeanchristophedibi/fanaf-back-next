@@ -309,15 +309,15 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
         Créer un sponsor
       </Button>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl">
-        <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Créer un nouveau sponsor</DialogTitle>
           <DialogDescription>
             Ajoutez un nouveau sponsor à la liste
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-y-auto flex-1 pr-2 -mr-2">
           {/* Informations du sponsor */}
           <div>
             <h3 className="text-gray-900 mb-4">Informations du sponsor</h3>
@@ -538,18 +538,19 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
             </div>
           )}
 
-          <div className="flex justify-end gap-3 border-t pt-4">
-            <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }}>
-              Annuler
-            </Button>
-            <Button 
-              className="bg-orange-600 hover:bg-orange-700 text-white"
-              onClick={handleCreateSponsor}
-              disabled={!isFormValid() || createSponsorMutation.isPending}
-            >
-              {createSponsorMutation.isPending ? 'Création...' : 'Créer le sponsor'}
-            </Button>
-          </div>
+        </div>
+        
+        <div className="flex justify-end gap-3 border-t pt-4 flex-shrink-0 mt-4">
+          <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }}>
+            Annuler
+          </Button>
+          <Button 
+            className="bg-orange-600 hover:bg-orange-700 text-white"
+            onClick={handleCreateSponsor}
+            disabled={!isFormValid() || createSponsorMutation.isPending}
+          >
+            {createSponsorMutation.isPending ? 'Création...' : 'Créer le sponsor'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
