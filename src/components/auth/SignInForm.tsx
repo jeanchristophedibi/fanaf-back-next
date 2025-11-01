@@ -7,7 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Eye, EyeOff, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Lock, AlertCircle, Loader2, Mail, Shield } from 'lucide-react';
+import { motion } from 'motion/react';
 import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';
 import loginImage from '../../assets/images/img-1.jpg';
@@ -45,36 +46,65 @@ function SignInFormContent() {
   }, [router, searchParams]);
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* --- Image à gauche --- */}
-      <div className="relative hidden lg:flex lg:w-1/2 min-h-screen">
+      <div className="relative hidden lg:flex lg:w-1/2 min-h-screen overflow-hidden">
         {loginImage ? (
           <>
             <Image
               src={loginImage}
               alt="FANAF 2026"
               fill
-              className="object-cover"
+              className="object-cover scale-105 transition-transform duration-700"
               priority
             />
-            <div className="absolute inset-0 bg-black/40"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-900/60 via-orange-800/50 to-black/60"></div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-12 z-10">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="text-center"
+              >
+                <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-6 mx-auto border border-white/20">
+                  <Shield className="w-10 h-10 text-white" />
+                </div>
+                <h2 className="text-5xl font-bold text-white mb-4 drop-shadow-lg">FANAF 2026</h2>
+                <p className="text-xl text-orange-100 mb-2 drop-shadow-md">Back Office</p>
+                <p className="text-lg text-white/90 drop-shadow-md">Administration & Gestion</p>
+                <div className="mt-8 w-24 h-1 bg-orange-500 mx-auto rounded-full"></div>
+              </motion.div>
+            </div>
           </>
         ) : (
           <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-orange-600 via-orange-500 to-orange-700">
-            <Lock className="w-16 h-16 text-white mb-6" />
-            <h2 className="text-4xl font-bold text-white mb-2">FANAF 2026</h2>
-            <p className="text-lg text-orange-100">Back Office Administration</p>
+            <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mb-6 border border-white/30">
+              <Lock className="w-10 h-10 text-white" />
+            </div>
+            <h2 className="text-5xl font-bold text-white mb-4">FANAF 2026</h2>
+            <p className="text-xl text-orange-100">Back Office Administration</p>
           </div>
         )}
       </div>
 
       {/* --- Formulaire à droite --- */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center bg-gray-50 dark:bg-gray-900 px-6 py-12">
-        <div className="w-full max-w-md space-y-8">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Connexion</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">Accédez à votre compte</p>
-          </div>
+      <div className="flex w-full lg:w-1/2 items-center justify-center px-6 py-12 lg:py-20">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md"
+        >
+          {/* Card avec ombre et bordure */}
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-8 lg:p-10 space-y-8">
+            {/* En-tête */}
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl mb-4 shadow-lg">
+                <Lock className="w-8 h-8 text-white" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900">Connexion</h1>
+              <p className="text-gray-600">Accédez à votre espace d'administration</p>
+            </div>
 
           {/* --- Formulaire --- */}
           <form 
@@ -154,86 +184,126 @@ function SignInFormContent() {
             }}
           >
             {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                <AlertCircle className="w-4 h-4" />
-                <span>{error}</span>
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-start gap-3 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg text-red-700"
+              >
+                <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                <span className="text-sm font-medium">{error}</span>
+              </motion.div>
             )}
 
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="Entrez votre email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="password">Mot de passe</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Entrez votre mot de passe"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  disabled={loading}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-gray-700 font-medium text-sm">
+                  Adresse email
+                </Label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                    <Mail className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    placeholder="exemple@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="pl-12 h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500 rounded-lg transition-colors"
+                  />
+                </div>
               </div>
-              {password.length > 0 && password.length < 6 && (
-                <p className="text-sm text-amber-600 mt-1">
-                  Le mot de passe doit contenir au moins 6 caractères.
-                </p>
-              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-700 font-medium text-sm">
+                  Mot de passe
+                </Label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                    <Lock className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={loading}
+                    className="pl-12 pr-12 h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500 rounded-lg transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1.5 rounded-md hover:bg-gray-100 z-10"
+                    disabled={loading}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+                {password.length > 0 && password.length < 6 && (
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-sm text-amber-600 mt-1 flex items-center gap-1"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    Le mot de passe doit contenir au moins 6 caractères.
+                  </motion.p>
+                )}
+              </div>
             </div>
 
             <Button 
               type="submit" 
-              className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-70 disabled:cursor-not-allowed"
-              disabled={loading || password.length > 0 && password.length < 6}
+              className="w-full h-12 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg"
+              disabled={loading || (password.length > 0 && password.length < 6)}
             >
               {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
                   Connexion en cours...
-                </>
+                </span>
               ) : (
-                'Se connecter'
+                <span className="flex items-center justify-center gap-2">
+                  <Lock className="w-4 h-4" />
+                  Se connecter
+                </span>
               )}
             </Button>
           </form>
-
-          {/* Overlay de chargement pendant la connexion */}
-          {loading && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
-              <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center space-y-4">
-                <Loader2 className="w-12 h-12 text-orange-600 animate-spin" />
-                <p className="text-gray-900 font-medium">Connexion en cours...</p>
-                <p className="text-sm text-gray-500">Veuillez patienter</p>
-              </div>
             </div>
-          )}
+          </motion.div>
         </div>
-      </div>
+
+        {/* Overlay de chargement pendant la connexion */}
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-2xl p-10 shadow-2xl flex flex-col items-center space-y-4 max-w-sm mx-4"
+            >
+              <div className="relative">
+                <Loader2 className="w-16 h-16 text-orange-600 animate-spin" />
+                <div className="absolute inset-0 border-4 border-orange-100 border-t-orange-600 rounded-full animate-spin"></div>
+              </div>
+              <p className="text-gray-900 font-semibold text-lg">Connexion en cours...</p>
+              <p className="text-sm text-gray-500 text-center">Veuillez patienter quelques instants</p>
+            </motion.div>
+          </motion.div>
+        )}
     </div>
   );
 }
