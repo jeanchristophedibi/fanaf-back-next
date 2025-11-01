@@ -6,18 +6,15 @@ import { usePathname, useRouter } from 'next/navigation';
 
 export type NavItem =
   | 'home'
-  | 'paiements-attente'
-  | 'paiements';
+  | 'documents'
 
-export default function OperateurCaisseLayout({ children }: { children: React.ReactNode }) {
+export default function OperateurBadgeLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
   // Déterminer l'élément actif basé sur l'URL
   const getActiveNav = (): NavItem => {
-    if (pathname?.includes('/')) return 'home';
-    if (pathname?.includes('/paiements/attente')) return 'paiements-attente';
-    if (pathname?.includes('/paiements/liste')) return 'paiements';
+    if (pathname?.includes('/documents')) return 'documents';
     return 'home';
   };
 
@@ -26,13 +23,10 @@ export default function OperateurCaisseLayout({ children }: { children: React.Re
   const handleNavChange = (nav: string) => {
     switch (nav) {
       case 'home':
-        router.push('/dashboard/operateur-caisse');
+        router.push('/dashboard/operateur-badge');
         break;
-      case 'paiements-attente':
-        router.push('/dashboard/operateur-caisse/paiements/attente');
-        break;
-      case 'paiements':
-        router.push('/dashboard/operateur-caisse/paiements/liste');
+      case 'documents':
+        router.push('/dashboard/operateur-badge/documents');
         break;
     }
   };
@@ -41,7 +35,7 @@ export default function OperateurCaisseLayout({ children }: { children: React.Re
     <UnifiedLayout
       activeNav={activeNav}
       onNavChange={handleNavChange}
-      userProfile="operateur-caisse"
+      userProfile="operateur-badge"
       onSwitchProfile={() => {}}
     >
       {children}
