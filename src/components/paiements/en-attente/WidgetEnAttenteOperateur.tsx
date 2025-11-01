@@ -11,65 +11,75 @@ import paymentService from "@/services/paymentService";
 
 
 export function WidgetEnAttenteOperateur() {
-  type Transaction = {
-    id: string;
-    reference: string;
-    payment_method: string;
-    payment_provider: string;
-    amount: number;
-    fees: number;
-    state: string;
-    initiated_at: string;
-    completed_at: string | null;
-    failed_at: string | null;
-    user: {
-      full_name: string;
-      email: string;
-      organization: {
-        id: string;
-        name: string;
-      } | null;
-      country: {
-        id: string;
-        name: string;
-        code: string | null;
-        flag: string;
-      } | null;
+  type PaymentStats = {
+    totals: {
+      count: number;
+      amount: number;
+      fees: number;
     };
+    by_method: Array<{
+      payment_method: string;
+      count: number;
+      total_amount: number;
+    }>;
   };
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [statsData, setStatsData] = useState<PaymentStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const fetchTransactions = async () => {
+    const fetchStats = async () => {
       setIsLoading(true);
       try {
-        const response = await paymentService.getAll();
-        setTransactions(Array.isArray(response?.data?.data) ? response.data.data : []);
+        const response = await paymentService.getStatsEnAttente();
+        console.log('Stats paiements en attente:', response);
+        setStatsData(response?.data || response);
       } catch (error) {
-        toast?.error('Impossible de récupérer les paiements');
-        setTransactions([]);
+        console.error('Erreur récupération stats:', error);
+        toast?.error('Impossible de récupérer les statistiques');
+        setStatsData(null);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchTransactions();
+    fetchStats();
   }, []);
 
-  const pending = useMemo(() => transactions.filter(t => t.state?.includes('Confirmed')), [transactions]);
+  // Calculer les statistiques pour l'affichage
+  const stats = useMemo(() => {
+    if (!statsData) {
+      return {
+        total: 0,
+        cash: 0,
+        virement: 0,
+        cheque: 0,
+        asapay: 0,
+      };
+    }
 
-  const toMode = (method: string) => (method === 'cash' ? 'espèce' : method);
+    const methodStats = {
+      total: statsData.totals?.count || 0,
+      cash: 0,
+      virement: 0,
+      cheque: 0,
+      asapay: 0,
+    };
 
-  // Calculer les statistiques pour les paiements en attente (Confirmed)
-  const stats = pending.reduce((acc, t) => {
-    acc.total++;
-    const mode = toMode(t.payment_method);
-    if (mode === 'espèce') acc.cash++;
-    else if (mode === 'virement') acc.virement++;
-    else if (mode === 'chèque') acc.cheque++;
-    return acc;
-  }, { total: 0, cash: 0, virement: 0, cheque: 0 });
+    // Parser les stats par méthode de paiement
+    statsData.by_method?.forEach((method) => {
+      if (method.payment_method === 'cash') {
+        methodStats.cash = method.count;
+      } else if (method.payment_method === 'virement' || method.payment_method === 'transfer') {
+        methodStats.virement = method.count;
+      } else if (method.payment_method === 'cheque' || method.payment_method === 'check') {
+        methodStats.cheque = method.count;
+      } else if (method.payment_method === 'asapay') {
+        methodStats.asapay = method.count;
+      }
+    });
+
+    return methodStats;
+  }, [statsData]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -102,7 +112,7 @@ export function WidgetEnAttenteOperateur() {
             <Banknote className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">Cash</p>
+            <p className="text-sm text-gray-600">Espèce</p>
             <p className="text-3xl text-gray-900">{stats.cash}</p>
           </div>
         </div>

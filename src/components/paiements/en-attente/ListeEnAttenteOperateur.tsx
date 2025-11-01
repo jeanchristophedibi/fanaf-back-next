@@ -18,34 +18,35 @@ import paymentService from "@/services/paymentService";
 type ModePaiement = 'cash' | 'check' | 'transfer';
 
 export function ListeEnAttenteOperateur() {
-  type Transaction = {
-    id: string;
-    reference: string;
-    payment_method: string;
-    payment_provider: string;
-    amount: number;
-    fees: number;
-    state: string;
-    initiated_at: string;
-    completed_at: string | null;
-    failed_at: string | null;
+  type RegistrationItem = {
     user: {
-      full_name: string;
+      id: string;
+      name: string;
       email: string;
-      organization: {
+      phone: string;
+      job_title: string;
+      passport_number: string;
+      registration_fee: string;
+      company: {
         id: string;
         name: string;
-      } | null;
+      };
       country: {
         id: string;
         name: string;
-        code: string | null;
-        flag: string;
-      } | null;
+      };
+    };
+    registration: {
+      id: string;
+      reference: string;
+      status: string;
+      amount: number;
+      created_at: string;
+      type: string;
     };
   };
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<RegistrationItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
@@ -91,7 +92,7 @@ export function ListeEnAttenteOperateur() {
       const hasFilters = Object.keys(filters).length > 0;
       const response = searchTerm 
         ? await paymentService.search(searchTerm, hasFilters ? filters : undefined)
-        : (hasFilters ? await paymentService.getAll(filters) : await paymentService.getAll());
+        : (hasFilters ? await paymentService.getAllEnAttente(filters) : await paymentService.getAllEnAttente());
       
       setTransactions(Array.isArray(response?.data?.data) ? response.data.data : []);
     } catch (error) {
@@ -118,22 +119,25 @@ export function ListeEnAttenteOperateur() {
 
   // Transformer toutes les transactions en paiements
   const paiements = useMemo(() => {
-    const toMode = (method: string) => (method === 'cash' ? 'espèce' : method);
     return transactions
       .map(t => ({
-        id: t.id,
-        reference: t.reference,
-        participantNom: t.user?.full_name || 'N/A',
+        id: t.registration.id,
+        reference: t.registration.reference,
+        participantNom: t.user?.name || 'N/A',
         participantEmail: t.user?.email || 'N/A',
-        organisationNom: t.user?.organization?.name || 'N/A',
-        statut: 'non-membre',
-        montant: t.amount,
-        modePaiement: toMode(t.payment_method),
-        canalEncaissement: t.payment_provider || 'externe',
-        dateInscription: t.initiated_at,
-        datePaiement: t.completed_at || t.initiated_at,
+        participantPhone: t.user?.phone || 'N/A',
+        participantJob: t.user?.job_title || 'N/A',
+        organisationNom: t.user?.company?.name || 'N/A',
+        statut: t.user?.registration_fee || 'N/A',
+        montant: t.registration.amount,
+        modePaiement: null, // Paiement non encore finalisé
+        canalEncaissement: 'externe',
+        dateInscription: t.registration.created_at,
+        datePaiement: null,
         administrateurEncaissement: 'N/A',
         pays: t.user?.country?.name || 'N/A',
+        registrationStatus: t.registration.status,
+        registrationType: t.registration.type,
       }));
   }, [transactions]);
 
@@ -214,34 +218,53 @@ export function ListeEnAttenteOperateur() {
 
   const handleConfirmPayment = (participant: any) => {
     setSelectedParticipant(participant);
-    setSelectedModePaiement(participant.modePaiement || 'espèce');
+    setSelectedModePaiement(participant.modePaiement || 'cash');
     setShowConfirmDialog(true);
   };
 
   const handleValidatePayment = async () => {
+    if (!selectedParticipant) {
+      toast.error('Aucun participant sélectionné');
+      return;
+    }
+
     setIsLoading(true);
     try {
+      console.log('Validation paiement:', {
+        id: selectedParticipant.id,
+        mode: selectedModePaiement
+      });
+
       const response = await paymentService.validatePayment(
         selectedParticipant.id, 
         selectedModePaiement, 
       );
       
-      if (response.success === true) {
+      console.log('Réponse API:', response);
+      
+      if (response.success === true || response.status === 'success' || response.message?.includes('success')) {
         toast.success('Paiement validé avec succès');
-        fetchTransactions();
+        setShowConfirmDialog(false);
+        setSelectedParticipant(null);
+        setUploadedFile(null);
+        setSelectedModePaiement('cash');
+        // Recharger les transactions après un court délai
+        setTimeout(() => {
+          fetchTransactions();
+        }, 500);
       } else if (response.success === false) {
-        toast.error(response.message);
+        toast.error(response.message || 'Erreur lors de la validation du paiement');
       } else {
-        toast.error('Une erreur est survenue lors de la validation du paiement');
+        toast.success('Paiement traité');
+        setShowConfirmDialog(false);
+        fetchTransactions();
       }
-    } catch (error) {
-      toast.error('Erreur lors de la validation du paiement');
+    } catch (error: any) {
+      console.error('Erreur validation:', error);
+      const errorMessage = error?.response?.data?.message || error?.message || 'Erreur lors de la validation du paiement';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
-      setShowConfirmDialog(false);
-      setSelectedParticipant(null);
-      setUploadedFile(null);
-      setSelectedModePaiement('cash');
     }
   };
 
@@ -282,7 +305,7 @@ export function ListeEnAttenteOperateur() {
       p.modePaiement,
       p.canalEncaissement,
       new Date(p.dateInscription).toLocaleDateString('fr-FR'),
-      new Date(p.datePaiement).toLocaleDateString('fr-FR'),
+      p.datePaiement ? new Date(p.datePaiement).toLocaleDateString('fr-FR') : '',
       p.administrateurEncaissement,
       p.pays,
     ]);
@@ -589,7 +612,7 @@ export function ListeEnAttenteOperateur() {
                         onChange={(e) => setSelectedModePaiement(e.target.value as ModePaiement)}
                         className="w-4 h-4 text-green-600 focus:ring-green-500"
                       />
-                      <label htmlFor="espece" className="flex items-center gap-2 cursor-pointer">
+                      <label htmlFor="cash" className="flex items-center gap-2 cursor-pointer">
                         <span className="text-2xl">💵</span>
                         <span className="text-sm text-gray-700">Espèce</span>
                       </label>
@@ -604,7 +627,7 @@ export function ListeEnAttenteOperateur() {
                         onChange={(e) => setSelectedModePaiement(e.target.value as ModePaiement)}
                         className="w-4 h-4 text-green-600 focus:ring-green-500"
                       />
-                      <label htmlFor="espece" className="flex items-center gap-2 cursor-pointer">
+                      <label htmlFor="check" className="flex items-center gap-2 cursor-pointer">
                         <span className="text-2xl">💳</span>
                         <span className="text-sm text-gray-700">Chèque</span>
                       </label>
@@ -619,7 +642,7 @@ export function ListeEnAttenteOperateur() {
                         onChange={(e) => setSelectedModePaiement(e.target.value as ModePaiement)}
                         className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                       />
-                      <label htmlFor="carte" className="flex items-center gap-2 cursor-pointer">
+                      <label htmlFor="transfer" className="flex items-center gap-2 cursor-pointer">
                         <span className="text-2xl">🏦</span>
                         <span className="text-sm text-gray-700">Virement Bancaire</span>
                       </label>
@@ -636,7 +659,7 @@ export function ListeEnAttenteOperateur() {
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleValidatePayment}
+              onClick={() => handleValidatePayment()}
               className="bg-green-600 hover:bg-green-700"
             >
               Oui, confirmer l'encaissement
