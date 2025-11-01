@@ -167,17 +167,22 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
       });
       
       // Invalider tous les caches liés aux sponsors pour rafraîchir les listes et widgets
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['sponsors'] }),
-        queryClient.invalidateQueries({ queryKey: ['listeSponsors'] }),
-        queryClient.invalidateQueries({ queryKey: ['widgetSponsors'] }),
-        queryClient.invalidateQueries({ queryKey: ['sponsorTypes'] }),
-      ]);
+      // Utiliser predicate pour invalider toutes les queries qui commencent par ces clés
+      const sponsorQueryKeys = ['sponsors', 'listeSponsors', 'widgetSponsors', 'sponsorTypes'];
       
-      // Forcer le refetch des données liées aux sponsors
-      await queryClient.refetchQueries({ queryKey: ['sponsors'] });
-      await queryClient.refetchQueries({ queryKey: ['listeSponsors'] });
-      await queryClient.refetchQueries({ queryKey: ['widgetSponsors'] });
+      // Invalider toutes les queries liées aux sponsors
+      await Promise.all(
+        sponsorQueryKeys.map(key => 
+          queryClient.invalidateQueries({ queryKey: [key] })
+        )
+      );
+      
+      // Forcer le refetch immédiat de toutes les queries liées aux sponsors pour mettre à jour les widgets
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['widgetSponsors'] }),
+        queryClient.refetchQueries({ queryKey: ['listeSponsors'] }),
+        queryClient.refetchQueries({ queryKey: ['sponsors'] }),
+      ]);
       
       // Appeler le callback si fourni (avant la réinitialisation)
       if (onCreateSponsor) {

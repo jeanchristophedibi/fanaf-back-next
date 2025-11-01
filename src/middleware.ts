@@ -40,7 +40,7 @@ export function middleware(request: NextRequest) {
     if (d5) return d5;
 
     // Opérateur badge
-    const d6 = deny(pathname.startsWith('/dashboard/operateur-badge') && role !== 'operateur_badge');
+    const d6 = deny(pathname.startsWith('/dashboard/operateur-badge') && role !== 'badge_operator');
     if (d6) return d6;
   }
 
