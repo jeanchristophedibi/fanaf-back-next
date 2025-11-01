@@ -26,9 +26,7 @@ import { getOrganisationById, getParticipantById, getReferentSponsor, getPartici
 import { companiesDataService } from './data/companiesData';
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { ProformaInvoiceGenerator } from './ProformaInvoiceGenerator';
-import html2canvas from 'html2canvas';
+import { ProformaGenerator } from './proforma/ProformaGenerator';
 
 export const InscriptionsEnCoursPage = () => {
   const { participants } = useDynamicInscriptions();
@@ -78,39 +76,6 @@ export const InscriptionsEnCoursPage = () => {
   const voirProforma = (participant: Participant) => {
     setSelectedParticipant(participant);
     setShowProformaDialog(true);
-  };
-
-  const telechargerProforma = async (participant: Participant) => {
-    const element = document.getElementById(`proforma-${participant.id}`);
-    if (!element) {
-      toast.error('Impossible de générer la facture');
-      return;
-    }
-
-    toast.info('Génération de la facture en cours...');
-
-    try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false
-      });
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `facture-proforma-${participant.reference}.png`;
-          link.click();
-          URL.revokeObjectURL(url);
-          toast.success('Facture téléchargée avec succès');
-        }
-      });
-    } catch (error) {
-      console.error('Erreur génération facture:', error);
-      toast.error('Erreur lors de la génération de la facture');
-    }
   };
 
   const exporterCSV = () => {
@@ -296,7 +261,7 @@ export const InscriptionsEnCoursPage = () => {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => telechargerProforma(participant)}
+                          onClick={() => voirProforma(participant)}
                           className="text-blue-600 hover:text-blue-700"
                         >
                           <Download className="w-4 h-4" />
@@ -312,49 +277,17 @@ export const InscriptionsEnCoursPage = () => {
       </Card>
 
       {/* Dialog Proforma */}
-      {selectedParticipant && (
-        <Dialog open={showProformaDialog} onOpenChange={setShowProformaDialog}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Facture Proforma - {selectedParticipant.reference}</DialogTitle>
-            </DialogHeader>
-            <div className="mt-4">
-              {(() => {
-                const org = getOrganisation(selectedParticipant.organisationId);
-                if (!org) {
-                  return (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-                      Organisation introuvable pour cette inscription.
-                    </div>
-                  );
-                }
-                return (
-                  <ProformaInvoiceGenerator 
-                    participant={selectedParticipant}
-                    organisation={org}
-                    numeroFacture={`PRO-${new Date().getFullYear()}-${selectedParticipant.reference.split('-')[2]}`}
-                  />
-                );
-              })()}
-            </div>
-            <div className="flex justify-end gap-4 mt-4">
-              <Button
-                onClick={() => telechargerProforma(selectedParticipant)}
-                className="bg-amber-600 hover:bg-amber-700"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Télécharger
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowProformaDialog(false)}
-              >
-                Fermer
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      {selectedParticipant && (() => {
+        const org = getOrganisation(selectedParticipant.organisationId);
+        return org ? (
+          <ProformaGenerator
+            participant={selectedParticipant}
+            organisation={org}
+            open={showProformaDialog}
+            onOpenChange={setShowProformaDialog}
+          />
+        ) : null;
+      })()}
     </div>
   );
 };

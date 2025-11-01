@@ -6,12 +6,55 @@ import { Users, CheckCircle, TrendingUp, FileText, Clock } from 'lucide-react';
 import { useParticipantsQuery } from '../../../hooks/useParticipantsQuery';
 import { AnimatedStat } from '../../../components/AnimatedStat';
 import { WidgetStatsInscriptions } from '../../../components/inscriptions/WidgetStatsInscriptions';
+import { useQuery } from '@tanstack/react-query';
+import { fanafApi } from '../../../services/fanafApi';
 
 const AgentInscriptionDashboard = () => {
   const { participants, isLoading } = useParticipantsQuery({
     enabled: true,
     categories: ['member', 'not_member', 'vip']
   });
+
+  // Query pour récupérer les types d'inscription (pour obtenir les montants)
+  const { data: registrationTypesResponse } = useQuery({
+    queryKey: ['registrationTypes'],
+    queryFn: async () => {
+      return await fanafApi.getRegistrationTypes();
+    },
+    staleTime: 5 * 60 * 1000, // Cache pendant 5 minutes
+    gcTime: 10 * 60 * 1000, // Garder en cache pendant 10 minutes
+  });
+
+  const registrationTypes = registrationTypesResponse?.data || [];
+
+  // Fonction helper pour obtenir le montant formaté selon le slug
+  const getPriceBySlug = (slug: string): string => {
+    const registrationType = registrationTypes.find((rt: any) => rt.slug === slug);
+    if (registrationType) {
+      return registrationType.amount_formatted || 
+             new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(parseFloat(registrationType.amount || '0'));
+    }
+    // Fallback sur les prix par défaut si l'API ne retourne pas les montants
+    const defaultPrices: Record<string, string> = {
+      'membre-fanaf': '350 000 FCFA',
+      'non-membre': '400 000 FCFA',
+    };
+    return defaultPrices[slug] || '0 FCFA';
+  };
+
+  // Fonction helper pour obtenir le montant brut (sans formatage)
+  const getRawPriceBySlug = (slug: string): number => {
+    const registrationType = registrationTypes.find((rt: any) => rt.slug === slug);
+    if (registrationType && registrationType.amount) {
+      return parseFloat(registrationType.amount);
+    }
+    // Fallback sur les prix par défaut
+    const defaultPrices: Record<string, number> = {
+      'membre-fanaf': 350000,
+      'non-membre': 400000,
+    };
+    return defaultPrices[slug] || 0;
+  };
   
   // Statistiques globales (utilisées par le widget habituel)
   const stats = {
@@ -80,7 +123,7 @@ const AgentInscriptionDashboard = () => {
                 }}
               />
             </div>
-            <p className="text-xs text-gray-600">350 000 FCFA / inscription</p>
+            <p className="text-xs text-gray-600">{getPriceBySlug('membre-fanaf')} / inscription</p>
           </div>
         </Card>
 
@@ -106,7 +149,7 @@ const AgentInscriptionDashboard = () => {
                 }}
               />
             </div>
-            <p className="text-xs text-gray-600">400 000 FCFA / inscription</p>
+            <p className="text-xs text-gray-600">{getPriceBySlug('non-membre')} / inscription</p>
           </div>
         </Card>
 
@@ -185,7 +228,7 @@ const AgentInscriptionDashboard = () => {
                   <p className="text-xs text-gray-600">Organisations membres</p>
                 </div>
               </div>
-              <p className="text-lg text-blue-600">350 000 FCFA</p>
+              <p className="text-lg text-blue-600">{getPriceBySlug('membre-fanaf')}</p>
             </div>
 
             <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
@@ -198,7 +241,7 @@ const AgentInscriptionDashboard = () => {
                   <p className="text-xs text-gray-600">Autres organisations</p>
                 </div>
               </div>
-              <p className="text-lg text-orange-600">400 000 FCFA</p>
+              <p className="text-lg text-orange-600">{getPriceBySlug('non-membre')}</p>
             </div>
 
             <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">

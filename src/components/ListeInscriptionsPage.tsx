@@ -11,7 +11,8 @@ import { Label } from './ui/label';
 import { Separator } from './ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from './ui/pagination';
-import { Search, Download, Filter, Users, UserCheck, Award, Mic, Eye, FileDown, User, Mail, Phone, Globe, Building, Calendar, FileText, X, QrCode, Package, Receipt, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Download, Filter, Users, UserCheck, Award, Mic, Eye, FileDown, User, Mail, Phone, Globe, Building, Calendar, FileText, X, QrCode, Package, Receipt, CheckCircle2, Clock, FileInvoice } from 'lucide-react';
+import { ProformaGenerator } from './proforma/ProformaGenerator';
 import { type Participant } from './data/types';
 import { getOrganisationById } from './data/helpers';
 import { useParticipantsQuery } from '../hooks/useParticipantsQuery';
@@ -82,6 +83,7 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
     const [isOpen, setIsOpen] = useState(false);
     const [isBadgeOpen, setIsBadgeOpen] = useState(false);
     const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+    const [isProformaOpen, setIsProformaOpen] = useState(false);
     const organisation = getOrganisationById(participant.organisationId);
 
     const handleOpenBadge = () => {
@@ -224,11 +226,29 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
                     </div>
                   </div>
                 </Button>
+                {/* Facture Proforma */}
+                {organisation && (
+                  <Button 
+                    onClick={() => setIsProformaOpen(true)}
+                    className="bg-white hover:bg-orange-600 hover:text-white border-2 border-orange-300 text-orange-700 h-auto py-4 justify-start button-press transition-all duration-200"
+                    variant="outline"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-orange-100 p-2 rounded-lg">
+                        <FileInvoice className="w-5 h-5 text-orange-600" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium">Facture Proforma</p>
+                        <p className="text-xs opacity-70">Générer & Télécharger</p>
+                      </div>
+                    </div>
+                  </Button>
+                )}
                 {/* Le reçu de paiement est visible uniquement pour l'administrateur FANAF */}
                 {hasReceipt && userProfile === 'fanaf' && (
                   <Button 
                     onClick={handleOpenReceipt}
-                    className="bg-white hover:bg-purple-600 hover:text-white border-2 border-purple-300 text-purple-700 h-auto py-4 col-span-2 justify-start button-press transition-all duration-200"
+                    className="bg-white hover:bg-green-600 hover:text-white border-2 border-green-300 text-green-700 h-auto py-4 justify-start button-press transition-all duration-200"
                     variant="outline"
                   >
                     <div className="flex items-center gap-3">
@@ -255,6 +275,14 @@ export function ListeInscriptionsPage({ readOnly = false, userProfile = 'agence'
             }} 
             open={isReceiptOpen} 
             onOpenChange={setIsReceiptOpen} 
+          />
+        )}
+        {organisation && (
+          <ProformaGenerator
+            participant={participant}
+            organisation={organisation}
+            open={isProformaOpen}
+            onOpenChange={setIsProformaOpen}
           />
         )}
       </Dialog>

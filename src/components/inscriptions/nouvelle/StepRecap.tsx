@@ -26,7 +26,7 @@ interface StepRecapProps {
     domaineActivite: string;
     codeOrganisation?: string;
   };
-  participantsGroupe?: Array<{ nom: string; prenom: string; email: string }>;
+  participantsGroupe?: Array<{ nom: string; prenom: string; email: string; telephone?: string; numeroIdentite?: string; jobTitle?: string }>;
   onGoToEtape?: (numero: number) => void;
 }
 

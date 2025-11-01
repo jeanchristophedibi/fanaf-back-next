@@ -4,8 +4,9 @@ import React from 'react';
 import { Card } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
 import { motion } from 'motion/react';
-import { User, Users, X } from 'lucide-react';
+import { User, Users, X, Phone, IdCard, Briefcase } from 'lucide-react';
 
 type TypeInscription = 'individuel' | 'groupe' | '';
 
@@ -17,7 +18,7 @@ interface StepInscriptionProps {
 }
 
 export const StepInscription: React.FC<StepInscriptionProps> = ({ typeInscription, setTypeInscription, participantsGroupe, setParticipantsGroupe }) => {
-  const addParticipant = () => setParticipantsGroupe([...participantsGroupe, { nom: '', prenom: '', email: '' }]);
+  const addParticipant = () => setParticipantsGroupe([...participantsGroupe, { nom: '', prenom: '', email: '', telephone: '', numeroIdentite: '', jobTitle: '' }]);
   const updateParticipant = (index: number, patch: any) => {
     const next = [...participantsGroupe];
     next[index] = { ...next[index], ...patch };
@@ -93,10 +94,85 @@ export const StepInscription: React.FC<StepInscriptionProps> = ({ typeInscriptio
                   <X className="w-4 h-4" />
                 </Button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input value={p.prenom} onChange={(e) => updateParticipant(idx, { prenom: e.target.value })} placeholder="Prénom" className="border-2 focus:border-indigo-500" />
-                <Input value={p.nom} onChange={(e) => updateParticipant(idx, { nom: e.target.value })} placeholder="Nom" className="border-2 focus:border-indigo-500" />
-                <Input value={p.email} onChange={(e) => updateParticipant(idx, { email: e.target.value })} placeholder="Email" className="border-2 focus:border-indigo-500" />
+              <div className="space-y-4">
+                {/* Première ligne : Prénom, Nom, Email */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600">Prénom <span className="text-red-500">*</span></Label>
+                    <Input 
+                      value={p.prenom || ''} 
+                      onChange={(e) => updateParticipant(idx, { prenom: e.target.value })} 
+                      placeholder="Prénom" 
+                      className="border-2 focus:border-indigo-500 h-10" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600">Nom <span className="text-red-500">*</span></Label>
+                    <Input 
+                      value={p.nom || ''} 
+                      onChange={(e) => updateParticipant(idx, { nom: e.target.value })} 
+                      placeholder="Nom" 
+                      className="border-2 focus:border-indigo-500 h-10" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600">Email <span className="text-red-500">*</span></Label>
+                    <Input 
+                      type="email"
+                      value={p.email || ''} 
+                      onChange={(e) => updateParticipant(idx, { email: e.target.value })} 
+                      placeholder="email@exemple.com" 
+                      className="border-2 focus:border-indigo-500 h-10" 
+                    />
+                  </div>
+                </div>
+                
+                {/* Deuxième ligne : Téléphone, Numéro d'identité, Job Title */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600 flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      Téléphone
+                    </Label>
+                    <Input 
+                      type="tel"
+                      value={p.telephone || ''} 
+                      onChange={(e) => updateParticipant(idx, { telephone: e.target.value })} 
+                      placeholder="+225 XX XX XX XX XX" 
+                      className="border-2 focus:border-indigo-500 h-10" 
+                    />
+                    <p className="text-xs text-gray-500">Si vide, utilisera le téléphone du participant principal</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600 flex items-center gap-1">
+                      <IdCard className="w-3 h-3" />
+                      Numéro de passeport/CNI
+                    </Label>
+                    <Input 
+                      value={p.numeroIdentite || ''} 
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const sanitized = raw.replace(/\s+/g, '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                        updateParticipant(idx, { numeroIdentite: sanitized });
+                      }}
+                      placeholder="ABC123456" 
+                      className="border-2 focus:border-indigo-500 h-10 font-mono tracking-wide" 
+                    />
+                    <p className="text-xs text-gray-500">Si vide, utilisera le numéro du participant principal</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600 flex items-center gap-1">
+                      <Briefcase className="w-3 h-3" />
+                      Fonction/Poste
+                    </Label>
+                    <Input 
+                      value={p.jobTitle || ''} 
+                      onChange={(e) => updateParticipant(idx, { jobTitle: e.target.value })} 
+                      placeholder="Directeur Commercial" 
+                      className="border-2 focus:border-indigo-500 h-10" 
+                    />
+                  </div>
+                </div>
               </div>
             </motion.div>
           ))}

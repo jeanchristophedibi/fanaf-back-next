@@ -35,6 +35,9 @@ interface ParticipantFormData {
   nom: string;
   prenom: string;
   email: string;
+  telephone?: string;
+  numeroIdentite?: string;
+  jobTitle?: string;
 }
 
 interface ParticipantPrincipalFormData {
@@ -273,7 +276,7 @@ export const NouvelleInscriptionPage = () => {
   };
 
   const ajouterParticipantGroupe = () => {
-    setParticipantsGroupe([...participantsGroupe, { nom: '', prenom: '', email: '' }]);
+    setParticipantsGroupe([...participantsGroupe, { nom: '', prenom: '', email: '', telephone: '', numeroIdentite: '', jobTitle: '' }]);
   };
 
   const supprimerParticipantGroupe = (index: number) => {
@@ -1179,9 +1182,10 @@ export const NouvelleInscriptionPage = () => {
         
         // Ajouter les participants du groupe (is_lead: false)
         participantsGroupe.forEach((p, index) => {
-          // Utiliser le téléphone du participant principal pour tous les participants du groupe
-          // TODO: Ajouter un champ téléphone spécifique pour chaque participant du groupe dans le formulaire
-          const phoneToUse = participantPrincipal.telephone;
+          // Utiliser le téléphone spécifique du participant si fourni, sinon utiliser celui du participant principal
+          const phoneToUse = (p.telephone && p.telephone.trim() !== '') 
+            ? p.telephone.trim() 
+            : participantPrincipal.telephone;
           
           let groupPhone: string;
           try {
@@ -1194,13 +1198,40 @@ export const NouvelleInscriptionPage = () => {
             return;
           }
           
-          // Générer un numéro de passeport unique pour chaque participant du groupe
-          // Si le participant principal a un numéro, on génère des variations uniques
+          // Utiliser le numéro d'identité spécifique du participant si fourni, sinon générer une variante unique
           let passportNumber: string | undefined;
-          if (participantPrincipal.numeroIdentite && participantPrincipal.numeroIdentite.trim() !== '') {
+          
+          if (p.numeroIdentite && p.numeroIdentite.trim() !== '') {
+            // Utiliser le numéro spécifique du participant
+            const participantPassport = p.numeroIdentite.trim();
+            
+            // Vérifier que ce numéro n'est pas déjà utilisé
+            if (usedPassportNumbers.has(participantPassport)) {
+              // Si déjà utilisé, générer une variante
+              let uniquePassport = participantPassport;
+              let suffix = 1;
+              
+              while (usedPassportNumbers.has(uniquePassport) && suffix < 1000) {
+                uniquePassport = `${participantPassport}-${String(suffix).padStart(3, '0')}`;
+                suffix++;
+              }
+              
+              if (suffix < 1000) {
+                passportNumber = uniquePassport;
+                usedPassportNumbers.add(uniquePassport);
+                console.log(`Numéro de passeport unique généré pour participant ${index + 2} (variante):`, passportNumber);
+              } else {
+                console.warn(`Impossible de générer un numéro de passeport unique pour participant ${index + 2}, sera omis`);
+              }
+            } else {
+              // Le numéro est unique, l'utiliser tel quel
+              passportNumber = participantPassport;
+              usedPassportNumbers.add(participantPassport);
+              console.log(`Numéro de passeport utilisé pour participant ${index + 2}:`, passportNumber);
+            }
+          } else if (participantPrincipal.numeroIdentite && participantPrincipal.numeroIdentite.trim() !== '') {
+            // Si le participant n'a pas de numéro spécifique, générer une variante du numéro du participant principal
             const baseNumber = participantPrincipal.numeroIdentite.trim();
-            // Générer un numéro unique en ajoutant un suffixe basé sur l'index
-            // Si le numéro de base est déjà utilisé, générer une variante
             let uniquePassport = baseNumber;
             let suffix = 1;
             
@@ -1210,11 +1241,10 @@ export const NouvelleInscriptionPage = () => {
               suffix++;
             }
             
-            // Si après 1000 tentatives on n'a pas trouvé, ne pas inclure le passport_number pour ce participant
             if (suffix < 1000) {
               passportNumber = uniquePassport;
               usedPassportNumbers.add(uniquePassport);
-              console.log(`Numéro de passeport unique généré pour participant ${index + 2}:`, passportNumber);
+              console.log(`Numéro de passeport unique généré pour participant ${index + 2} (depuis principal):`, passportNumber);
             } else {
               console.warn(`Impossible de générer un numéro de passeport unique pour participant ${index + 2}, sera omis`);
             }
@@ -1235,15 +1265,19 @@ export const NouvelleInscriptionPage = () => {
             groupUser.passport_number = passportNumber.trim();
           }
           
-          // TODO: Ajouter un champ job_title pour chaque participant du groupe dans le formulaire
-          // job_title sera ajouté plus tard quand le champ sera disponible dans le formulaire
+          // Ajouter job_title si fourni
+          if (p.jobTitle && p.jobTitle.trim() !== '') {
+            groupUser.job_title = p.jobTitle.trim();
+          }
           
           console.log(`Participant ${index + 2} ajouté:`, { 
             first_name: groupUser.first_name, 
             last_name: groupUser.last_name, 
             email: groupUser.email,
+            phone: groupUser.phone,
             has_passport: !!groupUser.passport_number,
-            passport: groupUser.passport_number
+            passport: groupUser.passport_number,
+            job_title: groupUser.job_title
           });
           
           users.push(groupUser);
