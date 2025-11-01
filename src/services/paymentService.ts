@@ -1,4 +1,5 @@
 import axiosInstance from '@/lib/axios'
+import { ParticipantFilters } from './participantService'
 
 export interface PaymentFilters {
   search?: string
@@ -13,6 +14,7 @@ export interface PaymentFilters {
 class PaymentService {
   private baseUrl = '/admin/payments'
   private baseUrlRegistration = '/admin/registrations'
+  private baseUrlCaisse = '/admin/operateurs/caisse'
 
   /**
    * Récupérer tous les paiements avec pagination
@@ -128,6 +130,28 @@ class PaymentService {
    */
   async search(query: string, filters?: Omit<PaymentFilters, 'search'>): Promise<any> {
     return this.getAll({ search: query, ...filters })
+  }
+
+  /**
+   * Rechercher des participants avec filtres
+   */
+  async getStatsOperateur(filters?: PaymentFilters): Promise<any> {
+    const params = new URLSearchParams()
+    
+    if (filters?.search) {
+      params.append('q', filters.search)
+    }
+    if (filters?.page) {
+      params.append('page', filters.page.toString())
+    }
+    if (filters?.per_page) {
+      params.append('per_page', filters.per_page.toString())
+    }
+
+    const response = await axiosInstance.get<any>(
+      `${this.baseUrlCaisse}/stats?${params.toString()}`
+    )
+    return response.data
   }
 
   /**

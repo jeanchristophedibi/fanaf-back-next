@@ -54,19 +54,6 @@ export default function OperateurBadgeDashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* En-tête */}
-      <div className="bg-gradient-to-r from-teal-600 to-cyan-600 rounded-xl p-6 text-white">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
-            <IdCard className="w-8 h-8" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold">Tableau de bord Opérateur Badge</h2>
-            <p className="text-teal-100">Suivi de la génération des badges et documents</p>
-          </div>
-        </div>
-      </div>
-
       {/* Statistiques principales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-l-4 border-l-teal-600">

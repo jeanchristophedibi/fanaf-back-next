@@ -1,7 +1,7 @@
 'use client';
 
-import { DashboardHome } from '../../../components/dashboard/DashboardHome';
+import OperateurCaisseDashboard from './Dashboard';
 
 export default function OperateurCaisseHomePage() {
-  return <DashboardHome />;
+  return <OperateurCaisseDashboard />;
 }

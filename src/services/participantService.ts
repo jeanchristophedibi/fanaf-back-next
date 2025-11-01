@@ -83,6 +83,14 @@ class ParticipantService {
     const response = await axiosInstance.post<any>(`${this.baseUrlRegistration}/${id}/kit/collect`)
     return response.data
   }
+
+  /**
+   *  Régénérer le badge
+   */
+  async refreshDocument(id: string): Promise<any> {
+    const response = await axiosInstance.post<any>(`${this.baseUrlOperateur}/${id}/document/refresh`)
+    return response.data
+  }
 }
 
 // Export d'une instance singleton

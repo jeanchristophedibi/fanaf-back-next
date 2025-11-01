@@ -34,7 +34,7 @@ export function Sidebar({ activeNav, onNavChange, onSwitchProfile }: OperateurCa
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
       <div className="p-6">
         <div className="space-y-3">
-          <Logo className="h-16 w-auto object-contain" alt="Operateur Caisse" />
+          <Logo className="h-10 w-auto object-contain" alt="Operateur Caisse" />
           <div>
             <h1 className="text-gray-900">FANAF 2026</h1>
             <p className="text-xs text-gray-500">Operateur Caisse</p>

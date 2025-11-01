@@ -1,7 +1,6 @@
 "use client";
 
 import { ListeEnAttenteOperateur } from '../../../../../components/paiements/en-attente/ListeEnAttenteOperateur';
-import { WidgetEnAttenteOperateur } from '../../../../../components/paiements/en-attente/WidgetEnAttenteOperateur';
 
 export default function PaiementsEnAttentePage() {
   return (
@@ -13,9 +12,6 @@ export default function PaiementsEnAttentePage() {
           Liste des paiements en attente de finalisation pour FANAF 2026
         </p>
       </div>
-
-      {/* Statistiques */}
-      <WidgetEnAttenteOperateur />
 
       {/* Liste des paiements */}
       <ListeEnAttenteOperateur />
