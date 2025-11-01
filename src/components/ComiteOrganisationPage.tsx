@@ -193,7 +193,7 @@ export function ComiteOrganisationPage() {
   };
 
   const handleDownloadBadge = (membre: MembreComite) => {
-    console.log('Téléchargement badge rouge pour:', membre.nom, membre.prenom);
+    console.log('Téléchargement badge rouge pour:', membre);
     // Ici vous ajouteriez la logique pour générer et télécharger le badge rouge
   };
 

@@ -159,7 +159,7 @@ export function CreateMembreDialog({ open, onOpenChange, onSuccess }: CreateMemb
       setError('Le téléphone est requis');
       return;
     }
-    if (!formData.profil || formData.profil === '') {
+    if (!formData.profil) {
       setError('Le profil est requis');
       return;
     }
