@@ -7,11 +7,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Eye, EyeOff, Lock, AlertCircle, Loader2, Mail, Shield } from 'lucide-react';
+import { Eye, EyeOff, Lock, AlertCircle, Loader2, Mail } from 'lucide-react';
 import { motion } from 'motion/react';
 import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';
-import loginImage from '../../assets/images/img-1.jpg';
+import { Logo } from '../ui/Logo';
+import logoImage from '../../assets/logo.png';
 
 function SignInFormContent() {
   const [showPassword, setShowPassword] = useState(false);
@@ -47,48 +48,18 @@ function SignInFormContent() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* --- Image à gauche --- */}
-      <div className="relative hidden lg:flex lg:w-1/2 min-h-screen overflow-hidden">
-        {loginImage ? (
-          <>
-            <Image
-              src={loginImage}
-              alt="FANAF 2026"
-              fill
-              className="object-cover scale-105 transition-transform duration-700"
-              priority
-            />
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-900/60 via-orange-800/50 to-black/60"></div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-12 z-10">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="text-center"
-              >
-                <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-6 mx-auto border border-white/20">
-                  <Shield className="w-10 h-10 text-white" />
-                </div>
-                <h2 className="text-5xl font-bold text-white mb-4 drop-shadow-lg">FANAF 2026</h2>
-                <p className="text-xl text-orange-100 mb-2 drop-shadow-md">Back Office</p>
-                <p className="text-lg text-white/90 drop-shadow-md">Administration & Gestion</p>
-                <div className="mt-8 w-24 h-1 bg-orange-500 mx-auto rounded-full"></div>
-              </motion.div>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-orange-600 via-orange-500 to-orange-700">
-            <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mb-6 border border-white/30">
-              <Lock className="w-10 h-10 text-white" />
-            </div>
-            <h2 className="text-5xl font-bold text-white mb-4">FANAF 2026</h2>
-            <p className="text-xl text-orange-100">Back Office Administration</p>
-          </div>
-        )}
+      {/* --- Logo à gauche --- */}
+      <div className="relative w-full lg:w-1/2 h-screen overflow-hidden order-2 lg:order-1 flex items-center justify-center bg-gradient-to-br from-orange-500 via-orange-400 to-blue-600">
+        <div className="flex flex-col items-center justify-center p-12 w-full">
+          <p className="text-white text-4xl font-bold">FANAF 2026</p>
+          <p className="text-white text-sm">9-11 février 2026</p>
+          {/* <p className="text-white text-sm">Accédez à votre espace d'administration</p> */}
+
+        </div>
       </div>
 
       {/* --- Formulaire à droite --- */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center px-6 py-12 lg:py-20">
+      <div className="flex w-full lg:w-1/2 items-center justify-center px-6 py-12 lg:py-20 order-1 lg:order-2">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -98,12 +69,23 @@ function SignInFormContent() {
           {/* Card avec ombre et bordure */}
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-8 lg:p-10 space-y-8">
             {/* En-tête */}
-            <div className="text-center space-y-2">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl mb-4 shadow-lg">
-                <Lock className="w-8 h-8 text-white" />
+            <div className="text-center space-y-4">
+              <div className="flex items-center justify-center mb-6">
+                <div className="relative h-20 w-auto">
+                  <Image
+                    src={logoImage}
+                    alt="FANAF Logo"
+                    width={200}
+                    height={80}
+                    className="h-20 w-auto object-contain"
+                    priority
+                  />
+                </div>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900">Connexion</h1>
-              <p className="text-gray-600">Accédez à votre espace d'administration</p>
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold text-gray-900">Connexion</h1>
+                <p className="text-gray-600">Accédez à votre espace d'administration</p>
+              </div>
             </div>
 
           {/* --- Formulaire --- */}
