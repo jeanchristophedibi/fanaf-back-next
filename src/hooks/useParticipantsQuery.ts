@@ -41,9 +41,20 @@ export function useParticipantsQuery(options?: {
   const query = useQuery<Participant[]>({
     queryKey: ['participants', Array.from(finalisedParticipantsIds).sort().join(','), categories?.join(',') || 'all'],
     queryFn: async () => {
-      // Récupérer uniquement depuis l'API via le service
-      const apiParticipants = await inscriptionsDataService.loadParticipants(categories);
-      return applyFinalisedStatus(apiParticipants || [], finalisedParticipantsIds);
+      try {
+        // Récupérer uniquement depuis l'API via le service
+        const apiParticipants = await inscriptionsDataService.loadParticipants(categories);
+        return applyFinalisedStatus(apiParticipants || [], finalisedParticipantsIds);
+      } catch (error: any) {
+        // Capturer silencieusement les erreurs ServerError (erreurs serveur avec HTML)
+        // et retourner un tableau vide au lieu de laisser l'erreur remonter
+        if (error?.name === 'ServerError' || error?.constructor?.name === 'ServerError') {
+          // Retourner un tableau vide pour les erreurs serveur silencieuses
+          return [];
+        }
+        // Pour les autres erreurs, laisser React Query les gérer normalement
+        throw error;
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 secondes - rafraîchir plus souvent pour les mises à jour locales

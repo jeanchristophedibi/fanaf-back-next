@@ -34,6 +34,7 @@ function getQueryClient() {
         },
       },
     });
+    
   }
   
   return browserQueryClient;
