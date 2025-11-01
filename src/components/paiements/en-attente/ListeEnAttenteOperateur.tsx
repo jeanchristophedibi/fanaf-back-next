@@ -657,6 +657,38 @@ export function ListeEnAttenteOperateur() {
                         <span className="text-sm text-gray-700">Virement Bancaire</span>
                       </label>
                     </div>
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="preuvePaiement" className="text-sm text-gray-700 font-medium">Preuve de paiement (facultatif) :</Label>
+                      <input
+                        id="preuvePaiement"
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            setUploadedFile(e.target.files[0]);
+                          } else {
+                            setUploadedFile(null);
+                          }
+                        }}
+                        className="block w-full text-sm text-gray-700 file:mr-2 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                      />
+                      {uploadedFile && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <File className="w-4 h-4 text-gray-500" />
+                          <span className="text-xs text-gray-600">{uploadedFile.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            type="button"
+                            onClick={() => setUploadedFile(null)}
+                            className="p-0 h-6 w-6"
+                            title="Supprimer le fichier"
+                          >
+                            <X className="w-4 h-4 text-gray-400" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

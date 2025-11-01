@@ -26,7 +26,8 @@ import {
   Filter,
   X,
   FileDown,
-  PackageOpen
+  PackageOpen,
+  RefreshCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
@@ -334,6 +335,15 @@ export function DocumentsParticipantsPage() {
       toast.error('Une erreur est survenue lors de la confirmation de remise');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const refreshBadge = async (participantId: string) => {
+    const response = await participantService.refreshDocument(participantId);
+    if (response.success === true) {
+      toast.success('Document régénéré avec succès');
+    } else {
+      toast.error(response.message);
     }
   };
 
@@ -910,6 +920,14 @@ export function DocumentsParticipantsPage() {
 
                           {/* Actions */}
                         <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => refreshBadge(participant.id)}
+                            className="gap-2 border-teal-200 text-teal-700 hover:bg-teal-50"
+                          >
+                            <RefreshCcw className="w-4 h-4" />
+                          </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -959,16 +977,6 @@ export function DocumentsParticipantsPage() {
                             <QrCode className="w-4 h-4" />
                             ({remisesCount.badge}) Remise de kit
                           </Button>
-                          
-                          {/* <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openConfirmDialog(participant.id, 'kit')}
-                            className="gap-2 border-teal-200 text-teal-700 hover:bg-teal-50"
-                          >
-                            <PackageOpen className="w-4 h-4" />
-                            ({remisesCount.kit}) Remise kit
-                          </Button> */}
                         </div>
                         </div>
                       </Card>

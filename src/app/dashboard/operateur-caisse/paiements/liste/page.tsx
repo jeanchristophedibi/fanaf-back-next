@@ -1,7 +1,7 @@
 "use client";
 
-import { StatsPaiementsOperateur } from '../../../../../components/paiements/liste/StatsPaiementsOperateur';
 import { ListePaiementsOperateur } from '../../../../../components/paiements/liste/ListeOperateur';
+import { WidgetEnAttenteOperateur } from '@/components/paiements/en-attente/WidgetEnAttenteOperateur';
 
 export default function ListePaiementsPage() {
   return (
@@ -15,7 +15,7 @@ export default function ListePaiementsPage() {
       </div>
 
       {/* Statistiques */}
-      <StatsPaiementsOperateur />
+      <WidgetEnAttenteOperateur />
 
       {/* Liste des paiements */}
       <ListePaiementsOperateur />
