@@ -2,40 +2,74 @@
 
 import { Card } from "../../ui/card";
 import { Coins, Banknote, Building2, FileText } from "lucide-react";
-import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { motion } from "motion/react";
 import { AlertCircle } from "lucide-react";
 import { AnimatedStat } from "../../AnimatedStat";
-import { getOrganisationById, type ModePaiement } from "../../data/mockData";
 import { useState, useMemo, useEffect } from "react";
+import { toast } from "sonner";
+import paymentService from "@/services/paymentService";
 
 
 export function WidgetEnAttente() {
-  const { participants } = useDynamicInscriptions();
-  
-  // Calculer les statistiques pour les paiements en attente
-  const stats = participants.reduce((acc, participant) => {
-    if (participant.statutInscription === 'non-finalisée') {
-      acc.total++;
-      
-      // Compter par mode de paiement
-      const mode = participant.modePaiement || 'espèce';
-      
-      if (mode === 'espèce') {
-        acc.cash++;
-      } else if (mode === 'virement') {
-        acc.virement++;
-      } else if (mode === 'chèque') {
-        acc.cheque++;
+  type Transaction = {
+    id: string;
+    reference: string;
+    payment_method: string;
+    payment_provider: string;
+    amount: number;
+    fees: number;
+    state: string;
+    initiated_at: string;
+    completed_at: string | null;
+    failed_at: string | null;
+    user: {
+      full_name: string;
+      email: string;
+      organization: {
+        id: string;
+        name: string;
+      } | null;
+      country: {
+        id: string;
+        name: string;
+        code: string | null;
+        flag: string;
+      } | null;
+    };
+  };
+
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      setIsLoading(true);
+      try {
+        const response = await paymentService.getAll();
+        setTransactions(Array.isArray(response?.data?.data) ? response.data.data : []);
+      } catch (error) {
+        toast?.error('Impossible de récupérer les paiements');
+        setTransactions([]);
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+    fetchTransactions();
+  }, []);
+
+  const pending = useMemo(() => transactions.filter(t => t.state?.includes('Confirmed')), [transactions]);
+
+  const toMode = (method: string) => (method === 'cash' ? 'espèce' : method);
+
+  // Calculer les statistiques pour les paiements en attente (Confirmed)
+  const stats = pending.reduce((acc, t) => {
+    acc.total++;
+    const mode = toMode(t.payment_method);
+    if (mode === 'espèce') acc.cash++;
+    else if (mode === 'virement') acc.virement++;
+    else if (mode === 'chèque') acc.cheque++;
     return acc;
-  }, {
-    total: 0,
-    cash: 0,
-    virement: 0,
-    cheque: 0
-  });
+  }, { total: 0, cash: 0, virement: 0, cheque: 0 });
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -10,73 +10,133 @@ import { Label } from "../../ui/label";
 import { Search, Filter, Download, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "../../ui/dialog";
-import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, Mail, Phone, Globe, Building, Calendar } from "lucide-react";
-import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
-import { getOrganisationById, type ModePaiement } from "../../data/mockData";
+import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, Mail, Phone, Globe, Building, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import paymentService from "@/services/paymentService";
+
+type ModePaiement = 'espèce' | 'virement' | 'chèque' | 'carte bancaire' | 'orange money' | 'wave';
 
 export function ListePaiements() {
-  const { participants } = useDynamicInscriptions();
+  type Transaction = {
+    id: string;
+    reference: string;
+    payment_method: string;
+    payment_provider: string;
+    amount: number;
+    fees: number;
+    state: string;
+    initiated_at: string;
+    completed_at: string | null;
+    failed_at: string | null;
+    user: {
+      full_name: string;
+      email: string;
+      organization: {
+        id: string;
+        name: string;
+      } | null;
+      country: {
+        id: string;
+        name: string;
+        code: string | null;
+        flag: string;
+      } | null;
+    };
+  };
+
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<'all' | 'payé' | 'non-payé'>('all');
   const [filterMode, setFilterMode] = useState<'all' | ModePaiement>('all');
   const [filterCanal, setFilterCanal] = useState<'all' | 'externe' | 'asapay'>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 20;
   
   // État pour le tri
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
-  // Transformer les participants finalisés en paiements
-  const paiements = useMemo(() => {
-    return participants
-      .filter(p => p.statutInscription === 'finalisée')
-      .map(p => {
-        const organisation = getOrganisationById(p.organisationId);
-        
-        // Calcul du tarif selon le statut
-        let tarif = 0;
-        if (p.statut === 'non-membre') {
-          tarif = 400000;
-        } else if (p.statut === 'membre') {
-          tarif = 350000;
-        }
-
-        return {
-          id: p.id,
-          reference: p.reference,
-          participantNom: `${p.prenom} ${p.nom}`,
-          participantEmail: p.email,
-          organisationNom: organisation?.nom || 'N/A',
-          statut: p.statut,
-          montant: tarif,
-          modePaiement: p.modePaiement || 'espèce',
-          canalEncaissement: p.canalEncaissement || 'externe',
-          dateInscription: p.dateInscription,
-          datePaiement: p.datePaiement || p.dateInscription,
-          administrateurEncaissement: p.caissier || 'N/A',
-          pays: p.pays,
+  // Fonction pour charger les transactions avec recherche et filtres
+  const fetchTransactions = async () => {
+    setIsLoading(true);
+    try {
+      // Préparer les filtres API (ne pas envoyer si "all")
+      const filters: any = {};
+      
+      // Mode de paiement
+      if (filterMode !== 'all') {
+        const modeMap: Record<string, string> = {
+          'espèce': 'cash',
+          'virement': 'transfer',
+          'chèque': 'check',
+          'carte bancaire': 'card',
+          'orange money': 'orange_money',
+          'wave': 'wave'
         };
-      });
-  }, [participants]);
+        filters.payment_method = modeMap[filterMode] || filterMode;
+      }
+      
+      // Canal d'encaissement
+      if (filterCanal !== 'all') {
+        filters.payment_provider = filterCanal;
+      }
 
-  // Filtrer les paiements en attente
+      // Appeler l'API avec ou sans filtres
+      const hasFilters = Object.keys(filters).length > 0;
+      const response = searchTerm 
+        ? await paymentService.search(searchTerm, hasFilters ? filters : undefined)
+        : (hasFilters ? await paymentService.getAll(filters) : await paymentService.getAll());
+      
+      setTransactions(Array.isArray(response?.data?.data) ? response.data.data : []);
+    } catch (error) {
+      toast?.error('Impossible de récupérer les paiements');
+      setTransactions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Effectuer la recherche côté serveur avec debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchTransactions();
+    }, 500); // Délai de 500ms après la dernière frappe
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Recharger quand les filtres changent (sans debounce)
+  useEffect(() => {
+    fetchTransactions();
+  }, [filterMode, filterCanal]);
+
+  // Transformer toutes les transactions en paiements
+  const paiements = useMemo(() => {
+    const toMode = (method: string) => (method === 'cash' ? 'espèce' : method);
+    return transactions
+      .map(t => ({
+        id: t.id,
+        reference: t.reference,
+        participantNom: t.user?.full_name || 'N/A',
+        participantEmail: t.user?.email || 'N/A',
+        organisationNom: t.user?.organization?.name || 'N/A',
+        statut: 'non-membre',
+        montant: t.amount,
+        modePaiement: toMode(t.payment_method),
+        canalEncaissement: t.payment_provider || 'externe',
+        dateInscription: t.initiated_at,
+        datePaiement: t.completed_at || t.initiated_at,
+        administrateurEncaissement: 'N/A',
+        pays: t.user?.country?.name || 'N/A',
+      }));
+  }, [transactions]);
+
+  // Filtrer les paiements (recherche, mode et canal déjà faits côté serveur, on applique le tri local)
   const filteredPaiements = useMemo(() => {
     let filtered = [...paiements];
 
-    // Recherche
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        p =>
-          p.reference.toLowerCase().includes(term) ||
-          p.participantNom.toLowerCase().includes(term) ||
-          p.participantEmail.toLowerCase().includes(term) ||
-          p.organisationNom.toLowerCase().includes(term)
-      );
-    }
-
-    // Filtre par statut de paiement
+    // Filtre par statut de paiement (local uniquement car pas géré par l'API)
     if (filterStatut !== 'all') {
       if (filterStatut === 'payé') {
         filtered = filtered.filter(p => p.modePaiement);
@@ -85,17 +145,7 @@ export function ListePaiements() {
       }
     }
 
-    // Filtre par mode de paiement
-    if (filterMode !== 'all') {
-      filtered = filtered.filter(p => p.modePaiement === filterMode);
-    }
-
-    // Filtre par canal
-    if (filterCanal !== 'all') {
-      filtered = filtered.filter(p => p.canalEncaissement === filterCanal);
-    }
-
-    // Tri
+    // Tri local
     if (sortConfig) {
       filtered.sort((a, b) => {
         let aValue = a[sortConfig.key as keyof typeof a];
@@ -120,7 +170,7 @@ export function ListePaiements() {
     }
 
     return filtered;
-  }, [paiements, searchTerm, filterStatut, filterMode, filterCanal, sortConfig]);
+  }, [paiements, filterStatut, sortConfig]);
   
   // Fonction de tri
   const handleSort = (key: string) => {
@@ -138,12 +188,12 @@ export function ListePaiements() {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredPaiements.slice(startIndex, endIndex);
-  }, [filteredPaiements, currentPage]);
+  }, [filteredPaiements, currentPage, itemsPerPage]);
 
   // Réinitialiser la page quand les filtres changent
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterStatut, filterMode, filterCanal]);
+  }, [filterStatut]);
 
   const activeFiltersCount =
     (filterStatut !== 'all' ? 1 : 0) +
@@ -235,7 +285,6 @@ export function ListePaiements() {
   // Composant modal pour les détails de paiement
   const PaiementDetailsDialog = ({ paiement }: { paiement: any }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const organisation = getOrganisationById(paiement.organisationId);
     
     return (
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -459,7 +508,7 @@ export function ListePaiements() {
 
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <h2 className="text-gray-900">Liste des paiements finalisés</h2>
+            <h2 className="text-gray-900">Liste des paiements</h2>
             <p className="text-sm text-gray-500">
               {paiements.length} paiement{paiements.length > 1 ? 's' : ''} trouvé{paiements.length > 1 ? 's' : ''}
             </p>
@@ -524,51 +573,51 @@ export function ListePaiements() {
                   </td>
                 </tr>
               ) : (
-                paginatedPaiements.map((participant, index) => {
+                paginatedPaiements.map((paiement, index) => {
                   return (
                     <motion.tr
-                      key={participant.id}
+                      key={paiement.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
                       className="hover:bg-gray-50 transition-colors"
                     >
-                      <td className="px-6 py-4 text-sm text-gray-900">{participant.reference}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{paiement.reference}</td>
                       <td className="px-6 py-4">
                         <div>
-                          <p className="text-sm text-gray-900">{participant.participantNom}</p>
-                          <p className="text-xs text-gray-500">{participant.participantEmail}</p>
+                          <p className="text-sm text-gray-900">{paiement.participantNom}</p>
+                          <p className="text-xs text-gray-500">{paiement.participantEmail}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{participant.organisationNom}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{paiement.organisationNom}</td>
                       <td className="px-6 py-4">
                         <Badge 
-                          variant={participant.statut === 'membre' ? 'default' : 'secondary'}
-                          className={participant.statut === 'membre' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}
+                          variant={paiement.statut === 'membre' ? 'default' : 'secondary'}
+                          className={paiement.statut === 'membre' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}
                         >
-                          {participant.statut === 'membre' ? 'Membre' : 'Non-Membre'}
+                          {paiement.statut === 'membre' ? 'Membre' : 'Non-Membre'}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
                         <Badge 
                           variant="outline"
                           className={
-                            participant.modePaiement === 'espèce' ? 'border-green-300 text-green-700 bg-green-50' :
-                            participant.modePaiement === 'virement' ? 'border-blue-300 text-blue-700 bg-blue-50' :
+                            paiement.modePaiement === 'espèce' ? 'border-green-300 text-green-700 bg-green-50' :
+                            paiement.modePaiement === 'virement' ? 'border-blue-300 text-blue-700 bg-blue-50' :
                             'border-purple-300 text-purple-700 bg-purple-50'
                           }
                         >
-                          {participant.modePaiement}
+                          {paiement.modePaiement}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-gray-900">
-                        {participant.montant.toLocaleString()} FCFA
+                        {paiement.montant.toLocaleString()} FCFA
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(participant.dateInscription).toLocaleDateString('fr-FR')}
+                        {new Date(paiement.dateInscription).toLocaleDateString('fr-FR')}
                       </td>
                       <td className="px-6 py-4">
-                        <PaiementDetailsDialog paiement={participant} />
+                        <PaiementDetailsDialog paiement={paiement} />
                       </td>
                     </motion.tr>
                   );

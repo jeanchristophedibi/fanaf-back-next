@@ -1,3 +1,4 @@
+import { ModePaiement } from '@/components/data/mockData'
 import axiosInstance from '@/lib/axios'
 
 export interface PaymentFilters {
@@ -5,6 +6,9 @@ export interface PaymentFilters {
   page?: number
   per_page?: number
   assignment_id?: string
+  payment_method?: string
+  payment_provider?: string
+  state?: string
 }
 
 class PaymentService {
@@ -28,6 +32,15 @@ class PaymentService {
     if (filters?.assignment_id) {
       params.append('assignment_id', filters.assignment_id)
     }
+    if (filters?.payment_method) {
+      params.append('payment_method', filters.payment_method)
+    }
+    if (filters?.payment_provider) {
+      params.append('payment_provider', filters.payment_provider)
+    }
+    if (filters?.state) {
+      params.append('state', filters.state)
+    }
 
     const response = await axiosInstance.get<any>(
       `${this.baseUrl}?${params.toString()}`
@@ -36,10 +49,95 @@ class PaymentService {
   }
 
   /**
-   * Rechercher des constats
+   * Récupérer les stats des paiements
    */
-  async search(query: string): Promise<any> {
-    return this.getAll({ search: query })
+  async getStats(filters?: PaymentFilters): Promise<any> {
+    const params = new URLSearchParams()
+    
+    if (filters?.search) {
+      params.append('q', filters.search)
+    }
+    if (filters?.page) {
+      params.append('page', filters.page.toString())
+    }
+    if (filters?.per_page) {
+      params.append('per_page', filters.per_page.toString())
+    }
+    if (filters?.assignment_id) {
+      params.append('assignment_id', filters.assignment_id)
+    }
+
+    const response = await axiosInstance.get<any>(
+      `${this.baseUrl}/summary?${params.toString()}`
+    )
+    return response.data
+  }
+
+  /**
+   * Récupérer tous les paiements en attente avec pagination
+   */
+  async getAllEnAttente(filters?: PaymentFilters): Promise<any> {
+    const params = new URLSearchParams()
+    
+    if (filters?.search) {
+      params.append('q', filters.search)
+    }
+    if (filters?.page) {
+      params.append('page', filters.page.toString())
+    }
+    if (filters?.per_page) {
+      params.append('per_page', filters.per_page.toString())
+    }
+    if (filters?.assignment_id) {
+      params.append('assignment_id', filters.assignment_id)
+    }
+
+    const response = await axiosInstance.get<any>(
+      `${this.baseUrl}?${params.toString()}`
+    )
+    return response.data
+  }
+
+  /**
+   * Récupérer les stats des paiements en attente
+   */
+  async getStatsEnAttente(filters?: PaymentFilters): Promise<any> {
+    const params = new URLSearchParams()
+    
+    if (filters?.search) {
+      params.append('q', filters.search)
+    }
+    if (filters?.page) {
+      params.append('page', filters.page.toString())
+    }
+    if (filters?.per_page) {
+      params.append('per_page', filters.per_page.toString())
+    }
+    if (filters?.assignment_id) {
+      params.append('assignment_id', filters.assignment_id)
+    }
+
+    const response = await axiosInstance.get<any>(
+      `${this.baseUrl}/en-attente/stats?${params.toString()}`
+    )
+    return response.data
+  }
+
+  /**
+   * Rechercher des paiements avec filtres
+   */
+  async search(query: string, filters?: Omit<PaymentFilters, 'search'>): Promise<any> {
+    return this.getAll({ search: query, ...filters })
+  }
+
+  /**
+   * Valider un paiement en attente
+   */
+  async validatePayment(id: string, modePaiement: string): Promise<any> {
+    const response = await axiosInstance.post<any>(`${this.baseUrl}/${id}/confirm`, {
+      payment_method: modePaiement
+    });
+    return response.data;
   }
 }
 

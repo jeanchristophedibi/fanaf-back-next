@@ -5,6 +5,8 @@ export interface ParticipantFilters {
   page?: number
   per_page?: number
   assignment_id?: string
+  payment_method?: string
+  organization_id?: string
 }
 
 class ParticipantService {
@@ -28,6 +30,12 @@ class ParticipantService {
     if (filters?.assignment_id) {
       params.append('assignment_id', filters.assignment_id)
     }
+    if (filters?.payment_method) {
+      params.append('payment_method', filters.payment_method)
+    }
+    if (filters?.organization_id) {
+      params.append('organization_id', filters.organization_id)
+    }
 
     const response = await axiosInstance.get<any>(
       `${this.baseUrl}?${params.toString()}`
@@ -36,10 +44,18 @@ class ParticipantService {
   }
 
   /**
-   * Rechercher des constats
+   * Rechercher des participants avec filtres
    */
-  async search(query: string): Promise<any> {
-    return this.getAll({ search: query })
+  async search(query: string, filters?: Omit<ParticipantFilters, 'search'>): Promise<any> {
+    return this.getAll({ search: query, ...filters })
+  }
+
+  /**
+   *  Confirmation de remise
+   */
+  async confirmRemise(id: string): Promise<any> {
+    const response = await axiosInstance.post<any>(`${this.baseUrl}/${id}/confirm-remise`)
+    return response.data
   }
 }
 

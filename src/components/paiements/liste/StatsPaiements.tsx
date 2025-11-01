@@ -2,51 +2,69 @@
 
 import { Card } from "../../ui/card";
 import { Coins, Building2, TrendingUp } from "lucide-react";
-import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { motion } from "motion/react";
-import { useMemo } from "react";
-import { getOrganisationById } from "../../data/mockData";
+import { useEffect, useState } from "react";
+import paymentService from "@/services/paymentService";
+import { toast } from "sonner";
 
 export function StatsPaiements() {
-  const { participants } = useDynamicInscriptions();
+  const [statsPaiements, setStatsPaiements] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      setIsLoading(true);
+      try {
+        const response = await paymentService.getStats();
+        console.log('statsPaiements', response);
+        setStatsPaiements(response);
+      } catch (error) {
+        toast?.error('Impossible de récupérer les paiements');
+        setStatsPaiements({});
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchTransactions();
+  }, []);
   
-  // Calculer les statistiques pour les paiements finalisés
-  const stats = useMemo(() => {
-    return participants
-      .filter(p => p.statutInscription === 'finalisée')
-      .reduce((acc, participant) => {
-        acc.totalPaiements++;
+  // // Calculer les statistiques pour les paiements finalisés
+  // const stats = useMemo(() => {
+  //   return participants
+  //     .filter(p => p.statutInscription === 'finalisée')
+  //     .reduce((acc, participant) => {
+  //       acc.totalPaiements++;
         
-        const organisation = getOrganisationById(participant.organisationId);
-        let tarif = 0;
-        if (participant.statut === 'non-membre') {
-          tarif = 400000;
-        } else if (participant.statut === 'membre') {
-          tarif = 350000;
-        }
+  //       const organisation = getOrganisationById(participant.organisationId);
+  //       let tarif = 0;
+  //       if (participant.statut === 'non-membre') {
+  //         tarif = 400000;
+  //       } else if (participant.statut === 'membre') {
+  //         tarif = 350000;
+  //       }
         
-        acc.totalMontant += tarif;
+  //       acc.totalMontant += tarif;
         
-        // Canal d'encaissement
-        const canal = participant.canalEncaissement || 'externe';
-        if (canal === 'externe') {
-          acc.paiementsExterne++;
-          acc.montantExterne += tarif;
-        } else if (canal === 'asapay') {
-          acc.paiementsAsapay++;
-          acc.montantAsapay += tarif;
-        }
+  //       // Canal d'encaissement
+  //       const canal = participant.canalEncaissement || 'externe';
+  //       if (canal === 'externe') {
+  //         acc.paiementsExterne++;
+  //         acc.montantExterne += tarif;
+  //       } else if (canal === 'asapay') {
+  //         acc.paiementsAsapay++;
+  //         acc.montantAsapay += tarif;
+  //       }
         
-        return acc;
-      }, {
-        totalPaiements: 0,
-        totalMontant: 0,
-        paiementsExterne: 0,
-        montantExterne: 0,
-        paiementsAsapay: 0,
-        montantAsapay: 0
-      });
-  }, [participants]);
+  //       return acc;
+  //     }, {
+  //       totalPaiements: 0,
+  //       totalMontant: 0,
+  //       paiementsExterne: 0,
+  //       montantExterne: 0,
+  //       paiementsAsapay: 0,
+  //       montantAsapay: 0
+  //     });
+  // }, [participants]);
 
   return (
     <div className="grid grid-cols-3 gap-4">
@@ -62,9 +80,9 @@ export function StatsPaiements() {
             </div>
             <div>
               <p className="text-sm text-blue-700">Total paiements</p>
-              <p className="text-3xl text-blue-900">{stats.totalPaiements}</p>
+              <p className="text-3xl text-blue-900">{statsPaiements?.total_amount}</p>
               <p className="text-xs text-blue-600 mt-1">
-                {stats.totalMontant.toLocaleString()} FCFA
+                {statsPaiements?.total_amount?.toLocaleString() || 0} FCFA
               </p>
             </div>
           </div>
@@ -83,9 +101,9 @@ export function StatsPaiements() {
             </div>
             <div>
               <p className="text-sm text-blue-700">Canal Externe</p>
-              <p className="text-3xl text-blue-900">{stats.paiementsExterne}</p>
+              <p className="text-3xl text-blue-900">{statsPaiements?.offline_amount}</p>
               <p className="text-xs text-blue-600 mt-1">
-                {stats.montantExterne.toLocaleString()} FCFA
+                {statsPaiements?.offline_amount?.toLocaleString() || 0} FCFA
               </p>
             </div>
           </div>
@@ -104,9 +122,9 @@ export function StatsPaiements() {
             </div>
             <div>
               <p className="text-sm text-orange-700">Canal ASAPAY</p>
-              <p className="text-3xl text-orange-900">{stats.paiementsAsapay}</p>
+              <p className="text-3xl text-orange-900">{statsPaiements?.online_amount}</p>
               <p className="text-xs text-orange-600 mt-1">
-                {stats.montantAsapay.toLocaleString()} FCFA
+                {statsPaiements?.online_amount?.toLocaleString() || 0} FCFA
               </p>
             </div>
           </div>
