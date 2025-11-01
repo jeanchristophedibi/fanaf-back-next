@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake, UserPlus } from 'lucide-react';
+import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake, UserPlus, Loader2 } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Button } from '../ui/button';
@@ -41,6 +41,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
   const [paiementsOpen, setPaiementsOpen] = useState(false);
   const [tresorerieOpen, setTresorerieOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [loadingNav, setLoadingNav] = useState<string | null>(null);
 
   // Query pour synchroniser l'état après le montage pour éviter les erreurs d'hydratation
   useQuery({
@@ -224,18 +225,32 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
         {menuConfig.mainNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeNav === item.id;
+          const isLoadingItem = loadingNav === item.id;
           
           return (
             <button
               key={item.id}
-              onClick={() => onNavChange(item.id)}
+              onClick={() => {
+                setLoadingNav(item.id);
+                // Appeler onNavChange et réinitialiser le loader après un court délai
+                onNavChange(item.id);
+                // Réinitialiser le loader après un délai pour permettre au contenu de se charger
+                setTimeout(() => {
+                  setLoadingNav(null);
+                }, 500);
+              }}
+              disabled={isLoadingItem}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 isActive
                   ? 'bg-orange-50 text-orange-700'
                   : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              } ${isLoadingItem ? 'opacity-75 cursor-wait' : ''}`}
             >
-              <Icon className="w-5 h-5" />
+              {isLoadingItem ? (
+                <Loader2 className="w-5 h-5 animate-spin text-orange-600" />
+              ) : (
+                <Icon className="w-5 h-5" />
+              )}
               <span className="text-sm">{item.label}</span>
             </button>
           );
@@ -266,18 +281,33 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             <CollapsibleContent className="space-y-1 mt-1">
               {inscriptionsSubItems.map((subItem) => {
                 const isActive = activeNav === subItem.id;
+                const isLoadingItem = loadingNav === subItem.id;
                 
                 return (
                   <button
                     key={subItem.id}
-                    onClick={() => onNavChange(subItem.id)}
+                    onClick={() => {
+                      setLoadingNav(subItem.id);
+                      onNavChange(subItem.id);
+                      setTimeout(() => {
+                        setLoadingNav(null);
+                      }, 500);
+                    }}
+                    disabled={isLoadingItem}
                     className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
                       isActive
                         ? 'bg-orange-100 text-orange-700'
                         : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    } ${isLoadingItem ? 'opacity-75 cursor-wait' : ''}`}
                   >
-                    {subItem.label}
+                    {isLoadingItem ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                        <span>{subItem.label}</span>
+                      </>
+                    ) : (
+                      subItem.label
+                    )}
                   </button>
                 );
               })}
@@ -310,18 +340,33 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             <CollapsibleContent className="space-y-1 mt-1">
               {tresorerieSubItems.map((subItem) => {
                 const isActive = activeNav === subItem.id;
+                const isLoadingItem = loadingNav === subItem.id;
                 
                 return (
                   <button
                     key={subItem.id}
-                    onClick={() => onNavChange(subItem.id)}
+                    onClick={() => {
+                      setLoadingNav(subItem.id);
+                      onNavChange(subItem.id);
+                      setTimeout(() => {
+                        setLoadingNav(null);
+                      }, 500);
+                    }}
+                    disabled={isLoadingItem}
                     className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
                       isActive
                         ? 'bg-orange-100 text-orange-700'
                         : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    } ${isLoadingItem ? 'opacity-75 cursor-wait' : ''}`}
                   >
-                    {subItem.label}
+                    {isLoadingItem ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                        <span>{subItem.label}</span>
+                      </>
+                    ) : (
+                      subItem.label
+                    )}
                   </button>
                 );
               })}
@@ -354,18 +399,33 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             <CollapsibleContent className="space-y-1 mt-1">
               {organisationsSubItems.map((subItem) => {
                 const isActive = activeNav === subItem.id;
+                const isLoadingItem = loadingNav === subItem.id;
                 
                 return (
                   <button
                     key={subItem.id}
-                    onClick={() => onNavChange(subItem.id)}
+                    onClick={() => {
+                      setLoadingNav(subItem.id);
+                      onNavChange(subItem.id);
+                      setTimeout(() => {
+                        setLoadingNav(null);
+                      }, 500);
+                    }}
+                    disabled={isLoadingItem}
                     className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
                       isActive
                         ? 'bg-orange-100 text-orange-700'
                         : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    } ${isLoadingItem ? 'opacity-75 cursor-wait' : ''}`}
                   >
-                    {subItem.label}
+                    {isLoadingItem ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                        <span>{subItem.label}</span>
+                      </>
+                    ) : (
+                      subItem.label
+                    )}
                   </button>
                 );
               })}
@@ -398,18 +458,33 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             <CollapsibleContent className="space-y-1 mt-1">
               {networkingSubItems.map((subItem) => {
                 const isActive = activeNav === subItem.id;
+                const isLoadingItem = loadingNav === subItem.id;
                 
                 return (
                   <button
                     key={subItem.id}
-                    onClick={() => onNavChange(subItem.id)}
+                    onClick={() => {
+                      setLoadingNav(subItem.id);
+                      onNavChange(subItem.id);
+                      setTimeout(() => {
+                        setLoadingNav(null);
+                      }, 500);
+                    }}
+                    disabled={isLoadingItem}
                     className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
                       isActive
                         ? 'bg-orange-100 text-orange-700'
                         : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    } ${isLoadingItem ? 'opacity-75 cursor-wait' : ''}`}
                   >
-                    {subItem.label}
+                    {isLoadingItem ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                        <span>{subItem.label}</span>
+                      </>
+                    ) : (
+                      subItem.label
+                    )}
                   </button>
                 );
               })}
@@ -442,18 +517,33 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             <CollapsibleContent className="space-y-1 mt-1">
               {paiementsSubItems.map((subItem) => {
                 const isActive = activeNav === subItem.id;
+                const isLoadingItem = loadingNav === subItem.id;
                 
                 return (
                   <button
                     key={subItem.id}
-                    onClick={() => onNavChange(subItem.id)}
+                    onClick={() => {
+                      setLoadingNav(subItem.id);
+                      onNavChange(subItem.id);
+                      setTimeout(() => {
+                        setLoadingNav(null);
+                      }, 500);
+                    }}
+                    disabled={isLoadingItem}
                     className={`w-full flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg transition-colors text-sm ${
                       isActive
                         ? 'bg-orange-100 text-orange-700'
                         : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    } ${isLoadingItem ? 'opacity-75 cursor-wait' : ''}`}
                   >
-                    {subItem.label}
+                    {isLoadingItem ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                        <span>{subItem.label}</span>
+                      </>
+                    ) : (
+                      subItem.label
+                    )}
                   </button>
                 );
               })}
