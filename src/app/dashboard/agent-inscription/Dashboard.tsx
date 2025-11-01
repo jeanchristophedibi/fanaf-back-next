@@ -3,12 +3,15 @@
 import React from 'react';
 import { Card } from '../../../components/ui/card';
 import { Users, CheckCircle, TrendingUp, FileText, Clock } from 'lucide-react';
-import { useDynamicInscriptions } from '../../../components/hooks/useDynamicInscriptions';
+import { useParticipantsQuery } from '../../../hooks/useParticipantsQuery';
 import { AnimatedStat } from '../../../components/AnimatedStat';
 import { WidgetStatsInscriptions } from '../../../components/inscriptions/WidgetStatsInscriptions';
 
 const AgentInscriptionDashboard = () => {
-  const { participants } = useDynamicInscriptions();
+  const { participants, isLoading } = useParticipantsQuery({
+    enabled: true,
+    categories: ['member', 'not_member', 'vip']
+  });
   
   // Statistiques globales (utilisées par le widget habituel)
   const stats = {
@@ -51,7 +54,7 @@ const AgentInscriptionDashboard = () => {
       </div>
 
       {/* Statistiques principales - widget standard */}
-      <WidgetStatsInscriptions stats={stats as any} participants={participants as any} loading={false} />
+      <WidgetStatsInscriptions stats={stats as any} participants={participants as any} loading={isLoading} />
 
       {/* Répartition par type */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

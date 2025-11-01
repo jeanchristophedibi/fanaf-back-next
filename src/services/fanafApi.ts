@@ -89,22 +89,62 @@ class FanafApiService {
    */
   private async fetchApi<T>(
     endpoint: string,
-    options?: RequestInit
+    options?: Omit<RequestInit, 'body'> & { body?: BodyInit | null | Record<string, any> }
   ): Promise<T> {
     const token = this.getToken();
+    
+    // Vérifier que le token est présent pour tous les endpoints
+    if (!token) {
+      throw new Error('Token d\'authentification manquant. Veuillez vous connecter.');
+    }
+    
+    // Déterminer si le body est FormData pour ne pas ajouter Content-Type dans ce cas
+    const isFormData = options?.body instanceof FormData;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...(options?.headers as Record<string, string> || {}),
     };
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // Ne pas ajouter Content-Type pour FormData (le navigateur le fait automatiquement)
+    if (!isFormData && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    // Toujours ajouter le token d'authentification
+    headers['Authorization'] = `Bearer ${token}`;
+    
+    // Ajouter Accept pour FormData aussi
+    if (isFormData && !headers['Accept']) {
+      headers['Accept'] = 'application/json';
     }
 
     try {
+      // Gérer le body : FormData reste tel quel, les objets JS sont convertis en JSON
+      // Si c'est déjà une string (JSON stringifié), la laisser tel quel
+      let body: BodyInit | null | undefined;
+      const rawBody = options?.body;
+      if (rawBody !== null && rawBody !== undefined) {
+        // Si c'est déjà une string (JSON stringifié), Blob, ArrayBuffer, FormData, ou URLSearchParams, le laisser tel quel
+        if (typeof rawBody === 'string' || 
+            rawBody instanceof Blob || 
+            rawBody instanceof ArrayBuffer || 
+            rawBody instanceof FormData || 
+            rawBody instanceof URLSearchParams) {
+          // Déjà dans un format compatible, laisser tel quel
+          body = rawBody as BodyInit;
+        } else if (typeof rawBody === 'object') {
+          // C'est un objet JS, le convertir en JSON
+          body = JSON.stringify(rawBody);
+        } else {
+          body = rawBody as BodyInit;
+        }
+      } else {
+        body = rawBody;
+      }
+      
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
         headers,
+        body,
       }).catch((fetchError) => {
         // Gérer les erreurs réseau (CORS, connexion refusée, timeout, etc.)
         console.warn(`[fanafApi] Erreur réseau lors de l'appel à ${endpoint}:`, fetchError);
@@ -197,6 +237,22 @@ class FanafApiService {
         const isAuthError = response.status === 401 || response.status === 403;
         if (!isAuthError) {
           console.error(`Erreur API [${endpoint}]:`, errorMessage);
+        }
+        
+        // Pour les erreurs d'authentification, nettoyer le token et rediriger vers la connexion
+        if (isAuthError && typeof window !== 'undefined') {
+          console.warn('Token invalide ou expiré, nettoyage de la session...');
+          this.token = null;
+          this.user = null;
+          localStorage.removeItem('fanaf_token');
+          localStorage.removeItem('fanaf_user');
+          document.cookie = 'fanaf_token=; path=/; max-age=0; SameSite=Lax';
+          document.cookie = 'fanaf_role=; path=/; max-age=0; SameSite=Lax';
+          
+          // Rediriger vers la page de connexion si on n'y est pas déjà
+          if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/signin')) {
+            window.location.href = '/login';
+          }
         }
         
         throw new Error(errorMessage);
@@ -392,11 +448,6 @@ class FanafApiService {
     sponsor_website_url?: string;
     sponsor_email?: string;
   }): Promise<any> {
-    const token = this.getToken();
-    if (!token) {
-      throw new Error('Token d\'authentification manquant');
-    }
-
     const formData = new FormData();
     formData.append('name', data.name);
     formData.append('sponsor_type_id', data.sponsor_type_id);
@@ -455,74 +506,11 @@ class FanafApiService {
       url: `${API_BASE_URL}/api/v1/admin/sponsors/special-create`,
     });
 
-    let response: Response;
-    try {
-      response = await fetch(`${API_BASE_URL}/api/v1/admin/sponsors/special-create`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          // Ne pas définir Content-Type pour FormData, le navigateur le fait automatiquement
-        },
-        body: formData,
-      });
-    } catch (fetchError: any) {
-      console.error('Erreur réseau lors de la création du sponsor:', {
-        error: fetchError,
-        message: fetchError?.message,
-        name: fetchError?.name,
-        stack: fetchError?.stack,
-        url: `${API_BASE_URL}/api/v1/admin/sponsors/special-create`,
-      });
-      throw new Error(`Erreur de connexion: ${fetchError?.message || 'Impossible de joindre le serveur. Vérifiez votre connexion internet.'}`);
-    }
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: 'Erreur lors de la création du sponsor' }));
-      
-      // Log pour déboguer les erreurs
-      console.error('Erreur API createSponsor:', {
-        status: response.status,
-        statusText: response.statusText,
-        errorData: errorData,
-      });
-      
-      // Pour les erreurs 422 (validation), Laravel retourne les erreurs de validation dans errorData.errors
-      if (response.status === 422 && errorData.errors) {
-        const formatErrorMessage = (messages: any): string => {
-          if (Array.isArray(messages)) {
-            return messages.join(', ');
-          } else if (typeof messages === 'object' && messages !== null) {
-            // Si c'est un objet, formater récursivement
-            return Object.entries(messages)
-              .map(([key, value]: [string, any]) => {
-                if (Array.isArray(value)) {
-                  return `${key}: ${value.join(', ')}`;
-                } else if (typeof value === 'object') {
-                  return `${key}: ${formatErrorMessage(value)}`;
-                }
-                return `${key}: ${String(value)}`;
-              })
-              .join('; ');
-          }
-          return String(messages);
-        };
-
-        const validationErrors = Object.entries(errorData.errors)
-          .map(([field, messages]: [string, any]) => {
-            const fieldMessages = formatErrorMessage(messages);
-            return `${field}: ${fieldMessages}`;
-          })
-          .join('; ');
-        
-        const errorMessage = validationErrors || errorData.message || 'Erreur de validation';
-        throw new Error(`Erreur de validation: ${errorMessage}`);
-      }
-      
-      throw new Error(errorData.message || errorData.error || `Erreur ${response.status}: ${response.statusText}`);
-    }
-
-    return response.json();
+    // Utiliser fetchApi pour bénéficier de la gestion centralisée du token et des erreurs
+    return this.fetchApi<any>('/api/v1/admin/sponsors/special-create', {
+      method: 'POST',
+      body: formData,
+    });
   }
 
   /**
@@ -640,7 +628,7 @@ class FanafApiService {
   }): Promise<any> {
     return this.fetchApi<any>('/api/v1/admin/registrations/simple', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     });
   }
 
@@ -675,7 +663,7 @@ class FanafApiService {
   }): Promise<any> {
     return this.fetchApi<any>('/api/v1/admin/registrations/bulk', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data,
     });
   }
 

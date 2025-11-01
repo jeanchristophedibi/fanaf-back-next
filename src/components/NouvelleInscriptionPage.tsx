@@ -587,6 +587,13 @@ export const NouvelleInscriptionPage = () => {
     console.log('typeInscription:', typeInscription);
     console.log('typeParticipant:', typeParticipant);
     
+    // Vérifier que l'utilisateur est authentifié avant de finaliser
+    if (!fanafApi.isAuthenticated()) {
+      toast.error('Votre session a expiré. Veuillez vous reconnecter.');
+      window.location.href = '/login';
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -1119,6 +1126,12 @@ export const NouvelleInscriptionPage = () => {
         errorMessage = error.message;
         console.error('Message d\'erreur:', error.message);
         console.error('Stack:', error.stack);
+        
+        // Si c'est une erreur d'authentification, afficher un message spécifique
+        if (errorMessage.includes('Identifiants invalides') || errorMessage.includes('401') || errorMessage.includes('403')) {
+          errorMessage = 'Votre session a expiré. Veuillez vous reconnecter.';
+          // La redirection sera gérée par fanafApi.ts
+        }
       } else if (typeof error === 'string') {
         errorMessage = error;
       } else if (error && typeof error === 'object' && 'message' in error) {
