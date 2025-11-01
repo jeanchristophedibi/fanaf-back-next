@@ -2,11 +2,11 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../../../components/ui/dropdown-menu';
-import { Button } from '../../../components/ui/button';
-import { fanafApi } from '../../../services/fanafApi';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { Button } from '../ui/button';
+import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';
 
 interface TopBarProps {
@@ -18,6 +18,27 @@ export function TopBar({ userEmail }: TopBarProps) {
   const [email, setEmail] = useState<string>('');
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Déterminer le profil basé sur le pathname
+  const getUserProfilePath = (): string => {
+    if (!pathname) return '/dashboard';
+    
+    if (pathname.includes('/dashboard/admin-asaci')) {
+      return '/dashboard/admin-asaci';
+    } else if (pathname.includes('/dashboard/admin-fanaf')) {
+      return '/dashboard/admin-fanaf';
+    } else if (pathname.includes('/dashboard/agence')) {
+      return '/dashboard/agence';
+    } else if (pathname.includes('/dashboard/agent-inscription')) {
+      return '/dashboard/agent-inscription';
+    } else if (pathname.includes('/dashboard/operateur-caisse')) {
+      return '/dashboard/operateur-caisse';
+    } else if (pathname.includes('/dashboard/operateur-badge')) {
+      return '/dashboard/operateur-badge';
+    }
+    return '/dashboard';
+  };
 
   // Query pour initialiser l'email et le montage
   useQuery({
@@ -45,13 +66,15 @@ export function TopBar({ userEmail }: TopBarProps) {
   });
 
   const handleProfile = () => {
-    console.log('Profile clicked');
-    // TODO: Navigate to profile page
+    const profilePath = getUserProfilePath();
+    router.push(`${profilePath}/profil`);
+    setIsOpen(false);
   };
 
   const handleSettings = () => {
-    console.log('Settings clicked');
-    // TODO: Navigate to settings page
+    const profilePath = getUserProfilePath();
+    router.push(`${profilePath}/parametres`);
+    setIsOpen(false);
   };
 
   const handleLogout = () => {

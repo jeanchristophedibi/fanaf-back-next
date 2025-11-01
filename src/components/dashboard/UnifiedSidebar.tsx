@@ -114,7 +114,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
           showInscriptions: false,
           showOrganisations: false,
           showNetworking: false,
-          showPaiements: false,
+          showPaiements: true,
           showTresorerie: false,
           title: 'Agent Inscription',
         };

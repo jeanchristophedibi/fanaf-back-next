@@ -3,7 +3,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { UnifiedSidebar } from './UnifiedSidebar';
-import { TopBar } from '../../app/dashboard/admin-asaci/TopBar';
+import { TopBar } from './TopBar';
 
 interface UnifiedLayoutProps {
   activeNav: string;
