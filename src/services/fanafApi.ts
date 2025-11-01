@@ -365,9 +365,23 @@ class FanafApiService {
             if (typeof responseData.errors === 'string') {
               errorMessage = responseData.errors;
             } else if (Array.isArray(responseData.errors)) {
-              errorMessage = responseData.errors.map((e: any) => 
-                typeof e === 'string' ? e : e.message || String(e)
-              ).join(', ');
+              // Gérer les structures JSON API standard avec { status, title, detail }
+              errorMessage = responseData.errors.map((e: any) => {
+                if (typeof e === 'string') {
+                  return e;
+                }
+                // Structure JSON API standard: { status, title, detail }
+                if (e.detail) {
+                  return e.detail;
+                }
+                if (e.title) {
+                  return e.title;
+                }
+                if (e.message) {
+                  return e.message;
+                }
+                return String(e);
+              }).join(', ');
             } else if (responseData.errors.message) {
               errorMessage = responseData.errors.message;
             }

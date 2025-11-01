@@ -497,7 +497,7 @@ export function DashboardAnalytics() {
           <h3 className="text-gray-900 mb-4">Statistiques détaillées</h3>
           <div className="space-y-4">
             {/* Organisations */}
-            <div>
+            {/* <div>
               <p className="text-sm text-gray-600 mb-2">Organisations par type</p>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -543,7 +543,7 @@ export function DashboardAnalytics() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Rendez-vous Participants */}
             <div className="border-t pt-4">

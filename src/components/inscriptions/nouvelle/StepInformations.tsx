@@ -28,11 +28,15 @@ interface ParticipantPrincipalState {
 interface StepInformationsProps {
   participantPrincipal: ParticipantPrincipalState;
   onChange: (patch: Partial<ParticipantPrincipalState>) => void;
+  telephoneError?: string | null;
+  onTelephoneChange?: (value: string) => void;
 }
 
 export const StepInformations: React.FC<StepInformationsProps> = ({
   participantPrincipal,
   onChange,
+  telephoneError,
+  onTelephoneChange,
 }) => {
   // Récupérer les pays depuis l'API
   const { data: countriesResponse, isLoading: isLoadingCountries } = useQuery({
@@ -120,16 +124,34 @@ export const StepInformations: React.FC<StepInformationsProps> = ({
           <div className="space-y-3 mb-6">
             <Label className="text-gray-700 font-medium">Téléphone *</Label>
             <div className="flex items-stretch w-full max-w-md">
-              <Button type="button" variant="outline" className="h-12 px-4 rounded-r-none rounded-l-xl border-2 border-r-0 border-orange-600 bg-orange-600 flex items-center justify-center">
-                <Phone className="w-5 h-5 text-white" />
+              <Button type="button" variant="outline" className={`h-12 px-4 rounded-r-none rounded-l-xl border-2 border-r-0 flex items-center justify-center ${
+                telephoneError ? 'border-red-600 bg-red-600' : 'border-orange-600 bg-orange-600'
+              }`}>
+                <Phone className={`w-5 h-5 ${telephoneError ? 'text-white' : 'text-white'}`} />
               </Button>
               <Input
                 value={participantPrincipal.telephone}
-                onChange={(e) => onChange({ telephone: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  onChange({ telephone: value });
+                  if (onTelephoneChange) {
+                    onTelephoneChange(value);
+                  }
+                }}
                 placeholder="+225 XX XX XX XX XX"
-                className="h-12 text-base bg-white border-2 border-gray-200 border-l-0 -ml-px rounded-none rounded-r-xl shadow-sm focus:border-orange-500 focus:ring-orange-500/30"
+                className={`h-12 text-base bg-white border-2 border-l-0 -ml-px rounded-none rounded-r-xl shadow-sm focus:ring-orange-500/30 ${
+                  telephoneError 
+                    ? 'border-red-500 focus:border-red-500' 
+                    : 'border-gray-200 focus:border-orange-500'
+                }`}
               />
             </div>
+            {telephoneError && (
+              <p className="text-sm text-red-600 mt-1 flex items-center gap-1">
+                <span className="text-red-500">⚠</span>
+                {telephoneError}
+              </p>
+            )}
           </div>
 
           {/* Pays */}

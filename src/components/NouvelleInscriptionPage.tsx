@@ -101,6 +101,76 @@ export const NouvelleInscriptionPage = () => {
   const { organisations: allOrganisations = [] } = useOrganisationsQuery();
   const organisationsMembres = allOrganisations.filter(org => org.statut === 'membre');
   
+  // État pour les erreurs de validation
+  const [telephoneError, setTelephoneError] = useState<string | null>(null);
+  
+  // Fonction de validation en temps réel du téléphone
+  const validateTelephone = (phone: string): string | null => {
+    if (!phone || phone.trim() === '') {
+      return null; // Pas d'erreur si vide (on ne valide que si l'utilisateur a commencé à taper)
+    }
+    
+    try {
+      // Utiliser la même logique que cleanPhoneNumber mais sans lancer d'erreur
+      const phoneTrimmed = phone.trim();
+      let cleaned = phoneTrimmed.replace(/[\s\-\(\)\.]/g, '').trim();
+      
+      if (!cleaned.startsWith('+')) {
+        cleaned = `+${cleaned}`;
+      }
+      
+      const digitsOnly = cleaned.replace(/\D/g, '');
+      const lettersOnly = phoneTrimmed.replace(/[^a-zA-ZÀ-ÿ]/g, '').length;
+      
+      // Vérifier si c'est du texte de placeholder
+      if (digitsOnly.length < 4 || (lettersOnly > 5 && digitsOnly.length < 8)) {
+        const phoneLower = phoneTrimmed.toLowerCase();
+        const placeholderWords = ['exemple', 'example', 'test', 'lorem', 'ipsum', 'dolor', 'eveniet', 'earum', 'placeholder', 'fugiat', 'dolore'];
+        const exactPlaceholderPatterns = /^(xx|xxx|aaaa|bbbb|exemple|example|test|lorem|ipsum|placeholder)[\s\-]*$/i;
+        
+        if (exactPlaceholderPatterns.test(phoneTrimmed) || 
+            placeholderWords.some(word => phoneLower.includes(word)) ||
+            (lettersOnly > digitsOnly.length && digitsOnly.length < 8)) {
+          return 'Le champ téléphone contient du texte invalide. Veuillez saisir un numéro de téléphone valide (ex: +225 01 23 45 67 89)';
+        }
+      }
+      
+      // Vérifier le nombre minimum de chiffres seulement si l'utilisateur a tapé quelque chose
+      if (digitsOnly.length > 0 && digitsOnly.length < 8) {
+        return `Le numéro de téléphone doit contenir au moins 8 chiffres (ex: +225 01 23 45 67 89)`;
+      }
+      
+      // Vérifier la longueur maximale
+      if (digitsOnly.length > 15) {
+        return 'Le numéro de téléphone est trop long. Il doit contenir au maximum 15 chiffres (format international E.164)';
+      }
+      
+      // Vérifier les caractères non numériques
+      const nonDigits = cleaned.replace(/\d/g, '').replace('+', '').length;
+      if (nonDigits > 5) {
+        return 'Le numéro semble contenir du texte invalide. Veuillez saisir uniquement des chiffres avec le code pays (ex: +225 01 23 45 67 89)';
+      }
+      
+      // Vérifier le format du code pays
+      const countryCodeMatch = cleaned.match(/^\+\d{1,3}/);
+      if (!countryCodeMatch && digitsOnly.length > 0) {
+        return 'Le numéro de téléphone n\'a pas un format de code pays valide (ex: +225 pour la Côte d\'Ivoire)';
+      }
+      
+      // Vérifier le numéro local
+      if (countryCodeMatch && digitsOnly.length > 0) {
+        const localNumberLength = digitsOnly.length - countryCodeMatch[0].replace('+', '').length;
+        if (localNumberLength > 0 && localNumberLength < 4) {
+          return 'Le numéro local est trop court. Il doit contenir au moins 4 chiffres après le code pays.';
+        }
+      }
+      
+      return null; // Pas d'erreur
+    } catch (error) {
+      return 'Erreur lors de la validation du numéro de téléphone';
+    }
+  };
+  
   // Query pour récupérer les types d'inscription (registration fees)
   const { data: registrationTypesResponse, isLoading: isLoadingRegistrationTypes } = useQuery({
     queryKey: ['registrationTypes'],
@@ -249,79 +319,6 @@ export const NouvelleInscriptionPage = () => {
       window.removeEventListener('beforeunload', beforeUnload);
     };
   }, [isFormDirty]);
-
-  // Intercepter la navigation Next.js (Pages Router)
-  // useEffect(() => {
-  //   if (typeof window === 'undefined') return;
-  //   if (!Router.events) return;
-  //   if (!isFormDirty) return;
-    
-  //   const handleRouteChangeStart = (url: string) => {
-  //     if (!isFormDirty) return;
-      
-  //     // Si la navigation a déjà été confirmée (par un autre handler), laisser passer
-  //     if (navigationConfirmedRef.current) {
-  //       navigationConfirmedRef.current = false; // Réinitialiser pour la prochaine fois
-  //       return;
-  //     }
-      
-  //     const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-  //     if (!ok) {
-  //       Router.events.emit('routeChangeError');
-  //       throw 'routeChange aborted by user';
-  //     }
-  //     // Marquer que la navigation a été confirmée
-  //     navigationConfirmedRef.current = true;
-  //   };
-    
-  //   Router.events.on('routeChangeStart', handleRouteChangeStart);
-    
-  //   return () => {
-  //     Router.events.off('routeChangeStart', handleRouteChangeStart);
-  //   };
-  // }, [isFormDirty]);
-
-  // Intercepter les clics sur les liens (App Router)
-  // useEffect(() => {
-  //   if (typeof window === 'undefined' || typeof document === 'undefined') return;
-  //   if (!isFormDirty) return;
-    
-  //   const onDocumentClick = (e: MouseEvent) => {
-  //     const target = e.target as Element | null;
-  //     if (!target) return;
-  //     const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
-  //     if (anchor) {
-  //       const isExternal = anchor.origin !== window.location.origin;
-  //       if (isExternal || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
-  //       const href = anchor.getAttribute('href');
-  //       if (!href || href.startsWith('#') || href === window.location.pathname) return;
-        
-  //       // Empêcher la navigation par défaut et demander confirmation
-  //       e.preventDefault();
-  //       e.stopPropagation();
-        
-  //       const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-  //       if (ok) {
-  //         // Marquer que la navigation a été confirmée pour éviter les confirmations multiples
-  //         navigationConfirmedRef.current = true;
-  //         // Naviguer vers la destination
-  //         appRouter.push(href);
-  //       }
-  //       return;
-  //     }
-  //     const sidebarButton = target.closest('aside button');
-  //     if (sidebarButton) {
-  //       // Note: Pour les boutons de sidebar, il faudrait connaître leur destination
-  //       // Pour l'instant, on laisse passer si confirmé
-  //     }
-  //   };
-    
-  //   document.addEventListener('click', onDocumentClick, true);
-    
-  //   return () => {
-  //     document.removeEventListener('click', onDocumentClick, true);
-  //   };
-  // }, [isFormDirty, appRouter]);
 
   const validerEtape1 = () => {
     if (!typeParticipant) {
@@ -622,33 +619,62 @@ export const NouvelleInscriptionPage = () => {
             throw new Error('Le numéro de téléphone est requis');
           }
           
-          // Vérifier que ce n'est pas du texte de placeholder ou d'exemple
-          const phoneLower = phone.toLowerCase().trim();
-          const placeholderWords = ['exemple', 'example', 'test', 'lorem', 'ipsum', 'dolor', 'eveniet', 'earum', 'placeholder', 'xx', 'xxx', 'xxx', 'aaaa', 'bbbb'];
-          const isPlaceholder = placeholderWords.some(word => phoneLower.includes(word));
-          
-          if (isPlaceholder) {
-            throw new Error(`Le champ téléphone contient du texte invalide. Veuillez saisir un numéro de téléphone valide (ex: +225 01 23 45 67 89)`);
-          }
+          const phoneTrimmed = phone.trim();
           
           // Supprimer les espaces, tirets, parenthèses et autres caractères non numériques sauf +
-          let cleaned = phone.replace(/[\s\-\(\)\.]/g, '').trim();
+          let cleaned = phoneTrimmed.replace(/[\s\-\(\)\.]/g, '').trim();
           
           // S'assurer qu'il commence par + (code pays)
           if (!cleaned.startsWith('+')) {
             cleaned = `+${cleaned}`;
           }
           
-          // Vérifier que le numéro contient au moins 8 chiffres (code pays + numéro)
+          // Compter les chiffres et les lettres
           const digitsOnly = cleaned.replace(/\D/g, '');
+          const lettersOnly = phoneTrimmed.replace(/[^a-zA-ZÀ-ÿ]/g, '').length;
+          
+          // Vérifier d'abord si c'est du texte de placeholder (beaucoup de lettres, peu ou pas de chiffres)
+          if (digitsOnly.length < 4 || (lettersOnly > 5 && digitsOnly.length < 8)) {
+            const phoneLower = phoneTrimmed.toLowerCase();
+            const placeholderWords = ['exemple', 'example', 'test', 'lorem', 'ipsum', 'dolor', 'eveniet', 'earum', 'placeholder', 'fugiat', 'dolore'];
+            const exactPlaceholderPatterns = /^(xx|xxx|aaaa|bbbb|exemple|example|test|lorem|ipsum|placeholder)[\s\-]*$/i;
+            
+            // Vérifier les patterns exacts de placeholder (ex: "XX XX XX", "exemple", etc.)
+            // Ou si c'est principalement du texte (plus de lettres que de chiffres)
+            if (exactPlaceholderPatterns.test(phoneTrimmed) || 
+                placeholderWords.some(word => phoneLower.includes(word)) ||
+                (lettersOnly > digitsOnly.length && digitsOnly.length < 8)) {
+              throw new Error(`Le champ téléphone contient du texte invalide. Veuillez saisir un numéro de téléphone valide (ex: +225 01 23 45 67 89)`);
+            }
+          }
+          
+          // Vérifier que le numéro contient au moins 8 chiffres (code pays + numéro)
           if (digitsOnly.length < 8) {
-            throw new Error(`Le numéro de téléphone "${phone}" n'est pas valide. Il doit contenir au moins 8 chiffres (ex: +225 01 23 45 67 89)`);
+            throw new Error(`Le numéro de téléphone "${phoneTrimmed}" n'est pas valide. Il doit contenir au moins 8 chiffres (ex: +225 01 23 45 67 89)`);
+          }
+          
+          // Vérifier que le numéro n'est pas trop long (max 15 chiffres pour format international E.164)
+          if (digitsOnly.length > 15) {
+            throw new Error(`Le numéro de téléphone "${phoneTrimmed}" est trop long. Il doit contenir au maximum 15 chiffres (format international E.164)`);
           }
           
           // Vérifier qu'il n'y a pas trop de caractères non numériques (signe d'un texte)
           const nonDigits = cleaned.replace(/\d/g, '').replace('+', '').length;
           if (nonDigits > 5) {
-            throw new Error(`Le numéro de téléphone "${phone}" semble contenir du texte invalide. Veuillez saisir uniquement des chiffres avec le code pays (ex: +225 01 23 45 67 89)`);
+            throw new Error(`Le numéro de téléphone "${phoneTrimmed}" semble contenir du texte invalide. Veuillez saisir uniquement des chiffres avec le code pays (ex: +225 01 23 45 67 89)`);
+          }
+          
+          // Vérifier le format du code pays (1 à 3 chiffres après le +)
+          // Les codes pays commencent généralement par 1 à 3 chiffres
+          const countryCodeMatch = cleaned.match(/^\+\d{1,3}/);
+          if (!countryCodeMatch) {
+            throw new Error(`Le numéro de téléphone "${phoneTrimmed}" n'a pas un format de code pays valide (ex: +225 pour la Côte d'Ivoire)`);
+          }
+          
+          // Vérifier que le numéro local a au moins 4 chiffres (après le code pays)
+          const localNumberLength = digitsOnly.length - countryCodeMatch[0].replace('+', '').length;
+          if (localNumberLength < 4) {
+            throw new Error(`Le numéro de téléphone "${phoneTrimmed}" est trop court. Le numéro local doit contenir au moins 4 chiffres après le code pays.`);
           }
           
           return cleaned;
@@ -664,9 +690,12 @@ export const NouvelleInscriptionPage = () => {
         try {
           participantPhone = cleanPhoneNumber(participantPrincipal.telephone);
           console.log('Numéro de téléphone validé:', participantPhone);
+          setTelephoneError(null); // Réinitialiser l'erreur si la validation réussit
         } catch (error) {
           console.error('Erreur validation téléphone:', error);
-          toast.error(error instanceof Error ? error.message : 'Le numéro de téléphone du participant principal n\'est pas valide.');
+          const errorMessage = error instanceof Error ? error.message : 'Le numéro de téléphone du participant principal n\'est pas valide.';
+          setTelephoneError(errorMessage);
+          toast.error(errorMessage);
           setLoading(false);
           return;
         }
@@ -816,9 +845,87 @@ export const NouvelleInscriptionPage = () => {
           return; // Sortir après succès de l'inscription individuelle
         } catch (apiError: any) {
           console.error('Erreur API lors de la création de l\'inscription:', apiError);
-          const errorMessage = apiError?.message || 'Erreur lors de la création de l\'inscription via l\'API';
-          toast.error(errorMessage);
-          throw apiError; // Re-lancer pour être capturé par le catch externe
+          
+          // Extraire un message d'erreur plus détaillé
+          let errorMessage = 'Erreur lors de la création de l\'inscription via l\'API';
+          
+          // Essayer d'extraire le message depuis différentes structures d'erreur
+          // Vérifier d'abord si l'erreur contient une réponse HTTP avec des données
+          let errorData: any = null;
+          
+          if (apiError?.response?.data) {
+            errorData = apiError.response.data;
+          } 
+          // Parfois l'erreur peut être directement parsée
+          else if (typeof apiError === 'object' && apiError !== null) {
+            // Chercher directement dans l'objet d'erreur
+            if ('data' in apiError) {
+              errorData = apiError.data;
+            }
+          }
+          
+          if (errorData) {
+            // Structure JSON API avec errors array
+            if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+              const firstError = errorData.errors[0];
+              if (firstError.detail) {
+                errorMessage = firstError.detail;
+              } else if (firstError.title) {
+                errorMessage = firstError.title;
+              } else if (firstError.message) {
+                errorMessage = firstError.message;
+              }
+            } 
+            // Structure standard avec message
+            else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+            // Structure avec error
+            else if (errorData.error) {
+              errorMessage = typeof errorData.error === 'string' ? errorData.error : errorData.error.message || String(errorData.error);
+            }
+          }
+          
+          // En dernier recours, utiliser le message de l'erreur
+          // Parfois le message peut être une chaîne JSON qu'il faut parser
+          if (!errorMessage || errorMessage === 'Erreur lors de la création de l\'inscription via l\'API') {
+            if (apiError?.message) {
+              let parsedMessage = apiError.message;
+              
+              // Essayer de parser si c'est une chaîne JSON
+              try {
+                if (typeof parsedMessage === 'string' && parsedMessage.trim().startsWith('{')) {
+                  const parsed = JSON.parse(parsedMessage);
+                  if (parsed.errors && Array.isArray(parsed.errors) && parsed.errors.length > 0) {
+                    const firstError = parsed.errors[0];
+                    parsedMessage = firstError.detail || firstError.title || parsedMessage;
+                  } else if (parsed.message) {
+                    parsedMessage = parsed.message;
+                  }
+                }
+              } catch (e) {
+                // Si le parsing échoue, utiliser le message tel quel
+              }
+              
+              errorMessage = parsedMessage;
+            }
+          }
+          
+          // Améliorer le message pour les erreurs de clé étrangère
+          if (errorMessage.includes('Foreign key violation') || errorMessage.includes('foreign key constraint')) {
+            if (errorMessage.includes('created_by')) {
+              errorMessage = 'Erreur d\'authentification: Votre session semble invalide. Veuillez vous déconnecter et vous reconnecter, puis réessayer.';
+            } else {
+              errorMessage = 'Erreur de données: Une référence invalide a été détectée. Veuillez vérifier les informations saisies et réessayer.';
+            }
+          }
+          
+          toast.error(errorMessage, {
+            duration: 6000, // Afficher plus longtemps pour les erreurs importantes
+          });
+          
+          setLoading(false);
+          return; // Ne pas re-lancer l'erreur, on a déjà affiché le message
         }
       }
 
@@ -873,33 +980,44 @@ export const NouvelleInscriptionPage = () => {
             throw new Error('Le numéro de téléphone est requis');
           }
           
-          // Vérifier que ce n'est pas du texte de placeholder ou d'exemple
-          const phoneLower = phone.toLowerCase().trim();
-          const placeholderWords = ['exemple', 'example', 'test', 'lorem', 'ipsum', 'dolor', 'eveniet', 'earum', 'placeholder', 'xx', 'xxx', 'xxx', 'aaaa', 'bbbb'];
-          const isPlaceholder = placeholderWords.some(word => phoneLower.includes(word));
-          
-          if (isPlaceholder) {
-            throw new Error(`Le champ téléphone contient du texte invalide. Veuillez saisir un numéro de téléphone valide (ex: +225 01 23 45 67 89)`);
-          }
+          const phoneTrimmed = phone.trim();
           
           // Supprimer les espaces, tirets, parenthèses et autres caractères non numériques sauf +
-          let cleaned = phone.replace(/[\s\-\(\)\.]/g, '').trim();
+          let cleaned = phoneTrimmed.replace(/[\s\-\(\)\.]/g, '').trim();
           
           // S'assurer qu'il commence par + (code pays)
           if (!cleaned.startsWith('+')) {
             cleaned = `+${cleaned}`;
           }
           
-          // Vérifier que le numéro contient au moins 8 chiffres (code pays + numéro)
+          // Compter les chiffres et les lettres
           const digitsOnly = cleaned.replace(/\D/g, '');
+          const lettersOnly = phoneTrimmed.replace(/[^a-zA-ZÀ-ÿ]/g, '').length;
+          
+          // Vérifier d'abord si c'est du texte de placeholder (beaucoup de lettres, peu ou pas de chiffres)
+          if (digitsOnly.length < 4 || (lettersOnly > 5 && digitsOnly.length < 8)) {
+            const phoneLower = phoneTrimmed.toLowerCase();
+            const placeholderWords = ['exemple', 'example', 'test', 'lorem', 'ipsum', 'dolor', 'eveniet', 'earum', 'placeholder', 'fugiat', 'dolore'];
+            const exactPlaceholderPatterns = /^(xx|xxx|aaaa|bbbb|exemple|example|test|lorem|ipsum|placeholder)[\s\-]*$/i;
+            
+            // Vérifier les patterns exacts de placeholder (ex: "XX XX XX", "exemple", etc.)
+            // Ou si c'est principalement du texte (plus de lettres que de chiffres)
+            if (exactPlaceholderPatterns.test(phoneTrimmed) || 
+                placeholderWords.some(word => phoneLower.includes(word)) ||
+                (lettersOnly > digitsOnly.length && digitsOnly.length < 8)) {
+              throw new Error(`Le champ téléphone contient du texte invalide. Veuillez saisir un numéro de téléphone valide (ex: +225 01 23 45 67 89)`);
+            }
+          }
+          
+          // Vérifier que le numéro contient au moins 8 chiffres (code pays + numéro)
           if (digitsOnly.length < 8) {
-            throw new Error(`Le numéro de téléphone "${phone}" n'est pas valide. Il doit contenir au moins 8 chiffres (ex: +225 01 23 45 67 89)`);
+            throw new Error(`Le numéro de téléphone "${phoneTrimmed}" n'est pas valide. Il doit contenir au moins 8 chiffres (ex: +225 01 23 45 67 89)`);
           }
           
           // Vérifier qu'il n'y a pas trop de caractères non numériques (signe d'un texte)
           const nonDigits = cleaned.replace(/\d/g, '').replace('+', '').length;
           if (nonDigits > 5) {
-            throw new Error(`Le numéro de téléphone "${phone}" semble contenir du texte invalide. Veuillez saisir uniquement des chiffres avec le code pays (ex: +225 01 23 45 67 89)`);
+            throw new Error(`Le numéro de téléphone "${phoneTrimmed}" semble contenir du texte invalide. Veuillez saisir uniquement des chiffres avec le code pays (ex: +225 01 23 45 67 89)`);
           }
           
           return cleaned;
@@ -1396,7 +1514,14 @@ export const NouvelleInscriptionPage = () => {
           {etapeActuelle === 2 && (
                 <StepInformations
                   participantPrincipal={participantPrincipal}
-                  onChange={(patch: Partial<ParticipantPrincipalFormData>) => setParticipantPrincipal({ ...participantPrincipal, ...patch })}
+                  onChange={(patch: Partial<ParticipantPrincipalFormData>) => {
+                    setParticipantPrincipal({ ...participantPrincipal, ...patch });
+                  }}
+                  telephoneError={telephoneError}
+                  onTelephoneChange={(value) => {
+                    const error = validateTelephone(value);
+                    setTelephoneError(error);
+                  }}
                 />
               )}
           {etapeActuelle === 3 && (
