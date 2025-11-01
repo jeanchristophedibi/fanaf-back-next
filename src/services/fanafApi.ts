@@ -56,6 +56,31 @@ class NetworkError extends Error {
   }
 }
 
+/**
+ * Classe d'erreur personnalisée pour les erreurs serveur (500+)
+ * Elle ne génère pas de stack trace verbeux pour réduire le bruit dans la console
+ */
+class ServerError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ServerError';
+    // Supprimer complètement la stack trace pour réduire le bruit
+    this.stack = undefined;
+    
+    // Empêcher l'affichage de la stack trace dans la console
+    Object.defineProperty(this, 'stack', {
+      value: undefined,
+      writable: true,
+      configurable: true
+    });
+  }
+  
+  // Surcharger toString pour un affichage plus simple
+  toString() {
+    return this.message;
+  }
+}
+
 interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -375,9 +400,9 @@ class FanafApiService {
           // Pour les erreurs 404, logger en warn (endpoint peut ne pas exister)
           console.warn(`Endpoint non trouvé [${endpoint}]:`, errorMessage);
         } else if (isServerError && isHtmlResponse) {
-          // Pour les erreurs serveur avec HTML (500+), logger en warn
+          // Pour les erreurs serveur avec HTML (500+), ne pas logger
           // car c'est souvent une erreur côté serveur qui sera corrigée par l'équipe backend
-          console.warn(`Erreur serveur [${endpoint}]:`, errorMessage);
+          // L'erreur sera quand même lancée pour que React Query puisse la gérer, mais sans bruit console
         } else if (!isAuthError) {
           // Pour les autres erreurs, logger en erreur
           console.error(`Erreur API [${endpoint}]:`, errorMessage);
@@ -401,12 +426,18 @@ class FanafApiService {
           }
         }
         
-        // Utiliser LoginError pour les tentatives de connexion (moins verbeux)
+        // Utiliser des classes d'erreur personnalisées pour réduire le bruit dans la console
         // Note: La console affichera quand même le message d'erreur car c'est le comportement standard de JavaScript
-        // mais la stack trace sera minimisée grâce à LoginError
+        // mais la stack trace sera minimisée grâce aux classes d'erreur personnalisées
         if (isLoginAttempt && isAuthError) {
           const loginErr = new LoginError(errorMessage);
           throw loginErr;
+        }
+        
+        // Utiliser ServerError pour les erreurs serveur avec HTML (500+)
+        if (isServerError && isHtmlResponse) {
+          const serverErr = new ServerError(errorMessage);
+          throw serverErr;
         }
         
         throw new Error(errorMessage);

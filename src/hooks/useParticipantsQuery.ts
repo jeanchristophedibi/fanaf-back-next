@@ -44,6 +44,13 @@ export function useParticipantsQuery(options?: {
     gcTime: 5 * 60 * 1000, // 5 minutes en cache
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    onError: (error: any) => {
+      // Ignorer silencieusement les erreurs ServerError (erreurs serveur avec HTML)
+      if (error?.name === 'ServerError' || error?.constructor?.name === 'ServerError') {
+        return; // Ne rien faire, l'erreur est déjà gérée
+      }
+      // Pour les autres erreurs, laisser React Query les gérer normalement
+    },
   });
 
   // Écouter les changements via React Query uniquement
