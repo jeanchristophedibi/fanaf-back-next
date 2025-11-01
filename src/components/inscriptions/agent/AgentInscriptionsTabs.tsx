@@ -14,6 +14,7 @@ import { type Participant, type StatutParticipant } from '../../data/types';
 import { getOrganisationById } from '../../data/helpers';
 import { fanafApi } from '../../../services/fanafApi';
 import { mapApiRegistrationToParticipant } from '../../data/inscriptionsData';
+import { ProformaGenerator } from '../../proforma/ProformaGenerator';
 
 function getTypeInscription(participant: Participant): 'Groupée' | 'Individuelle' {
   return participant.groupeId ? 'Groupée' : 'Individuelle';
@@ -27,6 +28,8 @@ export function AgentInscriptionsTabs() {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<'en-cours' | 'finalisees'>('en-cours');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedParticipantForProforma, setSelectedParticipantForProforma] = useState<Participant | null>(null);
+  const [isProformaOpen, setIsProformaOpen] = useState(false);
 
   // Query pour récupérer les types d'inscription (pour obtenir les montants)
   const { data: registrationTypesResponse } = useQuery({
@@ -40,11 +43,17 @@ export function AgentInscriptionsTabs() {
 
   const registrationTypes = registrationTypesResponse?.data || [];
 
-  // Fonction helper pour obtenir le montant selon le type de participant depuis l'API
-  const getMontant = (participant: Participant): number => {
+  // Fonction helper pour obtenir le montant selon le type de participant depuis l'API uniquement
+  const getMontant = (participant: Participant): number | null => {
     // Si VIP ou speaker, montant = 0
     if (participant.statut === 'vip' || participant.statut === 'speaker') {
       return 0;
+    }
+
+    // Si pas de registration types chargés depuis l'API, retourner null
+    if (!registrationTypes || registrationTypes.length === 0) {
+      console.warn('[AgentInscriptionsTabs] Aucun type d\'inscription disponible depuis l\'API');
+      return null;
     }
 
     // Chercher le montant dans les registration types depuis l'API
@@ -53,19 +62,30 @@ export function AgentInscriptionsTabs() {
       slugToFind = 'membre-fanaf';
     } else if (participant.statut === 'non-membre') {
       slugToFind = 'non-membre';
+    } else {
+      // Type non reconnu
+      console.warn(`[AgentInscriptionsTabs] Type de participant non reconnu: ${participant.statut}`);
+      return null;
     }
 
     const registrationType = registrationTypes.find((rt: any) => rt.slug === slugToFind);
-    if (registrationType && registrationType.amount) {
-      return parseFloat(registrationType.amount);
+    
+    if (!registrationType) {
+      console.warn(`[AgentInscriptionsTabs] Type d'inscription non trouvé pour slug: ${slugToFind}`);
+      return null;
     }
 
-    // Fallback sur les prix par défaut si l'API ne retourne pas les montants
-    const PRIX: Record<'membre' | 'non-membre', number> = {
-      membre: 350000,
-      'non-membre': 400000,
-    };
-    return PRIX[participant.statut as 'membre' | 'non-membre'] || 0;
+    if (registrationType.amount) {
+      const montant = parseFloat(registrationType.amount);
+      if (isNaN(montant)) {
+        console.warn(`[AgentInscriptionsTabs] Montant invalide pour ${slugToFind}: ${registrationType.amount}`);
+        return null;
+      }
+      return montant;
+    }
+
+    console.warn(`[AgentInscriptionsTabs] Aucun montant trouvé pour le type ${slugToFind}`);
+    return null;
   };
 
   // Query pour récupérer toutes les inscriptions depuis l'API
@@ -171,8 +191,8 @@ export function AgentInscriptionsTabs() {
   };
 
   const ouvrirChoixFacture = (participant: Participant) => {
-    // Redirection simple vers la page de confirmation où la facture est générée
-    router.push('/dashboard/agent-inscription/inscriptions/creer');
+    setSelectedParticipantForProforma(participant);
+    setIsProformaOpen(true);
   };
 
   return (
@@ -405,11 +425,17 @@ export function AgentInscriptionsTabs() {
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col">
-                                <span className="text-gray-900">
-                                  {montant === 0 ? 'Exonéré' : `${montant.toLocaleString('fr-FR')} FCFA`}
-                                </span>
-                                {montant > 0 && (
-                                  <span className="text-xs text-blue-600">✓ Payé</span>
+                                {montant === null ? (
+                                  <span className="text-gray-400 text-xs italic">Montant non disponible</span>
+                                ) : (
+                                  <>
+                                    <span className="text-gray-900">
+                                      {montant === 0 ? 'Exonéré' : `${montant.toLocaleString('fr-FR')} FCFA`}
+                                    </span>
+                                    {montant > 0 && (
+                                      <span className="text-xs text-blue-600">✓ Payé</span>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </TableCell>
@@ -417,10 +443,25 @@ export function AgentInscriptionsTabs() {
                               {isParticipantExonere(participant) ? (
                                 <div className="text-sm text-gray-500 italic">Inscription gratuite</div>
                               ) : (
-                                <Button onClick={() => ouvrirChoixFacture(participant)} variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50" size="sm">
-                                  <Download className="w-4 h-4 mr-2" />
-                                  Facture Proforma
-                                </Button>
+                                <>
+                                  <Button onClick={() => ouvrirChoixFacture(participant)} variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50" size="sm">
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Facture Proforma
+                                  </Button>
+                                  {selectedParticipantForProforma?.id === participant.id && org && (
+                                    <ProformaGenerator
+                                      participant={participant}
+                                      organisation={org}
+                                      open={isProformaOpen && selectedParticipantForProforma?.id === participant.id}
+                                      onOpenChange={(open) => {
+                                        setIsProformaOpen(open);
+                                        if (!open) {
+                                          setSelectedParticipantForProforma(null);
+                                        }
+                                      }}
+                                    />
+                                  )}
+                                </>
                               )}
                             </TableCell>
                           </TableRow>
