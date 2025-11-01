@@ -12,7 +12,13 @@ export function useParticipantsQuery(options?: {
   enabled?: boolean;
   includeOrganisations?: boolean;
   categories?: Array<'member' | 'not_member' | 'vip'>;
-}) {
+}): {
+  participants: Participant[];
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+  refetch: () => void;
+} {
   const { enabled = true, includeOrganisations = false, categories } = options || {};
   const queryClient = useQueryClient();
   
@@ -32,7 +38,7 @@ export function useParticipantsQuery(options?: {
     });
   }
 
-  const query = useQuery({
+  const query = useQuery<Participant[]>({
     queryKey: ['participants', Array.from(finalisedParticipantsIds).sort().join(','), categories?.join(',') || 'all'],
     queryFn: async () => {
       // Récupérer uniquement depuis l'API via le service
@@ -44,13 +50,6 @@ export function useParticipantsQuery(options?: {
     gcTime: 5 * 60 * 1000, // 5 minutes en cache
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    onError: (error: any) => {
-      // Ignorer silencieusement les erreurs ServerError (erreurs serveur avec HTML)
-      if (error?.name === 'ServerError' || error?.constructor?.name === 'ServerError') {
-        return; // Ne rien faire, l'erreur est déjà gérée
-      }
-      // Pour les autres erreurs, laisser React Query les gérer normalement
-    },
   });
 
   // Écouter les changements via React Query uniquement
@@ -60,8 +59,11 @@ export function useParticipantsQuery(options?: {
   // depuis l'endroit où vous dispatch l'événement paymentFinalized
 
   return {
-    ...query,
-    participants: query.data || [],
+    participants: (query.data || []) as Participant[],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error as Error | null,
+    refetch: query.refetch,
   };
 }
 
