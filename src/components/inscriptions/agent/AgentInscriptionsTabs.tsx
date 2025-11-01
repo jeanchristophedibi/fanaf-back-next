@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
@@ -9,23 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
-import { Calendar, CheckCircle2, Clock, Users, User, Building, Download, UserPlus } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, Users, User, Building, Download, UserPlus, Loader2 } from 'lucide-react';
 import { type Participant, type StatutParticipant } from '../../data/types';
 import { getOrganisationById } from '../../data/helpers';
-import { useDynamicInscriptions } from '../../hooks/useDynamicInscriptions';
+import { fanafApi } from '../../../services/fanafApi';
+import { mapApiRegistrationToParticipant } from '../../data/inscriptionsData';
 
 function getTypeInscription(participant: Participant): 'Groupée' | 'Individuelle' {
   return participant.groupeId ? 'Groupée' : 'Individuelle';
-}
-
-function getMontant(statut: Participant['statut']): number {
-  const PRIX: Record<StatutParticipant, number> = {
-    membre: 350000,
-    'non-membre': 400000,
-    vip: 0,
-    speaker: 0,
-  };
-  return PRIX[statut];
 }
 
 function isParticipantExonere(participant: Participant): boolean {
@@ -34,29 +25,127 @@ function isParticipantExonere(participant: Participant): boolean {
 
 export function AgentInscriptionsTabs() {
   const router = useRouter();
-  const { participants } = useDynamicInscriptions({ includeOrganisations: false });
   const [selectedTab, setSelectedTab] = useState<'en-cours' | 'finalisees'>('en-cours');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Query pour filtrer les inscriptions en cours
-  const inscriptionsEnCoursQuery = useQuery({
-    queryKey: ['agentInscriptionsTabs', 'inscriptionsEnCours', participants],
-    queryFn: () => participants.filter((p) => p.statutInscription !== 'finalisée'),
-    enabled: true,
-    staleTime: 0,
+  // Query pour récupérer les types d'inscription (pour obtenir les montants)
+  const { data: registrationTypesResponse } = useQuery({
+    queryKey: ['registrationTypes'],
+    queryFn: async () => {
+      return await fanafApi.getRegistrationTypes();
+    },
+    staleTime: 5 * 60 * 1000, // Cache pendant 5 minutes
+    gcTime: 10 * 60 * 1000, // Garder en cache pendant 10 minutes
   });
 
-  const inscriptionsEnCours = inscriptionsEnCoursQuery.data ?? [];
+  const registrationTypes = registrationTypesResponse?.data || [];
 
-  // Query pour filtrer les inscriptions finalisées
-  const inscriptionsFinaliseesQuery = useQuery({
-    queryKey: ['agentInscriptionsTabs', 'inscriptionsFinalisees', participants],
-    queryFn: () => participants.filter((p) => p.statutInscription === 'finalisée'),
-    enabled: true,
-    staleTime: 0,
+  // Fonction helper pour obtenir le montant selon le type de participant depuis l'API
+  const getMontant = (participant: Participant): number => {
+    // Si VIP ou speaker, montant = 0
+    if (participant.statut === 'vip' || participant.statut === 'speaker') {
+      return 0;
+    }
+
+    // Chercher le montant dans les registration types depuis l'API
+    let slugToFind = '';
+    if (participant.statut === 'membre') {
+      slugToFind = 'membre-fanaf';
+    } else if (participant.statut === 'non-membre') {
+      slugToFind = 'non-membre';
+    }
+
+    const registrationType = registrationTypes.find((rt: any) => rt.slug === slugToFind);
+    if (registrationType && registrationType.amount) {
+      return parseFloat(registrationType.amount);
+    }
+
+    // Fallback sur les prix par défaut si l'API ne retourne pas les montants
+    const PRIX: Record<'membre' | 'non-membre', number> = {
+      membre: 350000,
+      'non-membre': 400000,
+    };
+    return PRIX[participant.statut as 'membre' | 'non-membre'] || 0;
+  };
+
+  // Query pour récupérer toutes les inscriptions depuis l'API
+  const { data: registrationsResponse, isLoading: isLoadingRegistrations } = useQuery({
+    queryKey: ['agentRegistrations'],
+    queryFn: async () => {
+      // Récupérer toutes les inscriptions avec pagination
+      let allParticipants: Participant[] = [];
+      let page = 1;
+      let hasMore = true;
+      const perPage = 100; // Nombre d'éléments par page
+      
+      while (hasMore) {
+        const response = await fanafApi.getRegistrations({
+          per_page: perPage,
+          page: page,
+        });
+        
+        // Extraire les données de la réponse
+        // L'API peut retourner les données dans différentes structures
+        let apiData: any[] = [];
+        const responseData = response?.data;
+        
+        if (Array.isArray(responseData)) {
+          apiData = responseData;
+        } else if (responseData?.data && Array.isArray(responseData.data)) {
+          apiData = responseData.data;
+        } else if (responseData?.results && Array.isArray(responseData.results)) {
+          apiData = responseData.results;
+        } else if (responseData?.items && Array.isArray(responseData.items)) {
+          apiData = responseData.items;
+        }
+        
+        // Mapper les données de l'API vers le format Participant
+        const mappedParticipants: Participant[] = apiData.map((apiItem: any) => 
+          mapApiRegistrationToParticipant(apiItem)
+        );
+        
+        allParticipants = [...allParticipants, ...mappedParticipants];
+        
+        // Vérifier s'il y a plus de pages
+        // L'API peut retourner la pagination dans différentes structures
+        const pagination = responseData?.pagination || responseData?.meta || responseData;
+        const totalPages = pagination?.last_page || pagination?.total_pages || pagination?.totalPages || 1;
+        
+        // Si on a moins d'éléments que demandés, on a atteint la dernière page
+        if (apiData.length < perPage) {
+          hasMore = false;
+        } else {
+          // Vérifier si on a atteint la dernière page
+          hasMore = page < totalPages;
+        }
+        
+        // Sécurité: ne pas boucler indéfiniment
+        if (page >= 100) {
+          console.warn('[AgentInscriptionsTabs] Limite de pagination atteinte (100 pages max)');
+          hasMore = false;
+        }
+        
+        if (hasMore) {
+          page++;
+        }
+      }
+      
+      return allParticipants;
+    },
+    staleTime: 30 * 1000, // Cache pendant 30 secondes
+    gcTime: 5 * 60 * 1000, // Garder en cache pendant 5 minutes
   });
 
-  const inscriptionsFinalisees = inscriptionsFinaliseesQuery.data ?? [];
+  const participants = registrationsResponse || [];
+
+  // Filtrer les inscriptions en cours et finalisées
+  const inscriptionsEnCours = useMemo(() => {
+    return participants.filter((p) => p.statutInscription !== 'finalisée');
+  }, [participants]);
+
+  const inscriptionsFinalisees = useMemo(() => {
+    return participants.filter((p) => p.statutInscription === 'finalisée');
+  }, [participants]);
 
   const filterBySearch = (list: Participant[]) => {
     if (!searchTerm) return list;
@@ -115,7 +204,12 @@ export function AgentInscriptionsTabs() {
         <TabsContent value="en-cours">
           <Card>
             <CardContent className="p-6">
-              {filteredInscriptionsEnCours.length === 0 ? (
+              {isLoadingRegistrations ? (
+                <div className="text-center py-12">
+                  <Loader2 className="w-12 h-12 text-orange-600 animate-spin mx-auto mb-4" />
+                  <p className="text-gray-600">Chargement des inscriptions...</p>
+                </div>
+              ) : filteredInscriptionsEnCours.length === 0 ? (
                 <div className="text-center py-12">
                   <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-gray-900 mb-2">Aucune inscription en cours</h3>
@@ -220,7 +314,12 @@ export function AgentInscriptionsTabs() {
         <TabsContent value="finalisees">
           <Card>
             <CardContent className="p-6">
-              {filteredInscriptionsFinalisees.length === 0 ? (
+              {isLoadingRegistrations ? (
+                <div className="text-center py-12">
+                  <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+                  <p className="text-gray-600">Chargement des inscriptions...</p>
+                </div>
+              ) : filteredInscriptionsFinalisees.length === 0 ? (
                 <div className="text-center py-12">
                   <CheckCircle2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-gray-900 mb-2">Aucune inscription finalisée</h3>
@@ -250,7 +349,7 @@ export function AgentInscriptionsTabs() {
                     <TableBody>
                       {filteredInscriptionsFinalisees.map((participant) => {
                         const org = getOrganisationById(participant.organisationId);
-                        const montant = getMontant(participant.statut);
+                        const montant = getMontant(participant);
                         return (
                           <TableRow key={participant.id} className="hover:bg-blue-50/50">
                             <TableCell>
