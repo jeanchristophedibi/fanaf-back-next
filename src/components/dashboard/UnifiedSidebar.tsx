@@ -121,7 +121,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'operateur-caisse':
         return {
           mainNavItems: [
-            { id: 'dashboard', label: 'Dashboard', icon: Home },
+            { id: 'home', label: 'Tableau de bord', icon: Home },
           ],
           showInscriptions: false,
           showOrganisations: false,
@@ -134,7 +134,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
       case 'operateur-badge':
         return {
           mainNavItems: [
-            { id: 'dashboard', label: 'Dashboard', icon: Home },
+            { id: 'home', label: 'Tableau de bord', icon: Home },
             { id: 'documents', label: 'Documents participants', icon: FileText },
           ],
           showInscriptions: false,
