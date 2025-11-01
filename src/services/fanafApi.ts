@@ -1043,6 +1043,51 @@ class FanafApiService {
   async getDocuments(): Promise<any> {
     return this.fetchApi<any>('/api/v1/admin/documents');
   }
+
+  // ==================== USERS/UTILISATEURS ====================
+
+  /**
+   * Créer un utilisateur (membre du comité d'organisation)
+   * @param data - Données de l'utilisateur
+   * @returns Promise avec la réponse de l'API
+   */
+  async createUser(data: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    role: 'cashier' | 'agent_registration' | 'badge_operator' | 'scan_agent';
+  }): Promise<any> {
+    // Log des données envoyées pour le debug
+    console.log('[fanafApi] Création utilisateur avec données:', data);
+    console.log('[fanafApi] Endpoint:', `${API_BASE_URL}/api/v1/admin/users`);
+    
+    try {
+      const response = await this.fetchApi<any>('/api/v1/admin/users', {
+        method: 'POST',
+        body: data,
+      });
+      console.log('[fanafApi] Réponse createUser:', response);
+      return response;
+    } catch (error: any) {
+      // Logger l'erreur complète pour le debug
+      console.error('[fanafApi] Erreur lors de la création de l\'utilisateur:', {
+        error,
+        message: error?.message,
+        status: error?.response?.status,
+        data: error?.response?.data,
+        endpoint: '/api/v1/admin/users',
+        body: data,
+      });
+      
+      // Si l'endpoint n'est pas trouvé (404), suggérer de vérifier l'endpoint
+      if (error?.message?.includes('non trouvé') || error?.message?.includes('NOT_FOUND') || error?.message?.includes('404')) {
+        throw new Error(`L'endpoint /api/v1/admin/users n'existe pas encore sur le serveur. Veuillez vérifier avec l'équipe backend ou utiliser un endpoint alternatif.`);
+      }
+      
+      throw error;
+    }
+  }
 }
 
 export const fanafApi = new FanafApiService();

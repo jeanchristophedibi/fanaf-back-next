@@ -16,6 +16,7 @@ import { companiesDataService } from '../data/companiesData';
 import { Download, Plane, Search, Calendar, AlertCircle, Eye, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { List, type Column, type ListAction } from '../list/List';
+import { PageLoader } from '../ui/PageLoader';
 
 interface GroupedPlanVol {
   participantId: string;
@@ -621,6 +622,34 @@ export function ListePlanVol() {
     a.click();
     window.URL.revokeObjectURL(url);
   };
+
+  // Afficher un loader full-page pendant le chargement initial
+  if (loading && groupedPlansVol.length === 0) {
+    return (
+      <>
+        <PageLoader isLoading={loading} />
+        <List
+          data={[]}
+          columns={columns}
+          getRowId={(group) => group.participantId}
+          searchPlaceholder="Rechercher par nom, prénom, numéro de vol, organisation, aéroport..."
+          searchKeys={['_searchText']}
+          filterComponent={filterComponent}
+          filterTitle="Plan de vol"
+          exportFilename="plan-de-vol-fanaf"
+          exportHeaders={exportHeaders}
+          exportData={exportData}
+          onExport={handleExport}
+          itemsPerPage={10}
+          enableSelection={true}
+          buildActions={buildActions}
+          onSelectionChange={handleSelectionChange}
+          loading={true}
+          emptyMessage="Aucun participant trouvé"
+        />
+      </>
+    );
+  }
 
   return (
     <List

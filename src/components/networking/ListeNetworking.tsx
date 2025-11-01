@@ -142,6 +142,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       }
     };
     const [commentaire, setCommentaire] = useState(rendezVous.commentaire || '');
+    const [isLoading, setIsLoading] = useState(false);
     const apiDemandeur: any = (rendezVous as any)._apiDemandeur;
     const apiRecepteur: any = (rendezVous as any)._apiRecepteur;
     const demandeur = getParticipantById(rendezVous.demandeurId);
@@ -151,6 +152,7 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
     const referentSponsor = rendezVous.type === 'sponsor' ? getReferentSponsor(rendezVous.recepteurId) : undefined;
 
     const handleAction = async (newStatut: StatutRendezVous) => {
+      setIsLoading(true);
       try {
         // Appeler l'API pour accepter/valider ou refuser
         // Pour les sponsors, utiliser /validate, pour les participants utiliser /accept
@@ -186,6 +188,8 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       } catch (error: any) {
         console.error('Erreur lors de la mise à jour du rendez-vous:', error);
         toast.error(error?.message || 'Erreur lors de la mise à jour du rendez-vous');
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -335,17 +339,28 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
               <Button
                 onClick={() => handleAction('acceptée')}
                 className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                disabled={isLoading}
                 data-gramm="false"
                 data-gramm_editor="false"
                 data-enable-grammarly="false"
               >
-                <Check className="w-4 h-4" />
-                Accepter
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Traitement...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Accepter
+                  </>
+                )}
               </Button>
             ) : (
               <Button 
                 onClick={() => setIsOpen(false)} 
                 variant="outline"
+                disabled={isLoading}
                 data-gramm="false"
                 data-gramm_editor="false"
                 data-enable-grammarly="false"

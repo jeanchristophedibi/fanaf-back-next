@@ -6,10 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from './ui/dialog';
-import { Label } from './ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { Search, Filter, Eye, Download, UserPlus, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ProfilMembre, MembreComite } from './data/types';
+import { CreateMembreDialog } from './comite/CreateMembreDialog';
 
 const profilColors = {
   'caissier': 'bg-blue-100 text-blue-800',
@@ -28,13 +28,6 @@ export function ComiteOrganisationPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const [newMembre, setNewMembre] = useState({
-    nom: '',
-    prenom: '',
-    email: '',
-    telephone: '',
-    profil: '' as ProfilMembre | '',
-  });
 
   // Query pour charger les membres du comité depuis l'API quand l'endpoint sera disponible
   const membresComiteQuery = useQuery({
@@ -117,16 +110,14 @@ export function ComiteOrganisationPage() {
 
   const stats = statsQuery.data ?? { total: 0, caissiers: 0, agentsScan: 0 };
 
-  const handleCreateMembre = () => {
-    console.log('Création nouveau membre:', newMembre);
-    // Ici vous ajouteriez la logique pour créer le membre
-    setIsCreateDialogOpen(false);
-    setNewMembre({
-      nom: '',
-      prenom: '',
-      email: '',
-      telephone: '',
-      profil: '',
+  const handleMembreCreated = () => {
+    // Rafraîchir la liste des membres
+    queryClient.invalidateQueries({ 
+      predicate: (query) => {
+        const key = query.queryKey;
+        if (!Array.isArray(key) || key.length === 0) return false;
+        return key[0] === 'comiteOrganisation';
+      }
     });
   };
 
@@ -193,88 +184,18 @@ export function ComiteOrganisationPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <CardTitle>Liste des membres</CardTitle>
             <div className="flex gap-2">
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-orange-600 hover:bg-orange-700 text-white">
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Nouveau membre
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Créer un nouveau membre</DialogTitle>
-                    <DialogDescription>
-                      Ajoutez un nouveau membre au comité d'organisation
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="nom">Nom</Label>
-                      <Input
-                        id="nom"
-                        value={newMembre.nom}
-                        onChange={(e) => setNewMembre({ ...newMembre, nom: e.target.value })}
-                        placeholder="Entrez le nom"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="prenom">Prénom</Label>
-                      <Input
-                        id="prenom"
-                        value={newMembre.prenom}
-                        onChange={(e) => setNewMembre({ ...newMembre, prenom: e.target.value })}
-                        placeholder="Entrez le prénom"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Adresse mail</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={newMembre.email}
-                        onChange={(e) => setNewMembre({ ...newMembre, email: e.target.value })}
-                        placeholder="exemple@fanaf2026.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="telephone">Contact</Label>
-                      <Input
-                        id="telephone"
-                        value={newMembre.telephone}
-                        onChange={(e) => setNewMembre({ ...newMembre, telephone: e.target.value })}
-                        placeholder="+225 XX XX XX XX XX"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="profil">Profil</Label>
-                      <Select
-                        value={newMembre.profil}
-                        onValueChange={(value) => setNewMembre({ ...newMembre, profil: value as ProfilMembre })}
-                      >
-                        <SelectTrigger id="profil">
-                          <SelectValue placeholder="Sélectionnez un profil" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="caissier">Caissier</SelectItem>
-                          <SelectItem value="agent-scan">Agent de Scan</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                      Annuler
-                    </Button>
-                    <Button 
-                      className="bg-orange-600 hover:bg-orange-700 text-white"
-                      onClick={handleCreateMembre}
-                      disabled={!newMembre.nom || !newMembre.prenom || !newMembre.email || !newMembre.telephone || !newMembre.profil}
-                    >
-                      Créer
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button 
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+                onClick={() => setIsCreateDialogOpen(true)}
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Nouveau membre
+              </Button>
+              <CreateMembreDialog
+                open={isCreateDialogOpen}
+                onOpenChange={setIsCreateDialogOpen}
+                onSuccess={handleMembreCreated}
+              />
               <Button variant="outline" onClick={handleExport}>
                 <Download className="w-4 h-4 mr-2" />
                 Exporter

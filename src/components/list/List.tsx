@@ -62,6 +62,33 @@ export interface ListProps<T> {
   rowActionsWidth?: string; // Largeur de la colonne Actions (défaut: "w-32")
 }
 
+/**
+ * Fonction utilitaire pour obtenir les classes CSS de couleur en fonction du statut
+ * @param statut - Le statut (member, not_member, vip, staff, agent, speaker, sponsor)
+ * @returns Les classes CSS Tailwind pour le badge de statut
+ */
+export function getStatusBadgeColor(statut: string): string {
+  const statusColorMap: Record<string, string> = {
+    // Format: statut (en minuscules) -> classes CSS
+    'member': 'bg-purple-100 text-purple-800',           // Membre - Violet
+    'membre': 'bg-purple-100 text-purple-800',           // Membre - Violet (variante française)
+    'not_member': 'bg-stone-700 text-stone-50',          // Non membre - Marron
+    'not-member': 'bg-stone-700 text-stone-50',          // Non membre - Marron (avec tiret)
+    'non-membre': 'bg-stone-700 text-stone-50',          // Non membre - Marron (variante française)
+    'non_membre': 'bg-stone-700 text-stone-50',          // Non membre - Marron (variante underscore)
+    'vip': 'bg-cyan-100 text-cyan-800',                  // VIP - Turquoise
+    'staff': 'bg-red-100 text-red-800',                  // Comité d'organisation - Rouge
+    'agent': 'bg-blue-100 text-blue-800',                // Agent de badge - Bleu
+    'speaker': 'bg-yellow-100 text-yellow-800',          // Speaker - Jaune
+    'sponsor': 'bg-orange-100 text-orange-800',          // Sponsor - Orange
+  };
+
+  // Normaliser le statut (minuscules, supprimer les espaces)
+  const normalizedStatut = statut.toLowerCase().trim();
+  
+  return statusColorMap[normalizedStatut] || 'bg-gray-100 text-gray-800'; // Couleur par défaut si statut non trouvé
+}
+
 export function List<T extends Record<string, any>>({
   data,
   columns,
