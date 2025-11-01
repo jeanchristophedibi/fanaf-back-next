@@ -61,7 +61,6 @@ export async function fetchNetworkingRequests(
   }
 ): Promise<RendezVous[]> {
   try {
-    console.log('[fetchNetworkingRequests] ===== DÉBUT DU CHARGEMENT DES RENDEZ-VOUS =====');
     const allRequests: RendezVous[] = [];
     const seenIds = new Set<string>();
     const perPage = 100;
@@ -76,7 +75,6 @@ export async function fetchNetworkingRequests(
 
     for (const requestTarget of targetsToLoad) {
       const typeLabel = requestTarget === 'user' ? 'participant' : requestTarget === 'sponsor' ? 'sponsor' : 'tous types';
-      console.log(`[fetchNetworkingRequests] 📡 Début chargement ${typeLabel} (target: ${requestTarget || 'all'})`);
       
       let page = 1;
       let hasMore = true;
@@ -86,23 +84,12 @@ export async function fetchNetworkingRequests(
       
       while (hasMore) {
         try {
-          console.log(`[fetchNetworkingRequests] 🔄 Appel API ${typeLabel} - Page ${page} (per_page: ${perPage})`);
-          
           const response = await fanafApi.getNetworkingRequests({
             per_page: perPage,
             page: page,
             ...(requestTarget ? { target: requestTarget } : {}),
             ...(filters?.status ? { status: filters.status } : {}),
           }) as any;
-          
-          console.log(`[fetchNetworkingRequests] ✅ Réponse API reçue pour ${typeLabel}, page ${page}:`, {
-            hasResponse: !!response,
-            responseKeys: response ? Object.keys(response) : [],
-            hasData: !!response?.data,
-            hasDataData: !!response?.data?.data,
-            hasMeta: !!response?.meta,
-            responseType: typeof response,
-          });
 
           // Extraire les données de la réponse
           let data: any[] = [];
@@ -118,7 +105,8 @@ export async function fetchNetworkingRequests(
             totalCount = response.data.total || 0;
             if (response.data.last_page !== undefined) {
               hasMore = page < (response.data.last_page || 1);
-              console.log(`[fetchNetworkingRequests] 📄 ${typeLabel} - Pagination (structure imbriquée): page ${page}/${response.data.last_page}, total: ${response.data.total}, données: ${data.length}`);
+              // Log réduit : pagination détaillée (commenté pour réduire le bruit)
+              // console.log(`[fetchNetworkingRequests] 📄 ${typeLabel} - Pagination (structure imbriquée): page ${page}/${response.data.last_page}, total: ${response.data.total}, données: ${data.length}`);
             } else {
               hasMore = data.length >= perPage;
             }
@@ -129,12 +117,14 @@ export async function fetchNetworkingRequests(
               totalPages = response.meta.last_page || response.meta.total_pages || 1;
               totalCount = response.meta.total || 0;
               hasMore = page < totalPages;
-              console.log(`[fetchNetworkingRequests] 📄 ${typeLabel} - Pagination (via meta): page ${page}/${totalPages}, total: ${totalCount}, données: ${data.length}`);
+              // Log réduit : pagination détaillée (commenté pour réduire le bruit)
+              // console.log(`[fetchNetworkingRequests] 📄 ${typeLabel} - Pagination (via meta): page ${page}/${totalPages}, total: ${totalCount}, données: ${data.length}`);
             } else if (response.data.last_page !== undefined) {
               totalPages = response.data.last_page || 1;
               totalCount = response.data.total || 0;
               hasMore = page < totalPages;
-              console.log(`[fetchNetworkingRequests] 📄 ${typeLabel} - Pagination (via data): page ${page}/${totalPages}, total: ${totalCount}, données: ${data.length}`);
+              // Log réduit : pagination détaillée (commenté pour réduire le bruit)
+              // console.log(`[fetchNetworkingRequests] 📄 ${typeLabel} - Pagination (via data): page ${page}/${totalPages}, total: ${totalCount}, données: ${data.length}`);
             } else {
               hasMore = data.length === perPage;
             }
@@ -157,18 +147,19 @@ export async function fetchNetworkingRequests(
           }
           
           if (data.length > 0) {
-            if (page === 1) {
-              console.log(`[fetchNetworkingRequests] 📋 ${typeLabel} - Premier élément exemple (page 1):`, {
-                id: data[0]?.id,
-                type: data[0]?.type,
-                date: data[0]?.date,
-                heure: data[0]?.heure || data[0]?.start_time,
-                statut: data[0]?.statut || data[0]?.status,
-                keys: Object.keys(data[0] || {}),
-                sampleData: JSON.stringify(data[0]).substring(0, 300)
-              });
-            }
-            console.log(`[fetchNetworkingRequests] 📦 ${typeLabel} - Page ${page}: ${data.length} éléments bruts reçus`);
+            // Log réduit : exemples et détails (commentés pour réduire le bruit)
+            // if (page === 1) {
+            //   console.log(`[fetchNetworkingRequests] 📋 ${typeLabel} - Premier élément exemple (page 1):`, {
+            //     id: data[0]?.id,
+            //     type: data[0]?.type,
+            //     date: data[0]?.date,
+            //     heure: data[0]?.heure || data[0]?.start_time,
+            //     statut: data[0]?.statut || data[0]?.status,
+            //     keys: Object.keys(data[0] || {}),
+            //     sampleData: JSON.stringify(data[0]).substring(0, 300)
+            //   });
+            // }
+            // console.log(`[fetchNetworkingRequests] 📦 ${typeLabel} - Page ${page}: ${data.length} éléments bruts reçus`);
           } else {
             console.warn(`[fetchNetworkingRequests] ⚠️ ${typeLabel} - Page ${page}: Aucune donnée dans la réponse`);
           }
@@ -186,13 +177,15 @@ export async function fetchNetworkingRequests(
               loadedCount++;
             } else {
               duplicateCount++;
-              if (duplicateCount <= 3) {
-                console.log(`[fetchNetworkingRequests] 🔄 ${typeLabel} - Dupliqué ignoré: ID "${request.id}"`);
-              }
+              // Log réduit : duplication (commenté pour réduire le bruit)
+              // if (duplicateCount <= 3) {
+              //   console.log(`[fetchNetworkingRequests] 🔄 ${typeLabel} - Dupliqué ignoré: ID "${request.id}"`);
+              // }
             }
           }
           
-          console.log(`[fetchNetworkingRequests] ✅ ${typeLabel} - Page ${page}: ${addedCount} rendez-vous ajoutés, ${duplicateCount} dupliqués ignorés (total: ${loadedCount})`);
+          // Log réduit : détails par page (commenté pour réduire le bruit)
+          // console.log(`[fetchNetworkingRequests] ✅ ${typeLabel} - Page ${page}: ${addedCount} rendez-vous ajoutés, ${duplicateCount} dupliqués ignorés (total: ${loadedCount})`);
 
           // Si pas assez de données, pas de page suivante
           if (data.length < perPage) {
@@ -210,19 +203,24 @@ export async function fetchNetworkingRequests(
         }
       }
       
-      console.log(`[fetchNetworkingRequests] 📊 ${typeLabel} - Récapitulatif: ${loadedCount} rendez-vous chargés (total attendu: ${totalCount || '?'}, pages: ${totalPages || page - 1})`);
+      // Log réduit : récapitulatif par type (commenté pour réduire le bruit)
+      // console.log(`[fetchNetworkingRequests] 📊 ${typeLabel} - Récapitulatif: ${loadedCount} rendez-vous chargés (total attendu: ${totalCount || '?'}, pages: ${totalPages || page - 1})`);
     }
 
-    console.log(`[fetchNetworkingRequests] ===== FIN DU CHARGEMENT =====`);
-    console.log(`[fetchNetworkingRequests] ✅ TOTAL: ${allRequests.length} rendez-vous uniques chargés (${seenIds.size} IDs uniques)`);
-    console.log(`[fetchNetworkingRequests] 📋 Exemples de rendez-vous chargés:`, 
-      allRequests.slice(0, 5).map(r => ({ 
-        id: r.id, 
-        type: r.type, 
-        date: r.date,
-        statut: r.statut
-      }))
-    );
+    // Log final uniquement avec le total (réduit)
+    console.log(`[fetchNetworkingRequests] ✅ ${allRequests.length} rendez-vous chargés`);
+    
+    // Log détaillé désactivé (peut être réactivé en debug)
+    // console.log(`[fetchNetworkingRequests] ===== FIN DU CHARGEMENT =====`);
+    // console.log(`[fetchNetworkingRequests] ✅ TOTAL: ${allRequests.length} rendez-vous uniques chargés (${seenIds.size} IDs uniques)`);
+    // console.log(`[fetchNetworkingRequests] 📋 Exemples de rendez-vous chargés:`, 
+    //   allRequests.slice(0, 5).map(r => ({ 
+    //     id: r.id, 
+    //     type: r.type, 
+    //     date: r.date,
+    //     statut: r.statut
+    //   }))
+    // );
     return allRequests;
   } catch (error: any) {
     console.error('Erreur lors du chargement des rendez-vous:', error);
@@ -246,8 +244,6 @@ export class NetworkingDataService {
     filters?: { type?: 'participant' | 'sponsor'; status?: string },
     forceReload = false
   ): Promise<RendezVous[]> {
-    console.log(`[loadNetworkingRequests] 🔄 Appel de loadNetworkingRequests (forceReload: ${forceReload})`, filters);
-    
     // Vérifier si les filtres sont identiques
     const filtersMatch = 
       this.lastFilters?.type === filters?.type &&
@@ -255,19 +251,20 @@ export class NetworkingDataService {
     
     // Si déjà chargées avec les mêmes filtres et pas de rechargement forcé, retourner le cache
     if (!forceReload && this.isRequestsLoaded && this.requestsCache.length > 0 && filtersMatch) {
-      console.log(`[loadNetworkingRequests] ✅ Utilisation du cache (${this.requestsCache.length} rendez-vous)`);
-      console.log(`[loadNetworkingRequests] 📋 Exemples du cache:`, 
-        this.requestsCache.slice(0, 3).map(r => ({ id: r.id, type: r.type, statut: r.statut }))
-      );
+      // Log réduit pour l'utilisation du cache (moins de bruit)
+      // console.log(`[loadNetworkingRequests] ✅ Utilisation du cache (${this.requestsCache.length} rendez-vous)`);
       return this.requestsCache;
     }
 
-    console.log(`[loadNetworkingRequests] 📡 Démarrage du chargement depuis l'API...`);
+    // Log uniquement lors d'un chargement depuis l'API
+    if (forceReload || !this.isRequestsLoaded || this.requestsCache.length === 0 || !filtersMatch) {
+      console.log(`[loadNetworkingRequests] 📡 Démarrage du chargement depuis l'API...`, filters || 'aucun filtre');
+    }
     
     try {
       this.requestsCache = await fetchNetworkingRequests(filters);
       
-      console.log(`[loadNetworkingRequests] ✅ fetchNetworkingRequests terminé, ${this.requestsCache.length} rendez-vous reçus`);
+      console.log(`[loadNetworkingRequests] ✅ ${this.requestsCache.length} rendez-vous chargés depuis l'API`);
       
       // Créer un index par ID pour un accès rapide
       this.requestsById.clear();
@@ -283,16 +280,17 @@ export class NetworkingDataService {
       
       this.isRequestsLoaded = true;
       this.lastFilters = filters || null;
-      console.log(`[loadNetworkingRequests] ✅ ${this.requestsCache.length} rendez-vous chargés et indexés`);
-      console.log(`[loadNetworkingRequests] 📊 Index: ${indexedById} par ID`);
-      console.log(`[loadNetworkingRequests] 📋 Exemples de rendez-vous:`, 
-        this.requestsCache.slice(0, 5).map(r => ({ 
-          id: r.id, 
-          type: r.type, 
-          date: r.date,
-          statut: r.statut
-        }))
-      );
+      
+      // Log détaillé uniquement en mode debug (désactivé par défaut)
+      // console.log(`[loadNetworkingRequests] 📊 Index: ${indexedById} par ID`);
+      // console.log(`[loadNetworkingRequests] 📋 Exemples de rendez-vous:`, 
+      //   this.requestsCache.slice(0, 5).map(r => ({ 
+      //     id: r.id, 
+      //     type: r.type, 
+      //     date: r.date,
+      //     statut: r.statut
+      //   }))
+      // );
       
       return this.requestsCache;
     } catch (error: any) {

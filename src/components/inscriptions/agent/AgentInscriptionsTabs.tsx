@@ -437,5 +437,3 @@ export function AgentInscriptionsTabs() {
     </div>
   );
 }
-
-

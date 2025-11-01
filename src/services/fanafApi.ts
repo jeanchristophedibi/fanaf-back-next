@@ -241,23 +241,47 @@ class FanafApiService {
       let responseData: any;
       const contentType = response.headers.get('content-type');
       const isJson = contentType && contentType.includes('application/json');
+      const isHtml = contentType && contentType.includes('text/html');
       
+      // Lire le texte de la réponse une seule fois
+      let text = '';
       try {
-        const text = await response.text();
-        if (isJson && text) {
-          responseData = JSON.parse(text);
+        text = await response.text();
+      } catch (textError) {
+        // Si on ne peut pas lire le texte, utiliser un message par défaut
+        text = '';
+      }
+      
+      // Si c'est du HTML (comme une page 404), extraire un message clair
+      if (isHtml || (text && (text.trim().startsWith('<!DOCTYPE html>') || text.trim().startsWith('<html')))) {
+        // Pour les 404, message spécifique
+        if (response.status === 404) {
+          responseData = { 
+            message: `Endpoint non trouvé: ${endpoint}. Vérifiez que l'endpoint est correct.`,
+            error: 'NOT_FOUND'
+          };
         } else {
+          responseData = { 
+            message: `Erreur HTTP ${response.status}: Le serveur a retourné une page HTML au lieu d'une réponse JSON.`,
+            error: 'HTML_RESPONSE'
+          };
+        }
+      } else if (isJson && text) {
+        // Parser comme JSON
+        try {
+          responseData = JSON.parse(text);
+        } catch (parseError) {
+          // Si le parsing JSON échoue, utiliser le texte brut comme message
           responseData = { message: text || `Erreur HTTP: ${response.status}` };
         }
-      } catch (parseError) {
+      } else if (text) {
+        // Si c'est du texte mais pas JSON ni HTML, essayer de l'utiliser comme message
+        responseData = { message: text || `Erreur HTTP: ${response.status}` };
+      } else {
         responseData = { message: `Erreur HTTP: ${response.status}` };
       }
 
       if (!response.ok) {
-        // Log pour débugger la structure exacte de la réponse
-        console.log('Response status:', response.status);
-        console.log('Response data:', responseData);
-        
         // Extraire le message d'erreur de différentes structures possibles
         let errorMessage = `Erreur HTTP: ${response.status}`;
         
@@ -340,9 +364,14 @@ class FanafApiService {
         const isLoginAttempt = !requireAuth && isLoginEndpoint;
         
         // Logger différemment selon le type d'erreur
+        const isNotFound = response.status === 404;
+        
         if (isAuthError && isLoginAttempt) {
           // Pour les tentatives de connexion échouées, logger en warn (moins bruyant)
           console.warn(`Tentative de connexion échouée [${endpoint}]:`, errorMessage);
+        } else if (isNotFound) {
+          // Pour les erreurs 404, logger en warn (endpoint peut ne pas exister)
+          console.warn(`Endpoint non trouvé [${endpoint}]:`, errorMessage);
         } else if (!isAuthError) {
           // Pour les autres erreurs, logger en erreur
           console.error(`Erreur API [${endpoint}]:`, errorMessage);
@@ -735,6 +764,15 @@ class FanafApiService {
    */
   async refuseNetworkingRequest(requestId: string) {
     return this.fetchApi(`/api/v1/admin/networking/requests/${requestId}/refuse`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Valider une demande de rendez-vous (sponsors)
+   */
+  async validateNetworkingRequest(requestId: string) {
+    return this.fetchApi(`/api/v1/admin/networking/requests/${requestId}/validate`, {
       method: 'POST',
     });
   }

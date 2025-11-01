@@ -152,9 +152,14 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
 
     const handleAction = async (newStatut: StatutRendezVous) => {
       try {
-        // Appeler l'API pour accepter ou refuser
+        // Appeler l'API pour accepter/valider ou refuser
+        // Pour les sponsors, utiliser /validate, pour les participants utiliser /accept
         if (newStatut === 'acceptée') {
-          await fanafApi.acceptNetworkingRequest(rendezVous.id);
+          if (rendezVous.type === 'sponsor') {
+            await fanafApi.validateNetworkingRequest(rendezVous.id);
+          } else {
+            await fanafApi.acceptNetworkingRequest(rendezVous.id);
+          }
         } else if (newStatut === 'occupée') {
           await fanafApi.refuseNetworkingRequest(rendezVous.id);
         }
@@ -326,25 +331,25 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
             </div>
           </div>
           <DialogFooter className="gap-2">
-            {!readOnly && (activeFilter === 'sponsor' || rendezVous.type === 'sponsor') ? (
-              <>
-                <Button
-                  onClick={() => handleAction('occupée')}
-                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
-                >
-                  <X className="w-4 h-4" />
-                  Refuser (Occupé)
-                </Button>
-                <Button
-                  onClick={() => handleAction('acceptée')}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-                >
-                  <Check className="w-4 h-4" />
-                  Accepter
-                </Button>
-              </>
+            {!readOnly && (activeFilter === 'sponsor' || rendezVous.type === 'sponsor') && rendezVous.statut === 'en-attente' ? (
+              <Button
+                onClick={() => handleAction('acceptée')}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                data-gramm="false"
+                data-gramm_editor="false"
+                data-enable-grammarly="false"
+              >
+                <Check className="w-4 h-4" />
+                Accepter
+              </Button>
             ) : (
-              <Button onClick={() => setIsOpen(false)} variant="outline">
+              <Button 
+                onClick={() => setIsOpen(false)} 
+                variant="outline"
+                data-gramm="false"
+                data-gramm_editor="false"
+                data-enable-grammarly="false"
+              >
                 Fermer
               </Button>
             )}
@@ -509,42 +514,6 @@ export function ListeNetworking({ activeFilter, readOnly = false }: ListeNetwork
       className: 'h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50',
       title: 'Voir les détails',
       shouldShow: () => true, // Toujours afficher
-    },
-    {
-      label: 'Accepter',
-      icon: <Check className="w-4 h-4" />,
-      onClick: async (rdv) => {
-        try {
-          await fanafApi.acceptNetworkingRequest(rdv.id);
-          networkingDataService.updateRequest(rdv.id, { statut: 'acceptée' });
-          queryClient.invalidateQueries({ queryKey: ['networkingRequests'] });
-          toast.success('Rendez-vous accepté');
-        } catch (error: any) {
-          toast.error(error?.message || 'Erreur lors de l\'acceptation');
-        }
-      },
-      variant: 'ghost',
-      className: 'h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50',
-      title: 'Accepter',
-      shouldShow: (rdv) => !readOnly && (activeFilter === 'sponsor' || rdv.type === 'sponsor'),
-    },
-    {
-      label: 'Refuser',
-      icon: <X className="w-4 h-4" />,
-      onClick: async (rdv) => {
-        try {
-          await fanafApi.refuseNetworkingRequest(rdv.id);
-          networkingDataService.updateRequest(rdv.id, { statut: 'occupée' });
-          queryClient.invalidateQueries({ queryKey: ['networkingRequests'] });
-          toast.success('Rendez-vous refusé');
-        } catch (error: any) {
-          toast.error(error?.message || 'Erreur lors du refus');
-        }
-      },
-      variant: 'ghost',
-      className: 'h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50',
-      title: 'Refuser',
-      shouldShow: (rdv) => !readOnly && (activeFilter === 'sponsor' || rdv.type === 'sponsor'),
     },
   ];
 
