@@ -40,14 +40,21 @@ export async function loadDashboardCounts(): Promise<{
   const participants = await inscriptionsDataService.loadParticipants(['member', 'not_member', 'vip']);
   const rendezVous = await networkingDataService.loadNetworkingRequests();
 
+  // Fonction helper pour déterminer si une inscription est finalisée
+  // Une inscription est finalisée si statut_inscription === 'finalisée' OU si le participant est exonéré (VIP/speaker)
+  const isInscriptionFinalisee = (participant: any): boolean => {
+    const isExonere = participant.statut === 'vip' || participant.statut === 'speaker';
+    return participant.statutInscription === 'finalisée' || isExonere;
+  };
+
   // Calculer les compteurs Inscriptions
   const inscriptions = {
-    membres: participants.filter(p => p.statut === 'membre' && p.statutInscription === 'finalisée').length,
-    nonMembres: participants.filter(p => p.statut === 'non-membre' && p.statutInscription === 'finalisée').length,
+    membres: participants.filter(p => p.statut === 'membre' && isInscriptionFinalisee(p)).length,
+    nonMembres: participants.filter(p => p.statut === 'non-membre' && isInscriptionFinalisee(p)).length,
     vip: participants.filter(p => p.statut === 'vip').length,
     speakers: participants.filter(p => p.statut === 'speaker').length,
-    enAttenteMembres: participants.filter(p => p.statut === 'membre' && p.statutInscription === 'non-finalisée').length,
-    enAttenteNonMembres: participants.filter(p => p.statut === 'non-membre' && p.statutInscription === 'non-finalisée').length,
+    enAttenteMembres: participants.filter(p => p.statut === 'membre' && !isInscriptionFinalisee(p)).length,
+    enAttenteNonMembres: participants.filter(p => p.statut === 'non-membre' && !isInscriptionFinalisee(p)).length,
   };
 
   // Calculer les compteurs Organisations
