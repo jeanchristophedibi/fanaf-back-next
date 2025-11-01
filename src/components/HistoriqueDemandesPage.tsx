@@ -62,12 +62,12 @@ export function HistoriqueDemandesPage() {
             });
 
             const requestsData = response?.data?.data || response?.data || [];
-            const pagination = response?.data || response?.meta || {};
+            const pagination = response?.data || {};
 
             allRequests = [...allRequests, ...requestsData];
 
             // Vérifier s'il y a plus de pages
-            const lastPage = pagination.last_page || pagination.meta?.last_page || currentPage;
+            const lastPage = pagination.last_page || currentPage;
             hasMore = currentPage < lastPage && requestsData.length === perPage;
             currentPage++;
           }
