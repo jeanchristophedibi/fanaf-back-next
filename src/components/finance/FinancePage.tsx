@@ -22,7 +22,6 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { useDynamicInscriptions } from '../hooks/useDynamicInscriptions';
 import { fanafApi } from '../../services/fanafApi';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
@@ -52,18 +51,35 @@ const isPaymentCompleted = (state: string): boolean => {
 };
 
 export function FinancePage() {
-  const { participants } = useDynamicInscriptions();
   const [showEnAttenteDialog, setShowEnAttenteDialog] = useState(false);
   const [selectedCanal, setSelectedCanal] = useState<'general' | CanalEncaissement>('general');
 
-  // Prix des inscriptions
-  const PRIX = {
-    membre: 350000,
-    nonMembre: 400000,
-  };
-
   // Objectif de revenus (exemple)
   const OBJECTIF_REVENUS = 50000000; // 50 millions FCFA
+
+  // Charger les types d'inscription depuis l'API pour obtenir les prix
+  const { data: registrationTypesResponse } = useQuery({
+    queryKey: ['registrationTypes'],
+    queryFn: async () => {
+      return await fanafApi.getRegistrationTypes();
+    },
+    staleTime: 10 * 60 * 1000, // Cache pendant 10 minutes
+    gcTime: 30 * 60 * 1000, // Garder en cache pendant 30 minutes
+  });
+
+  const registrationTypes = registrationTypesResponse?.data || [];
+
+  // Obtenir les prix depuis l'API
+  const getPriceForStatut = (statut: 'membre' | 'non-membre'): number => {
+    if (statut === 'membre') {
+      const membreType = registrationTypes.find((rt: any) => rt.slug === 'membre-fanaf');
+      return membreType ? parseFloat(membreType.amount) : 0;
+    } else if (statut === 'non-membre') {
+      const nonMembreType = registrationTypes.find((rt: any) => rt.slug === 'non-membre');
+      return nonMembreType ? parseFloat(nonMembreType.amount) : 0;
+    }
+    return 0;
+  };
 
   // Charger tous les paiements depuis l'API avec React Query
   const { data: apiPayments = [], isLoading: isLoadingPayments, error: paymentsQueryError } = useQuery({
@@ -108,45 +124,57 @@ export function FinancePage() {
 
   const paymentsError = paymentsQueryError ? (paymentsQueryError as Error).message : null;
 
-  // Query pour créer un mapping participant_id -> statut depuis les participants
-  const participantStatutMapQuery = useQuery({
-    queryKey: ['financePage', 'participantStatutMap', participants],
-    queryFn: () => {
-      const map = new Map<string, 'membre' | 'non-membre' | 'vip' | 'speaker'>();
-      participants.forEach(p => {
-        // Essayer de trouver le participant par email ou référence
-        // Filtrer les statuts valides (exclure 'referent' par exemple)
-        if (p.statut === 'membre' || p.statut === 'non-membre' || p.statut === 'vip' || p.statut === 'speaker') {
-          if (p.email) map.set(p.email.toLowerCase(), p.statut);
-          if (p.reference) map.set(p.reference, p.statut);
-        }
-      });
-      return map;
+  // Charger les inscriptions en attente depuis l'API pour calculer les montants à encaisser
+  const { data: pendingRegistrations = [], isLoading: isLoadingPending } = useQuery({
+    queryKey: ['financePendingRegistrations'],
+    queryFn: async () => {
+      try {
+        // Récupérer les inscriptions non finalisées
+        const response = await fanafApi.getRegistrations({
+          per_page: 1000, // Récupérer beaucoup d'inscriptions
+        });
+        
+        const registrationsData = response?.data?.data || response?.data || [];
+        
+        // Filtrer uniquement les inscriptions non finalisées
+        return registrationsData.filter((reg: any) => {
+          const status = reg.registration_status || reg.status || reg.statut_inscription || '';
+          return status === 'pending' || status === 'non-finalisée' || status === 'non-finalisee' || !status;
+        });
+      } catch (err: any) {
+        console.error('Erreur lors du chargement des inscriptions en attente:', err);
+        return [];
+      }
     },
-    enabled: true,
-    staleTime: 0,
+    staleTime: 60 * 1000, // 1 minute
+    gcTime: 10 * 60 * 1000, // 10 minutes en cache
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
-
-  const participantStatutMap = participantStatutMapQuery.data ?? new Map();
 
   // Query pour mapper les paiements API avec le statut du participant
   const enrichedPaymentsQuery = useQuery({
-    queryKey: ['financePage', 'enrichedPayments', apiPayments, participantStatutMap],
+    queryKey: ['financePage', 'enrichedPayments', apiPayments],
     queryFn: () => {
       if (apiPayments.length === 0) return [];
       
       return apiPayments.map(payment => {
-        // Déterminer le statut du participant
+        // Déterminer le statut du participant depuis l'API
         let statut: 'membre' | 'non-membre' | 'vip' | 'speaker' = 'membre';
-        const userEmail = payment.user?.email?.toLowerCase();
-        if (userEmail && participantStatutMap.has(userEmail)) {
-          statut = participantStatutMap.get(userEmail)!;
-        } else if (payment.user?.category) {
-          // Utiliser la catégorie de l'API si disponible
+        
+        // Utiliser la catégorie de l'API directement
+        if (payment.user?.category) {
           const category = payment.user.category;
           if (category === 'vip') statut = 'vip';
-          else if (category === 'not_member') statut = 'non-membre';
-          else if (category === 'member') statut = 'membre';
+          else if (category === 'not_member' || category === 'non-membre') statut = 'non-membre';
+          else if (category === 'member' || category === 'membre') statut = 'membre';
+          else if (category === 'speaker') statut = 'speaker';
+        } else if (payment.registration?.user?.category) {
+          const category = payment.registration.user.category;
+          if (category === 'vip') statut = 'vip';
+          else if (category === 'not_member' || category === 'non-membre') statut = 'non-membre';
+          else if (category === 'member' || category === 'membre') statut = 'membre';
+          else if (category === 'speaker') statut = 'speaker';
         }
         
         return {
@@ -158,13 +186,50 @@ export function FinancePage() {
         };
       });
     },
-    enabled: true,
+    enabled: apiPayments.length > 0,
     staleTime: 0,
   });
 
   const enrichedPayments = enrichedPaymentsQuery.data ?? [];
 
-  // Calculer les statistiques financières par canal
+  // Query pour enrichir les inscriptions en attente avec les statuts depuis l'API
+  const enrichedPendingRegistrationsQuery = useQuery({
+    queryKey: ['financePage', 'enrichedPendingRegistrations', pendingRegistrations],
+    queryFn: () => {
+      if (pendingRegistrations.length === 0) return [];
+      
+      return pendingRegistrations.map((reg: any) => {
+        // Déterminer le statut depuis l'API
+        let statut: 'membre' | 'non-membre' | 'vip' | 'speaker' = 'membre';
+        
+        if (reg.category) {
+          const category = reg.category;
+          if (category === 'vip') statut = 'vip';
+          else if (category === 'not_member' || category === 'non-membre') statut = 'non-membre';
+          else if (category === 'member' || category === 'membre') statut = 'membre';
+          else if (category === 'speaker') statut = 'speaker';
+        } else if (reg.user?.category) {
+          const category = reg.user.category;
+          if (category === 'vip') statut = 'vip';
+          else if (category === 'not_member' || category === 'non-membre') statut = 'non-membre';
+          else if (category === 'member' || category === 'membre') statut = 'membre';
+          else if (category === 'speaker') statut = 'speaker';
+        }
+        
+        return {
+          ...reg,
+          statut,
+          canalEncaissement: mapPaymentProvider(reg.payment_provider || 'externe'),
+        };
+      });
+    },
+    enabled: pendingRegistrations.length > 0,
+    staleTime: 0,
+  });
+
+  const enrichedPendingRegistrations = enrichedPendingRegistrationsQuery.data ?? [];
+
+  // Calculer les statistiques financières par canal uniquement depuis l'API
   const calculateStatsByCanal = (canal?: CanalEncaissement) => {
     const stats = {
       totalMembres: 0,
@@ -189,89 +254,64 @@ export function FinancePage() {
       },
     };
 
-    // Utiliser les paiements API si disponibles, sinon fallback vers participants
-    const useApiData = enrichedPayments.length > 0;
+    // Calcul basé uniquement sur les paiements API
+    enrichedPayments.forEach((payment) => {
+      // Filtrer par canal si spécifié
+      if (canal && payment.canalEncaissement !== canal) {
+        return;
+      }
 
-    if (useApiData) {
-      // Calcul basé sur les paiements API
-      enrichedPayments.forEach((payment) => {
-        // Filtrer par canal si spécifié
-        if (canal && payment.canalEncaissement !== canal) {
-          return;
-        }
+      const montant = payment.amount || parseFloat(payment.amount || '0');
+      const isCompleted = payment.isCompleted;
 
-        const montant = payment.amount || 0;
-        const isCompleted = payment.isCompleted;
-
-        // Comptabiliser selon le statut
-        if (payment.statut === 'vip') {
-          stats.totalVIP++;
-        } else if (payment.statut === 'speaker') {
-          stats.totalSpeakers++;
-        } else if (payment.statut === 'membre') {
-          if (isCompleted && montant > 0) {
-            stats.totalMembres++;
-            stats.revenuMembres += montant;
-            if (payment.modePaiement && payment.modePaiement in stats.paiementsParMode) {
-              const mode = payment.modePaiement as keyof typeof stats.paiementsParMode;
-              stats.paiementsParMode[mode] = (stats.paiementsParMode[mode] || 0) + montant;
-            }
-          } else {
-            stats.enAttenteMembres++;
-            stats.aEncaisserMembres += PRIX.membre;
-          }
-        } else if (payment.statut === 'non-membre') {
-          if (isCompleted && montant > 0) {
-            stats.totalNonMembres++;
-            stats.revenuNonMembres += montant;
-            if (payment.modePaiement && payment.modePaiement in stats.paiementsParMode) {
-              const mode = payment.modePaiement as keyof typeof stats.paiementsParMode;
-              stats.paiementsParMode[mode] = (stats.paiementsParMode[mode] || 0) + montant;
-            }
-          } else {
-            stats.enAttenteNonMembres++;
-            stats.aEncaisserNonMembres += PRIX.nonMembre;
+      // Comptabiliser selon le statut
+      if (payment.statut === 'vip') {
+        stats.totalVIP++;
+      } else if (payment.statut === 'speaker') {
+        stats.totalSpeakers++;
+      } else if (payment.statut === 'membre') {
+        if (isCompleted && montant > 0) {
+          stats.totalMembres++;
+          stats.revenuMembres += montant;
+          if (payment.modePaiement && payment.modePaiement in stats.paiementsParMode) {
+            const mode = payment.modePaiement as keyof typeof stats.paiementsParMode;
+            stats.paiementsParMode[mode] = (stats.paiementsParMode[mode] || 0) + montant;
           }
         }
-      });
-    } else {
-      // Fallback: Calcul basé sur les participants mock
-      participants.forEach((participant) => {
-        // Filtrer par canal si spécifié
-        if (canal && participant.canalEncaissement !== canal) {
-          return;
+      } else if (payment.statut === 'non-membre') {
+        if (isCompleted && montant > 0) {
+          stats.totalNonMembres++;
+          stats.revenuNonMembres += montant;
+          if (payment.modePaiement && payment.modePaiement in stats.paiementsParMode) {
+            const mode = payment.modePaiement as keyof typeof stats.paiementsParMode;
+            stats.paiementsParMode[mode] = (stats.paiementsParMode[mode] || 0) + montant;
+          }
         }
+      }
+    });
 
-        // Comptabiliser selon le statut
-        if (participant.statut === 'vip') {
-          stats.totalVIP++;
-        } else if (participant.statut === 'speaker') {
-          stats.totalSpeakers++;
-        } else if (participant.statut === 'membre') {
-          if (participant.statutInscription === 'finalisée') {
-            stats.totalMembres++;
-            stats.revenuMembres += PRIX.membre;
-            if (participant.modePaiement) {
-              stats.paiementsParMode[participant.modePaiement] += PRIX.membre;
-            }
-          } else {
-            stats.enAttenteMembres++;
-            stats.aEncaisserMembres += PRIX.membre;
-          }
-        } else if (participant.statut === 'non-membre') {
-          if (participant.statutInscription === 'finalisée') {
-            stats.totalNonMembres++;
-            stats.revenuNonMembres += PRIX.nonMembre;
-            if (participant.modePaiement) {
-              stats.paiementsParMode[participant.modePaiement] += PRIX.nonMembre;
-            }
-          } else {
-            stats.enAttenteNonMembres++;
-            stats.aEncaisserNonMembres += PRIX.nonMembre;
-          }
-        }
-      });
-    }
+    // Calculer les montants à encaisser depuis les inscriptions en attente de l'API
+    enrichedPendingRegistrations.forEach((reg: any) => {
+      // Filtrer par canal si spécifié
+      if (canal && reg.canalEncaissement !== canal) {
+        return;
+      }
+
+      // Comptabiliser selon le statut
+      if (reg.statut === 'vip') {
+        // VIP exonérés, rien à encaisser
+      } else if (reg.statut === 'speaker') {
+        // Speakers exonérés, rien à encaisser
+      } else if (reg.statut === 'membre') {
+        stats.enAttenteMembres++;
+        const prixMembre = getPriceForStatut('membre');
+        stats.aEncaisserMembres += prixMembre;
+      } else if (reg.statut === 'non-membre') {
+        stats.enAttenteNonMembres++;
+        const prixNonMembre = getPriceForStatut('non-membre');
+        stats.aEncaisserNonMembres += prixNonMembre;
+      }
+    });
 
     stats.revenuTotal = stats.revenuMembres + stats.revenuNonMembres;
     stats.aEncaisserTotal = stats.aEncaisserMembres + stats.aEncaisserNonMembres;
@@ -281,7 +321,7 @@ export function FinancePage() {
 
   // Query pour les statistiques par canal
   const statsGeneralQuery = useQuery({
-    queryKey: ['financePage', 'statsGeneral', enrichedPayments, participants],
+    queryKey: ['financePage', 'statsGeneral', enrichedPayments, enrichedPendingRegistrations, registrationTypes],
     queryFn: () => calculateStatsByCanal(),
     enabled: true,
     staleTime: 0,
@@ -311,7 +351,7 @@ export function FinancePage() {
   };
 
   const statsExterneQuery = useQuery({
-    queryKey: ['financePage', 'statsExterne', enrichedPayments, participants],
+    queryKey: ['financePage', 'statsExterne', enrichedPayments, enrichedPendingRegistrations, registrationTypes],
     queryFn: () => calculateStatsByCanal('externe'),
     enabled: true,
     staleTime: 0,
@@ -341,7 +381,7 @@ export function FinancePage() {
   };
 
   const statsAsapayQuery = useQuery({
-    queryKey: ['financePage', 'statsAsapay', enrichedPayments, participants],
+    queryKey: ['financePage', 'statsAsapay', enrichedPayments, enrichedPendingRegistrations, registrationTypes],
     queryFn: () => calculateStatsByCanal('asapay'),
     enabled: true,
     staleTime: 0,
@@ -398,15 +438,15 @@ Revenu total encaissé: ${formatCurrency(stats.revenuTotal)}
 
 DÉTAILS PAR CATÉGORIE
 ---------------------
-Membres: ${stats.totalMembres} × ${formatCurrency(PRIX.membre)} = ${formatCurrency(stats.revenuMembres)}
-Non-Membres: ${stats.totalNonMembres} × ${formatCurrency(PRIX.nonMembre)} = ${formatCurrency(stats.revenuNonMembres)}
+Membres: ${stats.totalMembres} × ${formatCurrency(getPriceForStatut('membre'))} = ${formatCurrency(stats.revenuMembres)}
+Non-Membres: ${stats.totalNonMembres} × ${formatCurrency(getPriceForStatut('non-membre'))} = ${formatCurrency(stats.revenuNonMembres)}
 VIP (Exonérés): ${stats.totalVIP}
 Speakers (Exonérés): ${stats.totalSpeakers}
 
 MONTANTS EN ATTENTE
 -------------------
-Membres en attente: ${stats.enAttenteMembres} × ${formatCurrency(PRIX.membre)} = ${formatCurrency(stats.aEncaisserMembres)}
-Non-Membres en attente: ${stats.enAttenteNonMembres} × ${formatCurrency(PRIX.nonMembre)} = ${formatCurrency(stats.aEncaisserNonMembres)}
+Membres en attente: ${stats.enAttenteMembres} × ${formatCurrency(getPriceForStatut('membre'))} = ${formatCurrency(stats.aEncaisserMembres)}
+Non-Membres en attente: ${stats.enAttenteNonMembres} × ${formatCurrency(getPriceForStatut('non-membre'))} = ${formatCurrency(stats.aEncaisserNonMembres)}
 Total à encaisser: ${formatCurrency(stats.aEncaisserTotal)}
 
 RÉPARTITION PAR MODE DE PAIEMENT
@@ -516,7 +556,7 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
               {canalType === 'externe' && (
                 <Badge className="bg-blue-100 text-blue-700 border-blue-300">
                   <Building2 className="w-3 h-3 mr-1" />
-                  Chèque, Espèce & Virement
+                  Espèce, Chèque & Virement
                 </Badge>
               )}
               {canalType === 'asapay' && (
@@ -669,7 +709,7 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
                   </div>
                   <div>
                     <h4 className="text-blue-900">Canal EXTERNE</h4>
-                    <p className="text-xs text-blue-600">Espèce & Virement</p>
+                    <p className="text-xs text-blue-600">Espèce, Chèque & Virement</p>
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -1003,7 +1043,7 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
                         <span className="text-gray-900">{item.mode}</span>
                         {isCheque && (
                           <Badge className="ml-2 bg-indigo-100 text-indigo-700 text-xs">
-                            Encaissement FANAF
+                            Total Paiements
                           </Badge>
                         )}
                       </div>
@@ -1036,16 +1076,16 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {isLoadingPayments && (
+          {(isLoadingPayments || isLoadingPending) && (
             <Badge className="bg-gray-100 text-gray-700 px-4 py-2">
-              <Activity className="w-4 h-4 mr-2" />
+              <Activity className="w-4 h-4 mr-2 animate-spin" />
               Chargement des données...
             </Badge>
           )}
-          {!isLoadingPayments && enrichedPayments.length > 0 && (
+          {!isLoadingPayments && !isLoadingPending && enrichedPayments.length > 0 && (
             <Badge className="bg-blue-100 text-blue-700 px-4 py-2">
               <Activity className="w-4 h-4 mr-2" />
-              Données API ({enrichedPayments.length} paiements)
+              Données API ({enrichedPayments.length} paiements, {enrichedPendingRegistrations.length} en attente)
             </Badge>
           )}
           <Badge className="bg-green-100 text-green-700 px-4 py-2">
@@ -1063,7 +1103,7 @@ Virement: ${formatCurrency(stats.paiementsParMode['virement'])}
             className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-600 data-[state=active]:to-orange-500 data-[state=active]:text-white rounded-lg transition-all"
           >
             <Coins className="w-4 h-4 mr-2" />
-            Encaissement FANAF
+            Total Paiements
           </TabsTrigger>
           <TabsTrigger 
             value="externe"
