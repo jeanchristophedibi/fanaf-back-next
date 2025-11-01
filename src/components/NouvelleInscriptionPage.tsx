@@ -601,6 +601,13 @@ export const NouvelleInscriptionPage = () => {
       return;
     }
     
+    // Vérifier que le type d'inscription est défini
+    if (!typeInscription || (typeInscription !== 'individuel' && typeInscription !== 'groupe')) {
+      toast.error('Type d\'inscription invalide. Veuillez réessayer.');
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -726,6 +733,8 @@ export const NouvelleInscriptionPage = () => {
           return;
         }
         
+        console.log('Préparation des données pour l\'API...');
+        
         // Préparer les données pour l'API
         const registrationData: any = {
           civility,
@@ -739,45 +748,59 @@ export const NouvelleInscriptionPage = () => {
           is_association: false,
         };
         
+        console.log('Données de base préparées:', { civility, first_name: registrationData.first_name, last_name: registrationData.last_name, email: registrationData.email });
+        
         // Ajouter passport_number seulement si présent
         if (participantPrincipal.numeroIdentite) {
           registrationData.passport_number = participantPrincipal.numeroIdentite;
+          console.log('Numéro d\'identité ajouté:', participantPrincipal.numeroIdentite);
         }
         // TODO: Ajouter un champ job_title dans le formulaire
 
         // Ajouter les informations de l'entreprise si disponibles
-        if (organisationData.nom) {
-          // Utiliser le même pays pour l'entreprise par défaut, ou permettre un pays différent si nécessaire
-          const companyCountryId = countryId; // Pour l'instant, utiliser le même pays que le participant
-          
-          // Valider et nettoyer le numéro de téléphone de l'entreprise si présent
-          let companyPhone: string | undefined;
-          if (organisationData.contact) {
-            try {
-              companyPhone = cleanPhoneNumber(organisationData.contact);
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : 'Le numéro de téléphone de l\'entreprise n\'est pas valide.');
-              setLoading(false);
-              return;
-            }
-          }
-          
-          // Vérifier que company_sector est présent si company_name est présent
+        // Pour les inscriptions individuelles, on ajoute les données d'organisation seulement si elles sont complètes
+        console.log('Vérification des données d\'organisation:', { 
+          nom: organisationData.nom, 
+          domaineActivite: organisationData.domaineActivite,
+          hasNom: !!organisationData.nom,
+          hasDomaineActivite: !!organisationData.domaineActivite
+        });
+        
+        // Pour les inscriptions individuelles, on ajoute les données d'entreprise seulement si nom ET domaineActivite sont remplis
+        // Sinon, on les ignore pour éviter de bloquer l'inscription
+        if (organisationData.nom && organisationData.nom.trim() !== '') {
+          // Si le nom est présent mais pas le domaine d'activité, on ne bloque pas mais on n'ajoute pas les données d'entreprise
           if (!organisationData.domaineActivite || organisationData.domaineActivite.trim() === '') {
-            toast.error('Le domaine d\'activité est obligatoire lorsque le nom de l\'entreprise est renseigné.');
-            setLoading(false);
-            return;
+            console.warn('Nom d\'entreprise fourni mais domaine d\'activité manquant - données d\'entreprise ignorées pour l\'inscription individuelle');
+          } else {
+            // Utiliser le même pays pour l'entreprise par défaut, ou permettre un pays différent si nécessaire
+            const companyCountryId = countryId; // Pour l'instant, utiliser le même pays que le participant
+            
+            // Valider et nettoyer le numéro de téléphone de l'entreprise si présent
+            let companyPhone: string | undefined;
+            if (organisationData.contact) {
+              try {
+                companyPhone = cleanPhoneNumber(organisationData.contact);
+              } catch (error) {
+                console.warn('Numéro de téléphone de l\'entreprise invalide, ignoré:', error);
+                // On continue sans le numéro de téléphone de l'entreprise plutôt que de bloquer
+              }
+            }
+            
+            console.log('Ajout des données d\'entreprise...');
+            registrationData.company_name = organisationData.nom;
+            registrationData.company_country_id = companyCountryId;
+            registrationData.company_sector = organisationData.domaineActivite.trim();
+            registrationData.company_email = organisationData.email;
+            registrationData.company_phone = companyPhone;
+            registrationData.company_address = organisationData.adresse;
+            console.log('Données d\'entreprise ajoutées:', { company_name: registrationData.company_name, company_sector: registrationData.company_sector });
+            // Ne pas ajouter company_website et company_description si undefined
+            // TODO: Ajouter un champ website dans le formulaire si nécessaire
+            // TODO: Ajouter un champ description dans le formulaire si nécessaire
           }
-          
-          registrationData.company_name = organisationData.nom;
-          registrationData.company_country_id = companyCountryId;
-          registrationData.company_sector = organisationData.domaineActivite.trim();
-          registrationData.company_email = organisationData.email;
-          registrationData.company_phone = companyPhone;
-          registrationData.company_address = organisationData.adresse;
-          // Ne pas ajouter company_website et company_description si undefined
-          // TODO: Ajouter un champ website dans le formulaire si nécessaire
-          // TODO: Ajouter un champ description dans le formulaire si nécessaire
+        } else {
+          console.log('Aucune information d\'entreprise à ajouter');
         }
         
         // Nettoyer les données : supprimer les valeurs undefined du payload
@@ -814,6 +837,17 @@ export const NouvelleInscriptionPage = () => {
           // Debug: log des données envoyées
           console.log('Données envoyées à l\'API simple:', JSON.stringify(cleanRegistrationData, null, 2));
           console.log('Appel API createRegistration...');
+          
+          // Vérification finale avant l'appel API
+          if (!cleanRegistrationData.registration_fee_id) {
+            throw new Error('registration_fee_id est requis pour finaliser l\'inscription');
+          }
+          if (!cleanRegistrationData.country_id) {
+            throw new Error('country_id est requis pour finaliser l\'inscription');
+          }
+          if (!cleanRegistrationData.email || !cleanRegistrationData.first_name || !cleanRegistrationData.last_name) {
+            throw new Error('Les informations du participant principal sont incomplètes');
+          }
           
           // Appel à l'API pour créer l'inscription
           const response = await fanafApi.createRegistration(cleanRegistrationData);
@@ -878,6 +912,7 @@ export const NouvelleInscriptionPage = () => {
             montantTotal: typeof montantAPI === 'string' ? parseFloat(montantAPI) : montantAPI
           });
 
+          setLoading(false); // Arrêter le chargement après succès
           return; // Sortir après succès de l'inscription individuelle
         } catch (apiError: any) {
           console.error('Erreur API lors de la création de l\'inscription:', apiError);
@@ -1109,17 +1144,26 @@ export const NouvelleInscriptionPage = () => {
         };
         
         // Ajouter passport_number seulement si présent
-        if (participantPrincipal.numeroIdentite) {
-          principalUser.passport_number = participantPrincipal.numeroIdentite;
+        if (participantPrincipal.numeroIdentite && participantPrincipal.numeroIdentite.trim() !== '') {
+          principalUser.passport_number = participantPrincipal.numeroIdentite.trim();
         }
-        // TODO: Ajouter un champ job_title dans le formulaire
+        // TODO: Ajouter un champ job_title dans le formulaire pour le participant principal
+        
+        console.log('Participant principal ajouté:', { 
+          first_name: principalUser.first_name, 
+          last_name: principalUser.last_name, 
+          email: principalUser.email,
+          is_lead: principalUser.is_lead,
+          has_passport: !!principalUser.passport_number
+        });
         
         users.push(principalUser);
         
         // Ajouter les participants du groupe (is_lead: false)
         participantsGroupe.forEach((p, index) => {
-          // Utiliser le contact de l'organisation ou celui du participant principal
-          const phoneToUse = organisationData.contact || participantPrincipal.telephone;
+          // Pour l'instant, utiliser le téléphone du participant principal pour tous les participants du groupe
+          // TODO: Ajouter un champ téléphone spécifique pour chaque participant du groupe dans le formulaire
+          const phoneToUse = participantPrincipal.telephone;
           
           let groupPhone: string;
           try {
@@ -1130,19 +1174,13 @@ export const NouvelleInscriptionPage = () => {
             return;
           }
           
-          // Générer un numéro de passeport unique pour chaque participant du groupe
-          // Utiliser le numéro du participant principal comme base et ajouter un suffixe unique
-          let passportNumber: string;
+          // Pour l'instant, utiliser le même numéro d'identité que le participant principal
+          // TODO: Ajouter un champ passport_number spécifique pour chaque participant du groupe dans le formulaire
+          let passportNumber: string | undefined;
           if (participantPrincipal.numeroIdentite) {
-            // Ajouter un suffixe unique basé sur l'index du participant (ex: ABC123 -> ABC123-001)
-            const baseNumber = participantPrincipal.numeroIdentite;
-            const suffix = String(index + 1).padStart(3, '0'); // 001, 002, 003, etc.
-            passportNumber = `${baseNumber}-${suffix}`;
-          } else {
-            // Si le participant principal n'a pas de numéro, générer un numéro temporaire
-            // TODO: Ajouter un champ passport_number spécifique pour chaque participant du groupe dans le formulaire
-            passportNumber = `TEMP-${Date.now()}-${index}`;
+            passportNumber = participantPrincipal.numeroIdentite;
           }
+          // Si le participant principal n'a pas de numéro, on ne l'ajoute pas (undefined sera filtré)
           
           const groupUser: any = {
             civility: mapCivility(defaultCivilityGroupe),
@@ -1152,10 +1190,15 @@ export const NouvelleInscriptionPage = () => {
             phone: groupPhone,
             country_id: countryId, // Utiliser le même pays que le participant principal (pourrait être étendu plus tard)
             is_lead: false,
-            passport_number: passportNumber,
           };
           
-          // TODO: Ajouter un champ job_title pour chaque participant du groupe
+          // Ajouter passport_number seulement si présent
+          if (passportNumber) {
+            groupUser.passport_number = passportNumber;
+          }
+          
+          // TODO: Ajouter un champ job_title pour chaque participant du groupe dans le formulaire
+          // job_title sera ajouté plus tard quand le champ sera disponible dans le formulaire
           
           users.push(groupUser);
         });
@@ -1169,22 +1212,42 @@ export const NouvelleInscriptionPage = () => {
         };
         
         // Ajouter les informations de l'entreprise si disponibles
-        if (organisationData.nom) {
+        if (organisationData.nom && organisationData.nom.trim() !== '') {
           // Utiliser le même pays pour l'entreprise par défaut
           bulkRegistrationData.company_name = organisationData.nom;
           bulkRegistrationData.company_country_id = countryId;
-          bulkRegistrationData.company_sector = organisationData.domaineActivite;
-          bulkRegistrationData.company_email = organisationData.email;
-          bulkRegistrationData.company_phone = organisationData.contact;
-          bulkRegistrationData.company_address = organisationData.adresse;
-          // Ne pas ajouter company_website et company_description si undefined
+          
+          // Vérifier que le secteur est présent
+          if (organisationData.domaineActivite && organisationData.domaineActivite.trim() !== '') {
+            bulkRegistrationData.company_sector = organisationData.domaineActivite.trim();
+          }
+          
+          // Valider et nettoyer le numéro de téléphone de l'entreprise si présent
+          if (organisationData.contact && organisationData.contact.trim() !== '') {
+            try {
+              bulkRegistrationData.company_phone = cleanPhoneNumber(organisationData.contact);
+            } catch (error) {
+              console.warn('Numéro de téléphone de l\'entreprise invalide, ignoré:', error);
+              // On continue sans le numéro de téléphone de l'entreprise plutôt que de bloquer
+            }
+          }
+          
+          if (organisationData.email && organisationData.email.trim() !== '') {
+            bulkRegistrationData.company_email = organisationData.email;
+          }
+          
+          if (organisationData.adresse && organisationData.adresse.trim() !== '') {
+            bulkRegistrationData.company_address = organisationData.adresse;
+          }
+          
           // TODO: Ajouter un champ website dans le formulaire si nécessaire
           // TODO: Ajouter un champ description dans le formulaire si nécessaire
         }
         
-        // Nettoyer les données : supprimer les valeurs undefined du payload
+        // Nettoyer les données : supprimer les valeurs undefined et null du payload
+        console.log('Nettoyage des données bulk...');
         const cleanBulkData = Object.fromEntries(
-          Object.entries(bulkRegistrationData).filter(([_, value]) => value !== undefined)
+          Object.entries(bulkRegistrationData).filter(([_, value]) => value !== undefined && value !== null)
         ) as {
           registration_fee_id: string;
           registration_type: 'group';
@@ -1210,12 +1273,13 @@ export const NouvelleInscriptionPage = () => {
           }>;
         };
         
-        // Nettoyer aussi les users : supprimer les champs undefined
+        // Nettoyer aussi les users : supprimer les champs undefined et null
         if (cleanBulkData.users) {
-          cleanBulkData.users = cleanBulkData.users.map((user: any) => 
-            Object.fromEntries(
-              Object.entries(user).filter(([_, value]) => value !== undefined)
-            ) as {
+          cleanBulkData.users = cleanBulkData.users.map((user: any) => {
+            const cleanedUser = Object.fromEntries(
+              Object.entries(user).filter(([_, value]) => value !== undefined && value !== null && value !== '')
+            );
+            return cleanedUser as {
               civility: string;
               first_name: string;
               last_name: string;
@@ -1225,13 +1289,29 @@ export const NouvelleInscriptionPage = () => {
               passport_number?: string;
               job_title?: string;
               is_lead: boolean;
-            }
-          );
+            };
+          });
         }
+        
+        console.log('Données bulk nettoyées:', {
+          registration_fee_id: cleanBulkData.registration_fee_id,
+          registration_type: cleanBulkData.registration_type,
+          is_association: cleanBulkData.is_association,
+          company_name: cleanBulkData.company_name,
+          users_count: cleanBulkData.users?.length || 0
+        });
         
         try {
           // Debug: log des données envoyées
           console.log('Données envoyées à l\'API bulk:', JSON.stringify(cleanBulkData, null, 2));
+          
+          // Vérification finale avant l'appel API
+          if (!cleanBulkData.registration_fee_id) {
+            throw new Error('registration_fee_id est requis pour finaliser l\'inscription groupée');
+          }
+          if (!cleanBulkData.users || cleanBulkData.users.length === 0) {
+            throw new Error('Au moins un participant est requis pour finaliser l\'inscription groupée');
+          }
           
           // Appel à l'API pour créer l'inscription groupée
           const response = await fanafApi.createBulkRegistration(cleanBulkData);
@@ -1330,6 +1410,7 @@ export const NouvelleInscriptionPage = () => {
             montantTotal: typeof montantAPI === 'string' ? parseFloat(montantAPI) : montantAPI
           });
 
+          setLoading(false); // Arrêter le chargement après succès
           return; // Sortir après succès de l'inscription groupée
         } catch (apiError: any) {
           console.error('Erreur API lors de la création de l\'inscription groupée:', apiError);

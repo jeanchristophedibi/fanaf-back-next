@@ -49,13 +49,30 @@ function SignInFormContent() {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* --- Logo à gauche --- */}
-      <div className="relative w-full lg:w-1/2 h-screen overflow-hidden order-2 lg:order-1 flex items-center justify-center bg-gradient-to-br from-orange-500 via-orange-400 to-blue-600">
-        <div className="flex flex-col items-center justify-center p-12 w-full">
-          <p className="text-white text-4xl font-bold">FANAF 2026</p>
-          <p className="text-white text-sm">9-11 février 2026</p>
-          {/* <p className="text-white text-sm">Accédez à votre espace d'administration</p> */}
-
-        </div>
+      <div className="relative w-full lg:w-1/2 h-screen overflow-hidden order-2 lg:order-1 flex items-center justify-center bg-gradient-to-br from-green-500 via-amber-400 to-green-600">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="flex flex-col items-center justify-center p-12 w-full"
+        >
+          <motion.p
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-white text-4xl font-bold mb-2"
+          >
+            FANAF 2026
+          </motion.p>
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="text-white text-sm"
+          >
+            9-11 février 2026
+          </motion.p>
+        </motion.div>
       </div>
 
       {/* --- Formulaire à droite --- */}
