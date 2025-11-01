@@ -6,9 +6,8 @@ import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Eye, Clock, User, Send, Inbox, FileText, Download } from 'lucide-react';import { getOrganisationById, getParticipantById, getReferentSponsor, getParticipantsByOrganisation } from './data/helpers';
 
-import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
-import { useFanafApi } from '../hooks/useFanafApi';
 import { getApiRequestsArray, normalizeStatus, extractRequester, extractReceiver, extractOrganisationName } from './data/networkingRecap';
+import { fanafApi } from '../services/fanafApi';
 import { AnimatedStat } from './AnimatedStat';
 import { HistoriqueRendezVousDialog } from './HistoriqueRendezVousDialog';
 import { List, type Column, type RowAction, type ListAction } from './list/List';
@@ -37,19 +36,44 @@ interface ParticipantWithStats {
 }
 
 export function HistoriqueDemandesPage() {
-  const { participants, rendezVous: rendezVousData } = useDynamicInscriptions({ includeRendezVous: true });
-  // Networking depuis l'API
-  const { networkingRequests, fetchNetworkingRequests } = useFanafApi({ autoFetch: false });
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [isHistoriqueOpen, setIsHistoriqueOpen] = useState(false);
 
-  // Charger les networking requests avec React Query
-  const { data: networkingRequestsData = [] } = useQuery({
+  // Charger les networking requests depuis l'API avec React Query
+  const { data: networkingRequestsData = [], isLoading: isLoadingRequests } = useQuery({
     queryKey: ['historiqueNetworkingRequests'],
     queryFn: async () => {
       try {
-        await fetchNetworkingRequests();
-        return networkingRequests;
+        let allRequests: any[] = [];
+        let currentPage = 1;
+        let hasMore = true;
+        const perPage = 100;
+
+        // Charger toutes les pages pour user et sponsor
+        for (const target of ['user', 'sponsor'] as const) {
+          hasMore = true;
+          currentPage = 1;
+
+          while (hasMore) {
+            const response = await fanafApi.getNetworkingRequests({
+              page: currentPage,
+              per_page: perPage,
+              target,
+            });
+
+            const requestsData = response?.data?.data || response?.data || [];
+            const pagination = response?.data || response?.meta || {};
+
+            allRequests = [...allRequests, ...requestsData];
+
+            // Vérifier s'il y a plus de pages
+            const lastPage = pagination.last_page || pagination.meta?.last_page || currentPage;
+            hasMore = currentPage < lastPage && requestsData.length === perPage;
+            currentPage++;
+          }
+        }
+
+        return allRequests;
       } catch (error) {
         console.error('Erreur lors du chargement des networking requests:', error);
         return [];
@@ -61,14 +85,13 @@ export function HistoriqueDemandesPage() {
     refetchOnReconnect: false,
   });
 
-  // Utiliser les données de la query si disponibles, sinon utiliser celles de useFanafApi
-  const effectiveNetworkingRequests = networkingRequestsData.length > 0 ? networkingRequestsData : networkingRequests;
+  const effectiveNetworkingRequests = networkingRequestsData;
 
   // Query pour calculer les statistiques pour chaque participant avec texte de recherche
   const participantsWithStatsQuery = useQuery({
-    queryKey: ['historiqueDemandes', 'participantsWithStats', effectiveNetworkingRequests, participants, rendezVousData],
+    queryKey: ['historiqueDemandes', 'participantsWithStats', effectiveNetworkingRequests],
     queryFn: () => {
-    // Si des données networking sont disponibles depuis l'API, les utiliser en priorité
+    // Utiliser uniquement les données networking depuis l'API
     const apiRequests: any[] = getApiRequestsArray(effectiveNetworkingRequests);
 
     if (apiRequests.length > 0) {
@@ -129,37 +152,8 @@ export function HistoriqueDemandesPage() {
       });
     }
 
-    // Fallback: ancienne logique locale
-    return participants.map(participant => {
-      const rendezVousEnvoyes = rendezVousData.filter(rdv => rdv.demandeurId === participant.id);
-      const rendezVousRecus = rendezVousData.filter(rdv => rdv.recepteurId === participant.id);
-      const totalRendezVous = rendezVousEnvoyes.length + rendezVousRecus.length;
-
-      const statsEnvoyes = {
-        acceptee: rendezVousEnvoyes.filter(rdv => rdv.statut === 'acceptée').length,
-        enAttente: rendezVousEnvoyes.filter(rdv => rdv.statut === 'en-attente').length,
-        occupee: rendezVousEnvoyes.filter(rdv => rdv.statut === 'occupée').length,
-      };
-
-      const statsRecus = {
-        acceptee: rendezVousRecus.filter(rdv => rdv.statut === 'acceptée').length,
-        enAttente: rendezVousRecus.filter(rdv => rdv.statut === 'en-attente').length,
-        occupee: rendezVousRecus.filter(rdv => rdv.statut === 'occupée').length,
-      };
-
-      const organisation = getOrganisationById(participant.organisationId);
-      const searchText = `${participant.nom} ${participant.prenom} ${participant.email} ${organisation?.nom || ''}`.toLowerCase();
-
-      return {
-        ...participant,
-        rendezVousEnvoyes: rendezVousEnvoyes.length,
-        rendezVousRecus: rendezVousRecus.length,
-        totalRendezVous,
-        statsEnvoyes,
-        statsRecus,
-        _searchText: searchText,
-      } as ParticipantWithStats;
-    });
+    // Si aucune donnée API n'est disponible, retourner un tableau vide
+    return [];
     },
     enabled: true,
     staleTime: 0,
@@ -169,11 +163,11 @@ export function HistoriqueDemandesPage() {
 
   // Query pour les statistiques globales
   const statsQuery = useQuery({
-    queryKey: ['historiqueDemandes', 'stats', rendezVousData, participantsWithStats, effectiveNetworkingRequests],
+    queryKey: ['historiqueDemandes', 'stats', effectiveNetworkingRequests, participantsWithStats],
     queryFn: () => {
-    const apiRequests: any[] = getApiRequestsArray(networkingRequests);
+    const apiRequests: any[] = getApiRequestsArray(effectiveNetworkingRequests);
 
-    const source = apiRequests.length > 0 ? apiRequests : rendezVousData;
+    const source = apiRequests;
 
     const totalDemandes = source.length;
     const demandesAcceptees = source.filter((rdv: any) => normalizeStatus(rdv.status || rdv.statut) === 'acceptée').length;
@@ -474,7 +468,7 @@ export function HistoriqueDemandesPage() {
             setSelectedParticipantId(null);
           }}
           participantId={selectedParticipantId}
-          rendezVousList={(getApiRequestsArray(networkingRequests).length > 0 ? getApiRequestsArray(networkingRequests) : rendezVousData) as any}
+          rendezVousList={getApiRequestsArray(effectiveNetworkingRequests) as any}
         />
       )}
     </div>
