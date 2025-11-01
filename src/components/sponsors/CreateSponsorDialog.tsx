@@ -8,10 +8,11 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Checkbox } from "../ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { UserPlus, User, Image as ImageIcon, Upload } from "lucide-react";
+import { UserPlus, User, Image as ImageIcon, Upload, Loader2 } from "lucide-react";
 import { Separator } from "../ui/separator";
 import { useFanafApi } from "../../hooks/useFanafApi";
 import { AlertCircle, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
 
 interface CreateSponsorDialogProps {
   open: boolean;
@@ -142,23 +143,62 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
 
       return sponsorResponse;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setSuccess(true);
+      
+      // Sauvegarder les données avant la réinitialisation pour le callback
+      const sponsorData = {
+        nom: formData.nomSponsor,
+        email: formData.emailSponsor,
+        type: formData.typeSponsor,
+        referent: referentData.nom.trim() !== '' ? {
+          nom: referentData.nom,
+          prenom: referentData.prenom,
+          email: referentData.email,
+          telephone: referentData.telephone,
+          fonction: referentData.fonction,
+        } : undefined,
+      };
+      
+      // Afficher une notification de succès
+      toast.success('Sponsor créé avec succès !', {
+        description: 'Le sponsor a été ajouté à la liste.',
+        duration: 3000,
+      });
+      
       // Invalider tous les caches liés aux sponsors pour rafraîchir les listes et widgets
-      queryClient.invalidateQueries({ queryKey: ['sponsors'] });
-      queryClient.invalidateQueries({ queryKey: ['listeSponsors'] });
-      queryClient.invalidateQueries({ queryKey: ['widgetSponsors'] });
-      // Reset form après un délai
-      setTimeout(() => {
-        resetForm();
-        setSuccess(false);
-        onOpenChange(false);
-      }, 2000);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['sponsors'] }),
+        queryClient.invalidateQueries({ queryKey: ['listeSponsors'] }),
+        queryClient.invalidateQueries({ queryKey: ['widgetSponsors'] }),
+        queryClient.invalidateQueries({ queryKey: ['sponsorTypes'] }),
+      ]);
+      
+      // Forcer le refetch des données liées aux sponsors
+      await queryClient.refetchQueries({ queryKey: ['sponsors'] });
+      await queryClient.refetchQueries({ queryKey: ['listeSponsors'] });
+      await queryClient.refetchQueries({ queryKey: ['widgetSponsors'] });
+      
+      // Appeler le callback si fourni (avant la réinitialisation)
+      if (onCreateSponsor) {
+        onCreateSponsor(sponsorData);
+      }
+      
+      // Reset form et fermer le dialog
+      resetForm();
+      onOpenChange(false);
     },
     onError: (err: any) => {
       const errorMessage = err?.message || err?.response?.data?.message || 'Erreur lors de la création du sponsor';
       setError(errorMessage);
       setSuccess(false);
+      
+      // Afficher une notification d'erreur
+      toast.error('Erreur lors de la création du sponsor', {
+        description: errorMessage,
+        duration: 5000,
+      });
+      
       console.error('Erreur détaillée:', err);
     },
   });
@@ -549,7 +589,14 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
             onClick={handleCreateSponsor}
             disabled={!isFormValid() || createSponsorMutation.isPending}
           >
-            {createSponsorMutation.isPending ? 'Création...' : 'Créer le sponsor'}
+            {createSponsorMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Création...
+              </>
+            ) : (
+              'Créer le sponsor'
+            )}
           </Button>
         </div>
       </DialogContent>
