@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Card } from './ui/card';
@@ -67,12 +69,14 @@ export function DocumentsParticipantsPage() {
 
   // Charger les participants finalisés depuis localStorage
   const [finalisedParticipantsIds, setFinalisedParticipantsIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
     const stored = localStorage.getItem('finalisedParticipantsIds');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
 
   // Fonction pour obtenir le nombre de remises d'un participant spécifique
   const getParticipantRemisesCount = (participantId: string): { badge: number; kit: number } => {
+    if (typeof window === 'undefined') return { badge: 0, kit: 0 };
     const remisesData = JSON.parse(localStorage.getItem('remisesDocuments') || '{}');
     const participantRemises = remisesData[participantId];
 
@@ -142,6 +146,7 @@ export function DocumentsParticipantsPage() {
     }
     
     // Sinon, chercher dans localStorage
+    if (typeof window === 'undefined') return { datePaiement: null, modePaiement: null };
     const finalisedPayments = JSON.parse(localStorage.getItem('finalisedPayments') || '{}');
     const paymentInfo = finalisedPayments[participant.id];
     
