@@ -5,6 +5,57 @@
 
 const API_BASE_URL = 'https://core-f26.asacitechnologies.com';
 
+/**
+ * Classe d'erreur personnalisée pour les erreurs de connexion
+ * Elle ne génère pas de stack trace verbeux pour réduire le bruit dans la console
+ */
+class LoginError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LoginError';
+    // Supprimer complètement la stack trace pour réduire le bruit
+    this.stack = undefined;
+    
+    // Empêcher l'affichage de la stack trace dans la console
+    // En définissant stack avant l'appel au constructeur parent
+    Object.defineProperty(this, 'stack', {
+      value: undefined,
+      writable: true,
+      configurable: true
+    });
+  }
+  
+  // Surcharger toString pour un affichage plus simple
+  toString() {
+    return this.message;
+  }
+}
+
+/**
+ * Classe d'erreur personnalisée pour les erreurs réseau
+ * Elle ne génère pas de stack trace verbeux pour réduire le bruit dans la console
+ */
+class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NetworkError';
+    // Supprimer complètement la stack trace pour réduire le bruit
+    this.stack = undefined;
+    
+    // Empêcher l'affichage de la stack trace dans la console
+    Object.defineProperty(this, 'stack', {
+      value: undefined,
+      writable: true,
+      configurable: true
+    });
+  }
+  
+  // Surcharger toString pour un affichage plus simple
+  toString() {
+    return this.message;
+  }
+}
+
 interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -89,14 +140,18 @@ class FanafApiService {
    */
   private async fetchApi<T>(
     endpoint: string,
-    options?: Omit<RequestInit, 'body'> & { body?: BodyInit | null | Record<string, any> }
+    options?: Omit<RequestInit, 'body'> & { body?: BodyInit | null | Record<string, any>; requireAuth?: boolean }
   ): Promise<T> {
     const token = this.getToken();
+    const requireAuth = options?.requireAuth !== false; // Par défaut, l'authentification est requise
     
     // Vérifier que le token est présent pour tous les endpoints
-    if (!token) {
+    if (requireAuth && !token) {
       throw new Error('Token d\'authentification manquant. Veuillez vous connecter.');
     }
+    
+    // Le token est toujours ajouté s'il est disponible (même pour les endpoints avec requireAuth: false)
+    // Cela permet à l'API de potentiellement offrir plus de données ou fonctionnalités pour les utilisateurs authentifiés
     
     // Déterminer si le body est FormData pour ne pas ajouter Content-Type dans ce cas
     const isFormData = options?.body instanceof FormData;
@@ -109,8 +164,10 @@ class FanafApiService {
       headers['Content-Type'] = 'application/json';
     }
 
-    // Toujours ajouter le token d'authentification
-    headers['Authorization'] = `Bearer ${token}`;
+    // Ajouter le token d'authentification si disponible
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     
     // Ajouter Accept pour FormData aussi
     if (isFormData && !headers['Accept']) {
@@ -141,14 +198,43 @@ class FanafApiService {
         body = rawBody;
       }
       
+      // Extraire requireAuth des options avant de les passer à fetch
+      const { requireAuth: _, ...fetchOptions } = options || {};
+      
+      // Détecter si c'est une tentative de connexion pour mieux gérer les erreurs réseau
+      const isLoginEndpoint = endpoint.includes('/password-login') || 
+                              endpoint.includes('/login') || 
+                              endpoint.includes('/signin') ||
+                              (endpoint.includes('/auth') && endpoint.includes('login'));
+      const isLoginAttempt = !requireAuth && isLoginEndpoint;
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
+        ...fetchOptions,
         headers,
         body,
       }).catch((fetchError) => {
         // Gérer les erreurs réseau (CORS, connexion refusée, timeout, etc.)
-        console.warn(`[fanafApi] Erreur réseau lors de l'appel à ${endpoint}:`, fetchError);
-        throw new Error(`Erreur de connexion: ${fetchError.message || 'Impossible de joindre le serveur'}`);
+        const errorMessage = fetchError.message || 'Impossible de joindre le serveur';
+        
+        // Créer un message d'erreur plus clair
+        let userMessage = 'Erreur de connexion réseau';
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+          userMessage = 'Impossible de joindre le serveur. Vérifiez votre connexion internet.';
+        } else if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+          userMessage = 'La connexion a expiré. Veuillez réessayer.';
+        } else if (errorMessage.includes('CORS') || errorMessage.includes('cors')) {
+          userMessage = 'Erreur de configuration serveur. Contactez l\'administrateur.';
+        }
+        
+        // Logger différemment selon le type d'endpoint
+        if (isLoginAttempt) {
+          console.warn(`[fanafApi] Erreur réseau lors de la connexion à ${endpoint}:`, errorMessage);
+        } else {
+          console.warn(`[fanafApi] Erreur réseau lors de l'appel à ${endpoint}:`, fetchError);
+        }
+        
+        // Utiliser NetworkError pour les erreurs réseau
+        throw new NetworkError(userMessage);
       });
 
       // Tenter de parser la réponse, même en cas d'erreur HTTP
@@ -211,12 +297,21 @@ class FanafApiService {
           errorMessage = `Erreur de validation: ${formatValidationErrors(responseData.errors)}`;
         } else if (responseData) {
           // Essayer différentes structures courantes
-          if (responseData.error) {
+          // Priorité 1: Gérer spécifiquement { success: false, message: "..." }
+          if (responseData.success === false && responseData.message) {
+            errorMessage = typeof responseData.message === 'string' 
+              ? responseData.message 
+              : String(responseData.message);
+          } else if (responseData.message) {
+            // Priorité 2: Vérifier message directement (structure standard)
+            errorMessage = typeof responseData.message === 'string'
+              ? responseData.message
+              : String(responseData.message);
+          } else if (responseData.error) {
+            // Priorité 3: Vérifier error (structure alternative)
             errorMessage = typeof responseData.error === 'string' 
               ? responseData.error 
               : responseData.error.message || String(responseData.error);
-          } else if (responseData.message) {
-            errorMessage = responseData.message;
           } else if (responseData.errors) {
             if (typeof responseData.errors === 'string') {
               errorMessage = responseData.errors;
@@ -235,12 +330,28 @@ class FanafApiService {
         // Ne pas logger comme erreur si c'est une erreur d'authentification attendue
         // (401/403 sont des erreurs métier normales)
         const isAuthError = response.status === 401 || response.status === 403;
-        if (!isAuthError) {
+        
+        // Détecter si c'est une tentative de connexion (endpoint public)
+        // Plus spécifique : détecter les endpoints de connexion/authentification
+        const isLoginEndpoint = endpoint.includes('/password-login') || 
+                                endpoint.includes('/login') || 
+                                endpoint.includes('/signin') ||
+                                (endpoint.includes('/auth') && endpoint.includes('login'));
+        const isLoginAttempt = !requireAuth && isLoginEndpoint;
+        
+        // Logger différemment selon le type d'erreur
+        if (isAuthError && isLoginAttempt) {
+          // Pour les tentatives de connexion échouées, logger en warn (moins bruyant)
+          console.warn(`Tentative de connexion échouée [${endpoint}]:`, errorMessage);
+        } else if (!isAuthError) {
+          // Pour les autres erreurs, logger en erreur
           console.error(`Erreur API [${endpoint}]:`, errorMessage);
         }
         
         // Pour les erreurs d'authentification, nettoyer le token et rediriger vers la connexion
-        if (isAuthError && typeof window !== 'undefined') {
+        // SAUF si c'est un endpoint public (requireAuth: false, comme la connexion)
+        // Les identifiants invalides sont normaux lors d'une tentative de connexion
+        if (isAuthError && requireAuth && typeof window !== 'undefined') {
           console.warn('Token invalide ou expiré, nettoyage de la session...');
           this.token = null;
           this.user = null;
@@ -255,11 +366,58 @@ class FanafApiService {
           }
         }
         
+        // Utiliser LoginError pour les tentatives de connexion (moins verbeux)
+        // Note: La console affichera quand même le message d'erreur car c'est le comportement standard de JavaScript
+        // mais la stack trace sera minimisée grâce à LoginError
+        if (isLoginAttempt && isAuthError) {
+          const loginErr = new LoginError(errorMessage);
+          throw loginErr;
+        }
+        
         throw new Error(errorMessage);
+      }
+
+      // Vérifier si la réponse contient success: false (certaines API retournent 200 avec success: false)
+      // Surtout pour les endpoints de connexion
+      if (responseData && typeof responseData === 'object' && responseData.success === false) {
+        // Détecter si c'est une tentative de connexion
+        const isLoginEndpoint = endpoint.includes('/password-login') || 
+                                endpoint.includes('/login') || 
+                                endpoint.includes('/signin') ||
+                                (endpoint.includes('/auth') && endpoint.includes('login'));
+        const isLoginAttempt = !requireAuth && isLoginEndpoint;
+        
+        // Extraire le message d'erreur
+        const errorMsg = responseData.message || 'Erreur lors de la requête';
+        
+        // Logger différemment selon le type d'endpoint
+        if (isLoginAttempt) {
+          console.warn(`Tentative de connexion échouée [${endpoint}]:`, errorMsg);
+          // Utiliser LoginError pour les tentatives de connexion échouées
+          throw new LoginError(errorMsg);
+        } else {
+          // Pour les autres endpoints, traiter comme une erreur normale
+          throw new Error(errorMsg);
+        }
       }
 
       return responseData as T;
     } catch (error) {
+      // Gérer les erreurs de connexion différemment
+      if (error instanceof LoginError) {
+        // Pour les erreurs de connexion, ne pas logger dans la console
+        // L'erreur sera gérée silencieusement par le formulaire
+        // et un message user-friendly sera affiché à l'utilisateur
+        throw error;
+      }
+      
+      // Gérer les erreurs réseau différemment
+      if (error instanceof NetworkError) {
+        // Pour les erreurs réseau, propager l'erreur sans re-logger
+        // Le message est déjà clair et user-friendly
+        throw error;
+      }
+      
       // Si c'est déjà une Error, la propager telle quelle
       if (error instanceof Error) {
         // Ne pas re-logger ici pour éviter les doublons (surtout 401/403)
@@ -302,6 +460,7 @@ class FanafApiService {
         email: email.trim(),
         password: password
       }),
+      requireAuth: false, // La connexion ne nécessite pas de token
     });
 
     // Gérer différentes structures de réponse possibles
@@ -387,6 +546,7 @@ class FanafApiService {
 
   /**
    * Récupérer toutes les companies/organisations
+   * Le token d'authentification est automatiquement ajouté via fetchApi
    */
   async getCompanies(params?: {
   page?: number;
@@ -400,6 +560,7 @@ class FanafApiService {
 
     const query = queryParams.toString();
     const endpoint = `/api/v1/admin/companies${query ? `?${query}` : ''}`;
+    // fetchApi ajoute automatiquement le token d'authentification dans le header Authorization
     return this.fetchApi<PaginatedResponse<any>>(endpoint);
   }
 
@@ -582,6 +743,7 @@ class FanafApiService {
 
   /**
    * Récupérer les inscriptions/participants
+   * Le token d'authentification est automatiquement ajouté via fetchApi
    * @param category - member | not_member | vip (optionnel - si non fourni, récupère tout)
    * @returns Promise avec la structure: { status: 200, message: string, data: [...] }
    */
@@ -597,6 +759,7 @@ class FanafApiService {
 
     // Utiliser l'endpoint /participants (remplace /registrations)
     const endpoint = `/api/v1/admin/participants${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    // fetchApi ajoute automatiquement le token d'authentification dans le header Authorization
     return this.fetchApi<any>(endpoint);
   }
 
@@ -684,6 +847,7 @@ class FanafApiService {
       valid_until: string;
     }>;
   }> {
+    // Le token sera ajouté automatiquement s'il est disponible
     return this.fetchApi<{
       status: number;
       message: string;
@@ -696,7 +860,7 @@ class FanafApiService {
         valid_from: string;
         valid_until: string;
       }>;
-    }>('/api/v1/registration-types');
+    }>('/api/v1/registration-types', { requireAuth: false });
   }
 
   /**
@@ -719,6 +883,7 @@ class FanafApiService {
       updated_at: string;
     }>;
   }> {
+    // Le token sera ajouté automatiquement s'il est disponible
     return this.fetchApi<{
       status: number;
       message: string;
@@ -734,7 +899,7 @@ class FanafApiService {
         created_at: string;
         updated_at: string;
       }>;
-    }>('/api/v1/common/countries');
+    }>('/api/v1/common/countries', { requireAuth: false });
   }
 
   // ==================== FLIGHT PLANS ====================

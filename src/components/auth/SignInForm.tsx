@@ -82,6 +82,15 @@ function SignInFormContent() {
             onSubmit={async (e) => {
               e.preventDefault();
               setError(null);
+              
+              // Validation du mot de passe (minimum 6 caractères)
+              if (password.length < 6) {
+                const errorMessage = 'Le mot de passe doit contenir au moins 6 caractères.';
+                setError(errorMessage);
+                toast.error(errorMessage);
+                return;
+              }
+              
               setLoading(true);
 
               try {
@@ -112,8 +121,31 @@ function SignInFormContent() {
                 }
                 router.push(redirect);
               } catch (err: any) {
-                console.error('Erreur de connexion détaillée:', err);
-                const errorMessage = err.message || 'Erreur de connexion. Vérifiez vos identifiants.';
+                // Extraire le message d'erreur de manière user-friendly
+                let errorMessage = err.message || 'Erreur de connexion. Vérifiez vos identifiants.';
+                
+                // Gérer les erreurs réseau différemment
+                if (err.name === 'NetworkError' || 
+                    errorMessage.includes('Impossible de joindre') ||
+                    errorMessage.includes('connexion réseau') ||
+                    errorMessage.includes('Failed to fetch')) {
+                  // Le message d'erreur réseau est déjà clair et user-friendly
+                  errorMessage = errorMessage;
+                } else if (errorMessage.toLowerCase().includes('identifiants invalides') || 
+                    errorMessage.toLowerCase().includes('invalid credentials') ||
+                    errorMessage.toLowerCase().includes('email ou mot de passe incorrect') ||
+                    errorMessage.toLowerCase().includes('unauthorized') ||
+                    errorMessage.toLowerCase().includes('forbidden')) {
+                  // Normaliser les messages d'erreur d'authentification
+                  errorMessage = 'Les identifiants saisis sont incorrects. Veuillez vérifier votre email et votre mot de passe.';
+                }
+                
+                // Ne pas logger les erreurs de connexion et réseau dans la console (erreurs attendues)
+                // Seulement logger pour les autres types d'erreurs
+                if (err.name !== 'LoginError' && err.name !== 'NetworkError') {
+                  console.error('Erreur de connexion détaillée:', err);
+                }
+                
                 setError(errorMessage);
                 toast.error(errorMessage);
               } finally {
@@ -151,6 +183,7 @@ function SignInFormContent() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  minLength={6}
                   disabled={loading}
                 />
                 <button
@@ -166,12 +199,17 @@ function SignInFormContent() {
                   )}
                 </button>
               </div>
+              {password.length > 0 && password.length < 6 && (
+                <p className="text-sm text-amber-600 mt-1">
+                  Le mot de passe doit contenir au moins 6 caractères.
+                </p>
+              )}
             </div>
 
             <Button 
               type="submit" 
               className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-70 disabled:cursor-not-allowed"
-              disabled={loading}
+              disabled={loading || password.length > 0 && password.length < 6}
             >
               {loading ? (
                 <>

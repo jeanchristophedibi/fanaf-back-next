@@ -152,8 +152,8 @@ export function DashboardHome({ userProfile = 'agence' }: DashboardHomeProps = {
                     <BarChart3 className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{inscriptionsCounts.membres + inscriptionsCounts.nonMembres}</div>
-                    <p className="text-xs text-muted-foreground mt-1">Membres + Non-membres</p>
+                    <div className="text-2xl font-bold">{inscriptionsCounts.membres + inscriptionsCounts.nonMembres} / {totals.participants}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Membres + Non-membres / Total inscrits</p>
                   </CardContent>
                 </Card>
 

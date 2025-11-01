@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -218,120 +218,110 @@ export const NouvelleInscriptionPage = () => {
     pays.toLowerCase().includes(paysRecherche.toLowerCase())
   );
 
-  // Query pour déterminer si le formulaire est en cours (pour confirmation de sortie)
-  const isFormDirtyQuery = useQuery({
-    queryKey: ['nouvelleInscription', 'isFormDirty', inscriptionFinalisee, etapeActuelle, participantPrincipal, organisationData, typeParticipant, typeInscription, participantsGroupe],
-    queryFn: () => {
-      if (inscriptionFinalisee) return false;
-      if (etapeActuelle > 1) return true;
-      const hasParticipant = Object.values(participantPrincipal).some((v) => String(v || '').length > 0 && v !== 'passeport');
-      const hasOrg = Object.values(organisationData).some((v) => String(v || '').length > 0);
-      const hasType = !!typeParticipant || !!typeInscription || participantsGroupe.length > 0;
-      return hasParticipant || hasOrg || hasType;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
+  // Calculer si le formulaire est en cours (pour confirmation de sortie)
+  const isFormDirty = useMemo(() => {
+    if (inscriptionFinalisee) return false;
+    if (etapeActuelle > 1) return true;
+    const hasParticipant = Object.values(participantPrincipal).some((v) => String(v || '').length > 0 && v !== 'passeport');
+    const hasOrg = Object.values(organisationData).some((v) => String(v || '').length > 0);
+    const hasType = !!typeParticipant || !!typeInscription || participantsGroupe.length > 0;
+    return hasParticipant || hasOrg || hasType;
+  }, [inscriptionFinalisee, etapeActuelle, participantPrincipal, organisationData, typeParticipant, typeInscription, participantsGroupe]);
 
-  const isFormDirty = isFormDirtyQuery.data ?? false;
+  // Ref pour permettre la navigation après confirmation
+  const navigationConfirmedRef = useRef(false);
 
-  // Query pour gérer les event listeners (confirmation lors de la fermeture/rafraîchissement/quit)
-  // Note: Les event listeners sont configurés via les handlers directs plutôt que useEffect
-  useQuery({
-    queryKey: ['nouvelleInscription', 'beforeUnload', isFormDirty],
-    queryFn: () => {
-      if (typeof window === 'undefined') return false;
-      const beforeUnload = (e: BeforeUnloadEvent) => {
-        if (!isFormDirty) return;
-        e.preventDefault();
-        e.returnValue = '';
-      };
-      if (isFormDirty) {
-        window.addEventListener('beforeunload', beforeUnload);
-      }
-      return true;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
+  // Event listener pour gérer la confirmation lors de la fermeture/rafraîchissement/quit
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isFormDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    
+    if (isFormDirty) {
+      window.addEventListener('beforeunload', beforeUnload);
+    }
+    
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload);
+    };
+  }, [isFormDirty]);
 
-  // Query pour intercepter la navigation Next.js
-  useQuery({
-    queryKey: ['nouvelleInscription', 'routeChange', isFormDirty],
-    queryFn: () => {
-      if (typeof window === 'undefined') return false;
-      const handleRouteChangeStart = (url: string) => {
-        if (!isFormDirty) return;
-        const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-        if (!ok) {
-          Router.events.emit('routeChangeError');
-          throw 'routeChange aborted by user';
-        }
-      };
-      Router.events.on('routeChangeStart', handleRouteChangeStart);
-      return true;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
+  // Intercepter la navigation Next.js (Pages Router)
+  // useEffect(() => {
+  //   if (typeof window === 'undefined') return;
+  //   if (!Router.events) return;
+  //   if (!isFormDirty) return;
+    
+  //   const handleRouteChangeStart = (url: string) => {
+  //     if (!isFormDirty) return;
+      
+  //     // Si la navigation a déjà été confirmée (par un autre handler), laisser passer
+  //     if (navigationConfirmedRef.current) {
+  //       navigationConfirmedRef.current = false; // Réinitialiser pour la prochaine fois
+  //       return;
+  //     }
+      
+  //     const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+  //     if (!ok) {
+  //       Router.events.emit('routeChangeError');
+  //       throw 'routeChange aborted by user';
+  //     }
+  //     // Marquer que la navigation a été confirmée
+  //     navigationConfirmedRef.current = true;
+  //   };
+    
+  //   Router.events.on('routeChangeStart', handleRouteChangeStart);
+    
+  //   return () => {
+  //     Router.events.off('routeChangeStart', handleRouteChangeStart);
+  //   };
+  // }, [isFormDirty]);
 
-  // Query pour intercepter les clics (App Router)
-  useQuery({
-    queryKey: ['nouvelleInscription', 'documentClick', isFormDirty, appRouter],
-    queryFn: () => {
-      if (typeof window === 'undefined' || typeof document === 'undefined') return false;
-      const onDocumentClick = (e: MouseEvent) => {
-        if (!isFormDirty) return;
-        const target = e.target as Element | null;
-        if (!target) return;
-        const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
-        if (anchor) {
-          const isExternal = anchor.origin !== window.location.origin;
-          if (isExternal || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
-          const href = anchor.getAttribute('href');
-          if (!href || href.startsWith('#') || href === window.location.pathname) return;
-          e.preventDefault();
-          const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-          if (ok) {
-            appRouter.push(href);
-          }
-          return;
-        }
-        const sidebarButton = target.closest('aside button');
-        if (sidebarButton) {
-          const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-          if (!ok) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-        }
-      };
-      document.addEventListener('click', onDocumentClick, true);
-      return true;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
-
-  // Query pour intercepter back/forward (popstate)
-  useQuery({
-    queryKey: ['nouvelleInscription', 'popstate', isFormDirty, pathname],
-    queryFn: () => {
-      if (typeof window === 'undefined') return false;
-      const onPopState = (e: PopStateEvent) => {
-        if (!isFormDirty) return;
-        const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
-        if (!ok) {
-          e.preventDefault?.();
-          history.pushState(null, '', pathname || window.location.pathname);
-        }
-      };
-      window.addEventListener('popstate', onPopState);
-      return true;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
+  // Intercepter les clics sur les liens (App Router)
+  // useEffect(() => {
+  //   if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  //   if (!isFormDirty) return;
+    
+  //   const onDocumentClick = (e: MouseEvent) => {
+  //     const target = e.target as Element | null;
+  //     if (!target) return;
+  //     const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
+  //     if (anchor) {
+  //       const isExternal = anchor.origin !== window.location.origin;
+  //       if (isExternal || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+  //       const href = anchor.getAttribute('href');
+  //       if (!href || href.startsWith('#') || href === window.location.pathname) return;
+        
+  //       // Empêcher la navigation par défaut et demander confirmation
+  //       e.preventDefault();
+  //       e.stopPropagation();
+        
+  //       const ok = window.confirm('Vous avez des modifications non enregistrées. Quitter cette page ?');
+  //       if (ok) {
+  //         // Marquer que la navigation a été confirmée pour éviter les confirmations multiples
+  //         navigationConfirmedRef.current = true;
+  //         // Naviguer vers la destination
+  //         appRouter.push(href);
+  //       }
+  //       return;
+  //     }
+  //     const sidebarButton = target.closest('aside button');
+  //     if (sidebarButton) {
+  //       // Note: Pour les boutons de sidebar, il faudrait connaître leur destination
+  //       // Pour l'instant, on laisse passer si confirmé
+  //     }
+  //   };
+    
+  //   document.addEventListener('click', onDocumentClick, true);
+    
+  //   return () => {
+  //     document.removeEventListener('click', onDocumentClick, true);
+  //   };
+  // }, [isFormDirty, appRouter]);
 
   const validerEtape1 = () => {
     if (!typeParticipant) {
@@ -732,7 +722,27 @@ export const NouvelleInscriptionPage = () => {
         console.log('Nettoyage des données...');
         const cleanRegistrationData = Object.fromEntries(
           Object.entries(registrationData).filter(([_, value]) => value !== undefined)
-        );
+        ) as {
+          civility: string;
+          first_name: string;
+          last_name: string;
+          email: string;
+          country_id: string;
+          phone: string;
+          registration_fee_id: string;
+          registration_type: 'individual' | 'group';
+          passport_number?: string;
+          job_title?: string;
+          is_association?: boolean;
+          company_name?: string;
+          company_country_id?: string;
+          company_sector?: string;
+          company_description?: string;
+          company_website?: string;
+          company_phone?: string;
+          company_email?: string;
+          company_address?: string;
+        };
         console.log('Données nettoyées:', cleanRegistrationData);
 
         try {
@@ -992,14 +1002,47 @@ export const NouvelleInscriptionPage = () => {
         // Nettoyer les données : supprimer les valeurs undefined du payload
         const cleanBulkData = Object.fromEntries(
           Object.entries(bulkRegistrationData).filter(([_, value]) => value !== undefined)
-        );
+        ) as {
+          registration_fee_id: string;
+          registration_type: 'group';
+          is_association?: boolean;
+          company_name?: string;
+          company_country_id?: string;
+          company_sector?: string;
+          company_description?: string;
+          company_website?: string;
+          company_phone?: string;
+          company_email?: string;
+          company_address?: string;
+          users: Array<{
+            civility: string;
+            first_name: string;
+            last_name: string;
+            email: string;
+            phone: string;
+            country_id: string;
+            passport_number?: string;
+            job_title?: string;
+            is_lead: boolean;
+          }>;
+        };
         
         // Nettoyer aussi les users : supprimer les champs undefined
         if (cleanBulkData.users) {
           cleanBulkData.users = cleanBulkData.users.map((user: any) => 
             Object.fromEntries(
               Object.entries(user).filter(([_, value]) => value !== undefined)
-            )
+            ) as {
+              civility: string;
+              first_name: string;
+              last_name: string;
+              email: string;
+              phone: string;
+              country_id: string;
+              passport_number?: string;
+              job_title?: string;
+              is_lead: boolean;
+            }
           );
         }
         
