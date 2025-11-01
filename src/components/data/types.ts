@@ -90,7 +90,7 @@ export interface ReservationStand {
   statut: 'confirmee' | 'en-attente' | 'annulee';
 }
 
-export type ProfilMembre = 'caissier' | 'agent-scan';
+export type ProfilMembre = 'cashier' | 'scan_agent' | 'agent_registration' | 'badge_operator';
 
 export interface MembreComite {
   id: string;

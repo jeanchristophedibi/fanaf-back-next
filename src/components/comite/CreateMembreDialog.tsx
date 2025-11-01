@@ -26,11 +26,8 @@ interface MembreFormData {
   profil: ProfilMembre | '';
 }
 
-// Mapping des profils français vers les rôles API
-const profilToRoleMap: Record<ProfilMembre, 'cashier' | 'scan_agent'> = {
-  'caissier': 'cashier',
-  'agent-scan': 'scan_agent',
-};
+// Les profils sont maintenant directement les rôles API
+// Pas besoin de mapping, on utilise directement les valeurs
 
 export function CreateMembreDialog({ open, onOpenChange, onSuccess }: CreateMembreDialogProps) {
   const { api } = useFanafApi();
@@ -106,6 +103,44 @@ export function CreateMembreDialog({ open, onOpenChange, onSuccess }: CreateMemb
     },
   });
 
+  // Fonction pour nettoyer et valider le numéro de téléphone
+  const cleanPhoneNumber = (phone: string): string => {
+    if (!phone || phone.trim() === '') {
+      throw new Error('Le numéro de téléphone est requis');
+    }
+    
+    // Vérifier que ce n'est pas du texte de placeholder ou d'exemple
+    const phoneLower = phone.toLowerCase().trim();
+    const placeholderWords = ['exemple', 'example', 'test', 'lorem', 'ipsum', 'dolor', 'eveniet', 'earum', 'placeholder', 'xx', 'xxx', 'aaaa', 'bbbb'];
+    const isPlaceholder = placeholderWords.some(word => phoneLower.includes(word));
+    
+    if (isPlaceholder) {
+      throw new Error('Le champ téléphone contient du texte invalide. Veuillez saisir un numéro de téléphone valide (ex: +225 01 23 45 67 89)');
+    }
+    
+    // Supprimer les espaces, tirets, parenthèses et autres caractères non numériques sauf +
+    let cleaned = phone.replace(/[\s\-\(\)\.]/g, '').trim();
+    
+    // S'assurer qu'il commence par + (code pays)
+    if (!cleaned.startsWith('+')) {
+      cleaned = `+${cleaned}`;
+    }
+    
+    // Vérifier que le numéro contient au moins 8 chiffres (code pays + numéro)
+    const digitsOnly = cleaned.replace(/\D/g, '');
+    if (digitsOnly.length < 8) {
+      throw new Error(`Le numéro de téléphone n'est pas valide. Il doit contenir au moins 8 chiffres (ex: +225 01 23 45 67 89)`);
+    }
+    
+    // Vérifier qu'il n'y a pas trop de caractères non numériques (signe d'un texte)
+    const nonDigits = cleaned.replace(/\d/g, '').replace('+', '').length;
+    if (nonDigits > 5) {
+      throw new Error(`Le numéro de téléphone semble contenir du texte invalide. Veuillez saisir uniquement des chiffres avec le code pays (ex: +225 01 23 45 67 89)`);
+    }
+    
+    return cleaned;
+  };
+
   const handleCreateMembre = () => {
     // Validation
     if (!formData.nom.trim()) {
@@ -131,13 +166,23 @@ export function CreateMembreDialog({ open, onOpenChange, onSuccess }: CreateMemb
 
     setError(null);
 
+    // Nettoyer et valider le numéro de téléphone
+    let cleanedPhone: string;
+    try {
+      cleanedPhone = cleanPhoneNumber(formData.telephone);
+    } catch (phoneError: any) {
+      setError(phoneError.message || 'Le numéro de téléphone n\'est pas valide');
+      return;
+    }
+
     // Convertir les données du formulaire vers le format API
+    // Les profils sont maintenant directement les rôles API
     const apiData = {
       first_name: formData.prenom.trim(),
       last_name: formData.nom.trim(),
       email: formData.email.trim(),
-      phone: formData.telephone.trim(),
-      role: profilToRoleMap[formData.profil as ProfilMembre],
+      phone: cleanedPhone,
+      role: formData.profil as 'cashier' | 'agent_registration' | 'badge_operator' | 'scan_agent',
     };
 
     createMembreMutation.mutate(apiData);
@@ -236,8 +281,10 @@ export function CreateMembreDialog({ open, onOpenChange, onSuccess }: CreateMemb
                 <SelectValue placeholder="Sélectionnez un profil" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="caissier">Caissier</SelectItem>
-                <SelectItem value="agent-scan">Agent de Scan</SelectItem>
+                <SelectItem value="cashier">Caissier</SelectItem>
+                <SelectItem value="scan_agent">Agent de scan</SelectItem>
+                <SelectItem value="agent_registration">Agent d'inscription</SelectItem>
+                <SelectItem value="badge_operator">Agent de badge</SelectItem>
               </SelectContent>
             </Select>
           </div>

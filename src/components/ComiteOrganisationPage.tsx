@@ -10,18 +10,75 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Search, Filter, Eye, Download, UserPlus, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ProfilMembre, MembreComite } from './data/types';
 import { CreateMembreDialog } from './comite/CreateMembreDialog';
+import { useFanafApi } from '../hooks/useFanafApi';
 
 const profilColors = {
-  'caissier': 'bg-blue-100 text-blue-800',
-  'agent-scan': 'bg-purple-100 text-purple-800',
+  'cashier': 'bg-blue-100 text-blue-800',
+  'scan_agent': 'bg-purple-100 text-purple-800',
+  'agent_registration': 'bg-green-100 text-green-800',
+  'badge_operator': 'bg-yellow-100 text-yellow-800',
 };
 
 const profilLabels = {
-  'caissier': 'Caissier',
-  'agent-scan': 'Agent de Scan',
+  'cashier': 'Caissier',
+  'scan_agent': 'Agent de scan',
+  'agent_registration': 'Agent d\'inscription',
+  'badge_operator': 'Agent de badge',
 };
 
+/**
+ * Mappe les données d'utilisateur de l'API vers le format MembreComite
+ */
+function mapApiUserToMembreComite(apiData: any, defaultProfil?: ProfilMembre): MembreComite {
+  // Mapper le rôle API vers le profil
+  const mapRoleToProfil = (role: string): ProfilMembre => {
+    if (role === 'cashier') return 'cashier';
+    if (role === 'scan_agent') return 'scan_agent';
+    if (role === 'agent_registration') return 'agent_registration';
+    if (role === 'badge_operator') return 'badge_operator';
+    // Par défaut, utiliser le profil fourni ou 'cashier'
+    return defaultProfil || 'cashier';
+  };
+
+  const role = apiData.role || apiData.user_role || apiData.type || '';
+  const profil = mapRoleToProfil(role);
+
+  // Générer un ID déterministe basé sur les données de l'utilisateur pour éviter les erreurs d'hydratation
+  const generateDeterministicId = (userData: any): string => {
+    const id = userData.id || userData.user_id;
+    if (id) return String(id);
+    
+    // Utiliser l'email comme base pour l'ID si disponible
+    const email = userData.email || '';
+    if (email) {
+      const emailKey = email.toLowerCase().trim().replace(/[^a-zA-Z0-9_]/g, '_');
+      return `user_email_${emailKey}`;
+    }
+    
+    // Sinon, utiliser un hash déterministe basé sur les données
+    const hashData = `${userData.first_name || userData.prenom || ''}_${userData.last_name || userData.nom || ''}_${role}`;
+    let hash = 0;
+    for (let i = 0; i < hashData.length; i++) {
+      const char = hashData.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return `user_hash_${Math.abs(hash).toString(36)}`;
+  };
+
+  return {
+    id: generateDeterministicId(apiData),
+    nom: apiData.last_name || apiData.nom || apiData.name?.split(' ')[0] || '',
+    prenom: apiData.first_name || apiData.prenom || apiData.name?.split(' ').slice(1).join(' ') || '',
+    email: apiData.email || '',
+    telephone: apiData.phone || apiData.telephone || apiData.contact || '',
+    profil,
+    dateCreation: apiData.created_at || apiData.date_creation || apiData.dateCreation || new Date().toISOString(),
+  };
+}
+
 export function ComiteOrganisationPage() {
+  const { api } = useFanafApi();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProfil, setSelectedProfil] = useState<string>('tous');
@@ -29,86 +86,100 @@ export function ComiteOrganisationPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Query pour charger les membres du comité depuis l'API quand l'endpoint sera disponible
+  // Query pour charger les membres du comité depuis l'API
   const membresComiteQuery = useQuery({
     queryKey: ['comiteOrganisation', 'membres'],
     queryFn: async () => {
-      // TODO: Charger depuis l'API quand l'endpoint sera disponible
-      // Pour l'instant, retourner un tableau vide
-      return [] as MembreComite[];
+      try {
+        // Charger les agents de scan et le staff
+        const [scanAgentsResponse, staffResponse] = await Promise.all([
+          api.getScanAgents(),
+          api.getStaff(),
+        ]);
+
+        // Extraire les données des réponses
+        const scanAgents = Array.isArray(scanAgentsResponse?.data?.data) 
+          ? scanAgentsResponse.data.data 
+          : Array.isArray(scanAgentsResponse?.data) 
+          ? scanAgentsResponse.data 
+          : Array.isArray(scanAgentsResponse) 
+          ? scanAgentsResponse 
+          : [];
+        
+        const staff = Array.isArray(staffResponse?.data?.data) 
+          ? staffResponse.data.data 
+          : Array.isArray(staffResponse?.data) 
+          ? staffResponse.data 
+          : Array.isArray(staffResponse) 
+          ? staffResponse 
+          : [];
+
+        // Créer un Set des IDs des agents de scan pour éviter les doublons
+        const scanAgentIds = new Set(scanAgents.map((agent: any) => agent.id || agent.user_id || '').filter(Boolean));
+
+        // Combiner les deux listes, en évitant les doublons
+        const allUsers = [...scanAgents];
+        staff.forEach((user: any) => {
+          const userId = user.id || user.user_id || '';
+          // Ne pas ajouter si déjà présent dans scanAgents
+          if (!scanAgentIds.has(userId)) {
+            allUsers.push(user);
+          }
+        });
+
+        // Mapper vers MembreComite
+        const membres = allUsers.map((user: any) => {
+          // Pour les agents de scan, forcer le profil scan_agent
+          const userId = user.id || user.user_id || '';
+          const isFromScanAgents = scanAgentIds.has(userId) || user.role === 'scan_agent';
+          return mapApiUserToMembreComite(user, isFromScanAgents ? 'scan_agent' : undefined);
+        });
+
+        // Supprimer les doublons basés sur l'ID
+        const uniqueMembres = Array.from(
+          new Map(membres.map(m => [m.id, m])).values()
+        );
+
+        return uniqueMembres;
+      } catch (error) {
+        console.error('Erreur lors du chargement des membres du comité:', error);
+        return [] as MembreComite[];
+      }
     },
     enabled: true,
-    staleTime: 0,
+    staleTime: 30 * 1000, // Cache pendant 30 secondes
+    gcTime: 5 * 60 * 1000, // Garder en cache pendant 5 minutes
   });
 
   const membresComite = membresComiteQuery.data ?? [];
 
-  // Query pour filtrer les membres
-  const filteredMembresQuery = useQuery({
-    queryKey: ['comiteOrganisation', 'filtered', membresComite, searchTerm, selectedProfil],
-    queryFn: () => {
-      return membresComite.filter((membre: MembreComite) => {
-        const matchesSearch = 
-          membre.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          membre.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          membre.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          membre.telephone.includes(searchTerm);
-        
-        const matchesProfil = selectedProfil === 'tous' || membre.profil === selectedProfil;
-        
-        return matchesSearch && matchesProfil;
-      });
-    },
-    enabled: true,
-    staleTime: 0,
+  // Filtrer les membres
+  const filteredMembres = membresComite.filter((membre: MembreComite) => {
+    const matchesSearch = 
+      membre.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      membre.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      membre.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      membre.telephone.includes(searchTerm);
+    
+    const matchesProfil = selectedProfil === 'tous' || membre.profil === selectedProfil;
+    
+    return matchesSearch && matchesProfil;
   });
-
-  const filteredMembres = filteredMembresQuery.data ?? [];
 
   // Pagination
   const totalPages = Math.ceil(filteredMembres.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedMembres = filteredMembres.slice(startIndex, endIndex);
 
-  // Query pour paginer
-  const paginatedMembresQuery = useQuery({
-    queryKey: ['comiteOrganisation', 'paginated', filteredMembres, currentPage, itemsPerPage],
-    queryFn: () => {
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      return filteredMembres.slice(startIndex, endIndex);
-    },
-    enabled: true,
-    staleTime: 0,
-  });
-
-  const paginatedMembres = paginatedMembresQuery.data ?? [];
-
-  // Query pour réinitialiser la page quand les filtres changent
-  useQuery({
-    queryKey: ['comiteOrganisation', 'resetPage', searchTerm, selectedProfil],
-    queryFn: () => {
-      queryClient.setQueryData(['comiteOrganisation', 'currentPage'], 1);
-      setCurrentPage(1);
-      return true;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
-
-  // Query pour les statistiques
-  const statsQuery = useQuery({
-    queryKey: ['comiteOrganisation', 'stats', membresComite],
-    queryFn: () => {
-      const total = membresComite.length;
-      const caissiers = membresComite.filter((m: MembreComite) => m.profil === 'caissier').length;
-      const agentsScan = membresComite.filter((m: MembreComite) => m.profil === 'agent-scan').length;
-      
-      return { total, caissiers, agentsScan };
-    },
-    enabled: true,
-    staleTime: 0,
-  });
-
-  const stats = statsQuery.data ?? { total: 0, caissiers: 0, agentsScan: 0 };
+  // Calculer les statistiques
+  const stats = {
+    total: membresComite.length,
+    caissiers: membresComite.filter((m: MembreComite) => m.profil === 'cashier').length,
+    agentsScan: membresComite.filter((m: MembreComite) => m.profil === 'scan_agent').length,
+    agentsRegistration: membresComite.filter((m: MembreComite) => m.profil === 'agent_registration').length,
+    badgeOperators: membresComite.filter((m: MembreComite) => m.profil === 'badge_operator').length,
+  };
 
   const handleMembreCreated = () => {
     // Rafraîchir la liste des membres
@@ -222,8 +293,10 @@ export function ComiteOrganisationPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="tous">Tous les profils</SelectItem>
-                  <SelectItem value="caissier">Caissier</SelectItem>
-                  <SelectItem value="agent-scan">Agent de Scan</SelectItem>
+                  <SelectItem value="scan_agent">Agent de scan</SelectItem>
+                  <SelectItem value="agent_registration">Agent d'inscription</SelectItem>
+                  <SelectItem value="badge_operator">Agent de badge</SelectItem>
+                  <SelectItem value="cashier">Caissier</SelectItem>
                 </SelectContent>
               </Select>
             </div>

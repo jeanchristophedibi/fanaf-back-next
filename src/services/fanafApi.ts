@@ -1088,6 +1088,22 @@ class FanafApiService {
       throw error;
     }
   }
+
+  /**
+   * Récupérer les agents de scan
+   * @returns Promise avec la liste des agents de scan
+   */
+  async getScanAgents(): Promise<any> {
+    return this.fetchApi<any>('/api/v1/admin/users/scan-agents');
+  }
+
+  /**
+   * Récupérer le staff (tous les membres du comité d'organisation)
+   * @returns Promise avec la liste du staff
+   */
+  async getStaff(): Promise<any> {
+    return this.fetchApi<any>('/api/v1/admin/users/staff');
+  }
 }
 
 export const fanafApi = new FanafApiService();
