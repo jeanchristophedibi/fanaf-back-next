@@ -103,6 +103,7 @@ export const NouvelleInscriptionPage = () => {
   
   // État pour les erreurs de validation
   const [telephoneError, setTelephoneError] = useState<string | null>(null);
+  const [isCodeValidated, setIsCodeValidated] = useState(false);
   
   // Fonction de validation en temps réel du téléphone
   const validateTelephone = (phone: string): string | null => {
@@ -228,6 +229,7 @@ export const NouvelleInscriptionPage = () => {
   
   const handleOrganisationSelect = (orgId: string) => {
     setOrganisationSelectionnee(orgId);
+    setIsCodeValidated(false); // Réinitialiser la validation du code quand on change d'organisation
     const orgTrouvee = organisationsMembres.find(org => org.id === orgId);
     if (orgTrouvee) {
       const orgAny = orgTrouvee as any;
@@ -410,26 +412,44 @@ export const NouvelleInscriptionPage = () => {
     }
 
     toast.success('Type d\'inscription validé');
+    setIsCodeValidated(false); // Réinitialiser la validation du code quand on arrive à l'étape 4
     setEtapeActuelle(4);
   };
 
   const validerEtape4 = () => {
+    console.log('validerEtape4 appelé, typeParticipant:', typeParticipant);
+    console.log('organisationSelectionnee:', organisationSelectionnee);
+    console.log('organisationData:', organisationData);
+    console.log('isCodeValidated:', isCodeValidated);
+    
     if (typeParticipant === 'membre') {
       if (!organisationSelectionnee) {
+        console.log('Erreur: aucune organisation sélectionnée');
         toast.error('Veuillez sélectionner une organisation membre');
         return;
       }
       
-      if (!organisationData.codeOrganisation) {
+      if (!organisationData.codeOrganisation || organisationData.codeOrganisation.trim() === '') {
+        console.log('Erreur: code organisation manquant');
         toast.error('Veuillez saisir le code de l\'organisation');
         return;
       }
       
-      const orgTrouvee = organisationsMembres.find(org => org.id === organisationSelectionnee);
-      if (orgTrouvee && (orgTrouvee as any).codeOrganisation !== organisationData.codeOrganisation) {
-        toast.error('Le code de l\'organisation est incorrect');
+      // Vérifier que le code fait bien 5 caractères
+      if (organisationData.codeOrganisation.length !== 5) {
+        console.log('Erreur: code organisation doit faire 5 caractères');
+        toast.error('Le code d\'organisation doit contenir exactement 5 caractères');
         return;
       }
+      
+      // Vérifier que le code a été validé par l'API
+      if (!isCodeValidated) {
+        console.log('Erreur: code organisation non validé');
+        toast.error('Veuillez attendre la validation du code d\'association');
+        return;
+      }
+      
+      console.log('Validation membre réussie, passage à l\'étape 5');
     } else {
       if (!organisationData.nom) {
         toast.error('Veuillez saisir le nom de l\'organisation');
@@ -686,11 +706,17 @@ export const NouvelleInscriptionPage = () => {
         
         // Valider et nettoyer le numéro de téléphone du participant principal
         console.log('Validation du numéro de téléphone...');
+        console.log('Téléphone brut:', participantPrincipal.telephone);
         let participantPhone: string;
         try {
           participantPhone = cleanPhoneNumber(participantPrincipal.telephone);
           console.log('Numéro de téléphone validé:', participantPhone);
           setTelephoneError(null); // Réinitialiser l'erreur si la validation réussit
+          
+          // Vérifier que le téléphone nettoyé n'est pas vide
+          if (!participantPhone || participantPhone.trim() === '') {
+            throw new Error('Le numéro de téléphone ne peut pas être vide après nettoyage.');
+          }
         } catch (error) {
           console.error('Erreur validation téléphone:', error);
           const errorMessage = error instanceof Error ? error.message : 'Le numéro de téléphone du participant principal n\'est pas valide.';
@@ -736,9 +762,16 @@ export const NouvelleInscriptionPage = () => {
             }
           }
           
+          // Vérifier que company_sector est présent si company_name est présent
+          if (!organisationData.domaineActivite || organisationData.domaineActivite.trim() === '') {
+            toast.error('Le domaine d\'activité est obligatoire lorsque le nom de l\'entreprise est renseigné.');
+            setLoading(false);
+            return;
+          }
+          
           registrationData.company_name = organisationData.nom;
           registrationData.company_country_id = companyCountryId;
-          registrationData.company_sector = organisationData.domaineActivite;
+          registrationData.company_sector = organisationData.domaineActivite.trim();
           registrationData.company_email = organisationData.email;
           registrationData.company_phone = companyPhone;
           registrationData.company_address = organisationData.adresse;
@@ -845,6 +878,12 @@ export const NouvelleInscriptionPage = () => {
           return; // Sortir après succès de l'inscription individuelle
         } catch (apiError: any) {
           console.error('Erreur API lors de la création de l\'inscription:', apiError);
+          console.error('Structure de l\'erreur:', {
+            message: apiError?.message,
+            response: apiError?.response,
+            status: apiError?.status,
+            data: apiError?.data,
+          });
           
           // Extraire un message d'erreur plus détaillé
           let errorMessage = 'Erreur lors de la création de l\'inscription via l\'API';
@@ -857,28 +896,38 @@ export const NouvelleInscriptionPage = () => {
             errorData = apiError.response.data;
           } 
           // Parfois l'erreur peut être directement parsée
+          else if (apiError?.response) {
+            errorData = apiError.response;
+          }
           else if (typeof apiError === 'object' && apiError !== null) {
             // Chercher directement dans l'objet d'erreur
             if ('data' in apiError) {
               errorData = apiError.data;
+            } else if ('errors' in apiError) {
+              errorData = apiError;
             }
           }
+          
+          console.log('errorData extrait:', errorData);
           
           if (errorData) {
             // Structure JSON API avec errors array
             if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
-              const firstError = errorData.errors[0];
-              if (firstError.detail) {
-                errorMessage = firstError.detail;
-              } else if (firstError.title) {
-                errorMessage = firstError.title;
-              } else if (firstError.message) {
-                errorMessage = firstError.message;
-              }
+              // Combiner tous les messages d'erreur
+              const errorMessages = errorData.errors.map((err: any) => {
+                if (err.detail && typeof err.detail === 'object') {
+                  // Si detail est un objet, extraire les clés-valeurs
+                  return Object.entries(err.detail)
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(', ');
+                }
+                return err.detail || err.title || err.message || String(err);
+              });
+              errorMessage = errorMessages.join('. ');
             } 
             // Structure standard avec message
             else if (errorData.message) {
-              errorMessage = errorData.message;
+              errorMessage = typeof errorData.message === 'string' ? errorData.message : String(errorData.message);
             }
             // Structure avec error
             else if (errorData.error) {
@@ -890,29 +939,21 @@ export const NouvelleInscriptionPage = () => {
           // Parfois le message peut être une chaîne JSON qu'il faut parser
           if (!errorMessage || errorMessage === 'Erreur lors de la création de l\'inscription via l\'API') {
             if (apiError?.message) {
-              let parsedMessage = apiError.message;
-              
-              // Essayer de parser si c'est une chaîne JSON
               try {
-                if (typeof parsedMessage === 'string' && parsedMessage.trim().startsWith('{')) {
-                  const parsed = JSON.parse(parsedMessage);
-                  if (parsed.errors && Array.isArray(parsed.errors) && parsed.errors.length > 0) {
-                    const firstError = parsed.errors[0];
-                    parsedMessage = firstError.detail || firstError.title || parsedMessage;
-                  } else if (parsed.message) {
-                    parsedMessage = parsed.message;
-                  }
+                const parsed = JSON.parse(apiError.message);
+                if (parsed.message) {
+                  errorMessage = parsed.message;
+                } else if (parsed.error) {
+                  errorMessage = parsed.error;
                 }
-              } catch (e) {
-                // Si le parsing échoue, utiliser le message tel quel
+              } catch {
+                errorMessage = apiError.message;
               }
-              
-              errorMessage = parsedMessage;
             }
           }
           
           // Améliorer le message pour les erreurs de clé étrangère
-          if (errorMessage.includes('Foreign key violation') || errorMessage.includes('foreign key constraint')) {
+          if (errorMessage && (errorMessage.includes('Foreign key violation') || errorMessage.includes('foreign key constraint'))) {
             if (errorMessage.includes('created_by')) {
               errorMessage = 'Erreur d\'authentification: Votre session semble invalide. Veuillez vous déconnecter et vous reconnecter, puis réessayer.';
             } else {
@@ -920,12 +961,13 @@ export const NouvelleInscriptionPage = () => {
             }
           }
           
-          toast.error(errorMessage, {
+          console.error('Message d\'erreur final:', errorMessage);
+          toast.error(errorMessage || 'Une erreur est survenue lors de la finalisation de l\'inscription.', {
             duration: 6000, // Afficher plus longtemps pour les erreurs importantes
           });
           
           setLoading(false);
-          return; // Ne pas re-lancer l'erreur, on a déjà affiché le message
+          return;
         }
       }
 
@@ -1540,6 +1582,7 @@ export const NouvelleInscriptionPage = () => {
                   organisationsOptions={organisationsMembres.map(o => ({ id: o.id, nom: o.nom }))}
                   selectedOrganisationId={organisationSelectionnee}
                   onSelectOrganisation={handleOrganisationSelect}
+                  onCodeValidated={setIsCodeValidated}
                 />
                     )}
               {etapeActuelle === 5 && (

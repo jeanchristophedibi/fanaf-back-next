@@ -440,21 +440,30 @@ class FanafApiService {
           }
         }
         
+        // Créer une erreur avec les données de réponse pour permettre un accès aux détails
+        const apiError: any = new Error(errorMessage);
+        apiError.status = response.status;
+        apiError.response = responseData; // Stocker les données complètes de la réponse
+        
         // Utiliser des classes d'erreur personnalisées pour réduire le bruit dans la console
         // Note: La console affichera quand même le message d'erreur car c'est le comportement standard de JavaScript
         // mais la stack trace sera minimisée grâce aux classes d'erreur personnalisées
         if (isLoginAttempt && isAuthError) {
           const loginErr = new LoginError(errorMessage);
+          (loginErr as any).status = response.status;
+          (loginErr as any).response = responseData;
           throw loginErr;
         }
         
         // Utiliser ServerError pour les erreurs serveur avec HTML (500+)
         if (isServerError && isHtmlResponse) {
           const serverErr = new ServerError(errorMessage);
+          (serverErr as any).status = response.status;
+          (serverErr as any).response = responseData;
           throw serverErr;
         }
         
-        throw new Error(errorMessage);
+        throw apiError;
       }
 
       // Vérifier si la réponse contient success: false (certaines API retournent 200 avec success: false)
@@ -1117,6 +1126,73 @@ class FanafApiService {
    */
   async getStaff(): Promise<any> {
     return this.fetchApi<any>('/api/v1/admin/users/staff');
+  }
+
+  /**
+   * Valider le code d'association pour un membre
+   * @param associationCode Code de l'association (5 caractères)
+   * @param companyId ID de l'entreprise/organisation
+   * @returns Promise avec le résultat de validation
+   */
+  async validateAssociationCode(associationCode: string, companyId: string): Promise<{ is_valid: boolean; errorMessage?: string }> {
+    try {
+      const response = await this.fetchApi<{ status: number; message: string; data: { is_valid: boolean } }>(
+        '/api/v1/registrations/validate-association-code',
+        {
+          method: 'POST',
+          body: {
+            association_code: associationCode,
+            company_id: companyId,
+          },
+        }
+      );
+      
+      return response.data || { is_valid: false };
+    } catch (error: any) {
+      // Si erreur 404, le code est invalide (format d'erreur de l'API)
+      // Le format d'erreur peut être : { errors: [{ status: 404, title: "...", detail: { is_valid: false } }] }
+      
+      // Accéder aux données d'erreur de différentes façons possibles
+      let errorData = null;
+      
+      // Essayer error.response (structure standard)
+      if (error?.response) {
+        errorData = error.response;
+      } 
+      // Essayer error directement s'il contient errors
+      else if (error?.errors) {
+        errorData = error;
+      }
+      // Essayer error.data
+      else if (error?.data) {
+        errorData = error.data;
+      }
+      
+      // Vérifier si c'est une erreur 404 avec le format spécifique
+      const is404 = error?.status === 404 || errorData?.status === 404 || 
+                   (errorData?.errors && Array.isArray(errorData.errors) && 
+                    errorData.errors.some((e: any) => e?.status === 404));
+      
+      if (is404) {
+        // Vérifier si c'est le format d'erreur spécifique avec errors array
+        if (errorData?.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+          const firstError = errorData.errors[0];
+          
+          // Si le title est spécifique, utiliser un message personnalisé
+          let errorMessage = 'Le code d\'association est invalide';
+          if (firstError?.title === 'api.registration.association_code_invalid') {
+            errorMessage = 'Le code d\'association est invalide';
+          } else if (firstError?.title) {
+            // Essayer de rendre le message plus lisible
+            errorMessage = firstError.title.replace(/api\.registration\./g, '').replace(/_/g, ' ');
+          }
+          
+          return { is_valid: false, errorMessage };
+        }
+        return { is_valid: false, errorMessage: 'Le code d\'association est incorrect' };
+      }
+      throw error;
+    }
   }
 }
 
