@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+'use client';
+
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
@@ -29,24 +30,21 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
-import { type Participant } from './data/types';
-import { getOrganisationById } from './data/helpers';
-import { useOrganisationsQuery } from '../hooks/useOrganisationsQuery';
-
 import { BadgeGenerator } from './BadgeGenerator';
 import { ReceiptGenerator } from './ReceiptGenerator';
 import JSZip from 'jszip';
 import html2canvas from 'html2canvas';
 import QRCodeReact from 'react-qr-code';
+import participantService from '@/services/participantService';
 
 export function DocumentsParticipantsPage() {
-  const { participants } = useDynamicInscriptions();
-  const { organisations } = useOrganisationsQuery();
+  // const { participants } = useDynamicInscriptions();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [selectedParticipant, setSelectedParticipant] = useState<any | null>(null);
   const [isBadgeOpen, setIsBadgeOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isDownloadingBadges, setIsDownloadingBadges] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const badgesContainerRef = useRef<HTMLDivElement>(null);
   
   // Filtres
@@ -71,12 +69,14 @@ export function DocumentsParticipantsPage() {
 
   // Charger les participants finalisés depuis localStorage
   const [finalisedParticipantsIds, setFinalisedParticipantsIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
     const stored = localStorage.getItem('finalisedParticipantsIds');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
 
   // Fonction pour obtenir le nombre de remises d'un participant spécifique
   const getParticipantRemisesCount = (participantId: string): { badge: number; kit: number } => {
+    if (typeof window === 'undefined') return { badge: 0, kit: 0 };
     const remisesData = JSON.parse(localStorage.getItem('remisesDocuments') || '{}');
     const participantRemises = remisesData[participantId];
 
@@ -96,53 +96,47 @@ export function DocumentsParticipantsPage() {
     return { badge: badgeCount, kit: kitCount };
   };
 
-  // Query pour écouter les changements du localStorage pour mettre à jour en temps réel
-  useQuery({
-    queryKey: ['documentsParticipants', 'localStorage', finalisedParticipantsIds],
-    queryFn: () => {
-      if (typeof window === 'undefined') return false;
-      const handleStorageChange = () => {
-        const stored = localStorage.getItem('finalisedParticipantsIds');
-        setFinalisedParticipantsIds(stored ? new Set(JSON.parse(stored)) : new Set());
-      };
+  // Écouter les changements du localStorage pour mettre à jour en temps réel
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem('finalisedParticipantsIds');
+      setFinalisedParticipantsIds(stored ? new Set(JSON.parse(stored)) : new Set());
+    };
 
-      // Écouter l'événement personnalisé de finalisation de paiement
-      const handlePaymentFinalized = () => {
-        handleStorageChange();
-      };
+    // Écouter l'événement personnalisé de finalisation de paiement
+    const handlePaymentFinalized = () => {
+      handleStorageChange();
+    };
 
-      window.addEventListener('storage', handleStorageChange);
-      window.addEventListener('paymentFinalized', handlePaymentFinalized);
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('paymentFinalized', handlePaymentFinalized);
 
-      return true;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('paymentFinalized', handlePaymentFinalized);
+    };
+  }, []);
 
   // État pour forcer le re-render des compteurs
   const [remisesUpdateTrigger, setRemisesUpdateTrigger] = useState(0);
 
-  // Query pour écouter les changements de remises pour forcer la mise à jour
-  useQuery({
-    queryKey: ['documentsParticipants', 'remisesUpdate', remisesUpdateTrigger],
-    queryFn: () => {
-      if (typeof window === 'undefined') return false;
-      const handleRemiseUpdate = () => {
-        setRemisesUpdateTrigger(prev => prev + 1);
-      };
+  // Écouter les changements de remises pour forcer la mise à jour
+  useEffect(() => {
+    const handleRemiseUpdate = () => {
+      setRemisesUpdateTrigger(prev => prev + 1);
+    };
 
-      window.addEventListener('remiseDocumentUpdated', handleRemiseUpdate);
-      window.addEventListener('storage', handleRemiseUpdate);
+    window.addEventListener('remiseDocumentUpdated', handleRemiseUpdate);
+    window.addEventListener('storage', handleRemiseUpdate);
 
-      return true;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
+    return () => {
+      window.removeEventListener('remiseDocumentUpdated', handleRemiseUpdate);
+      window.removeEventListener('storage', handleRemiseUpdate);
+    };
+  }, []);
 
   // Fonction helper pour obtenir les infos de paiement (depuis participant ou localStorage)
-  const getPaymentInfo = (participant: Participant) => {
+  const getPaymentInfo = (participant: any) => {
     // Si les infos sont déjà dans le participant, les retourner
     if (participant.datePaiement && participant.modePaiement) {
       return {
@@ -152,6 +146,7 @@ export function DocumentsParticipantsPage() {
     }
     
     // Sinon, chercher dans localStorage
+    if (typeof window === 'undefined') return { datePaiement: null, modePaiement: null };
     const finalisedPayments = JSON.parse(localStorage.getItem('finalisedPayments') || '{}');
     const paymentInfo = finalisedPayments[participant.id];
     
@@ -167,46 +162,65 @@ export function DocumentsParticipantsPage() {
       modePaiement: null,
     };
   };
+  
+  // Récupérer les participants par API
+  // Filtrer les participants avec paiement finalisé (statut_inscription ou localStorage)
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
 
-  // Query pour filtrer les participants avec paiement finalisé (statutInscription ou localStorage)
-  const participantsFinalisésQuery = useQuery({
-    queryKey: ['documentsParticipants', 'filtered', participants, finalisedParticipantsIds, searchTerm, filtreModePaiement, filtreOrganisation, filtrePeriode, dateDebut, dateFin],
-    queryFn: () => {
-      let filtered = participants.filter(p => 
-        p.statutInscription === 'finalisée' || finalisedParticipantsIds.has(p.id)
-      );
-
-      // Filtre par recherche
-      if (searchTerm) {
-        filtered = filtered.filter(p => {
-          const org = getOrganisationById(p.organisationId);
-          return (
-            p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            org?.nom.toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        });
-      }
-
-      // Filtre par mode de paiement
+  // Fonction pour charger les participants avec recherche et filtres
+  const fetchParticipants = async () => {
+    setIsLoadingParticipants(true);
+    try {
+      // Préparer les filtres API
+      const filters: any = {};
+      
+      // Mode de paiement
       if (filtreModePaiement !== 'all') {
-        filtered = filtered.filter(p => {
-          const paymentInfo = getPaymentInfo(p);
-          return paymentInfo.modePaiement === filtreModePaiement;
-        });
+        filters.payment_method = filtreModePaiement;
       }
-
-      // Filtre par organisation
+      
+      // Organisation
       if (filtreOrganisation !== 'all') {
-        filtered = filtered.filter(p => p.organisationId === filtreOrganisation);
+        filters.organization_id = filtreOrganisation;
       }
 
-      // Filtre par période de paiement
-      if (filtrePeriode !== 'all') {
-        const now = new Date();
-        filtered = filtered.filter(p => {
+      const response = searchTerm
+        ? await participantService.search(searchTerm, filters)
+        : await participantService.getAll(filters);
+      
+      setParticipants(response.data || []);
+    } catch (error) {
+      toast?.error('Impossible de récupérer les participants');
+      setParticipants([]);
+    } finally {
+      setIsLoadingParticipants(false);
+    }
+  };
+
+  // Effectuer la recherche côté serveur avec debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchParticipants();
+    }, 500); // Délai de 500ms après la dernière frappe
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Recharger quand les filtres changent
+  useEffect(() => {
+    fetchParticipants();
+  }, [filtreModePaiement, filtreOrganisation]);
+  
+  const participantsFinalisés = useMemo(() => {
+    let filtered = participants.filter(p => 
+      p.statut_inscription === 'finalisée' || finalisedParticipantsIds.has(p.id)
+    );
+
+    // Filtre par période de paiement (local uniquement car complexe)
+    if (filtrePeriode !== 'all') {
+      const now = new Date();
+      filtered = filtered.filter(p => {
         const paymentInfo = getPaymentInfo(p);
         const datePaiement = paymentInfo.datePaiement ? new Date(paymentInfo.datePaiement) : null;
         if (!datePaiement) return false;
@@ -239,15 +253,10 @@ export function DocumentsParticipantsPage() {
       });
     }
 
-      return filtered;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
+    return filtered;
+  }, [participants, searchTerm, filtreModePaiement, filtreOrganisation, filtrePeriode, dateDebut, dateFin, finalisedParticipantsIds]);
 
-  const participantsFinalisés = participantsFinalisésQuery.data ?? [];
-
-  const handleDownloadDocument = (participant: Participant, type: 'badge' | 'recu' | 'lettre' | 'facture') => {
+  const handleDownloadDocument = (participant: any, type: 'badge' | 'recu' | 'lettre' | 'facture') => {
     const docNames = {
       'badge': 'Badge',
       'recu': 'Reçu de paiement',
@@ -273,57 +282,24 @@ export function DocumentsParticipantsPage() {
   };
 
   // Confirmer la remise du document
-  const confirmRemiseDocument = () => {
+  const confirmRemiseDocument = async () => {
+    setIsLoading(true);
     const { participantId, type, participantName } = confirmDialog;
-    
-    // Récupérer les données de remise existantes
-    const remisesData = JSON.parse(localStorage.getItem('remisesDocuments') || '{}');
-    
-    // Initialiser si nécessaire
-    if (!remisesData[participantId]) {
-      remisesData[participantId] = {
-        badge: [],
-        kit: []
-      };
+
+    try {
+      const response = await participantService.confirmRemise(participantId);
+      if (response.success === true) {
+        toast.success('Remise confirmée avec succès');
+      } else if (response.success === false) {
+        toast.error(response.message);
+      } else {
+        toast.error('Une erreur est survenue lors de la confirmation de remise');
+      }
+    } catch (error) {
+      toast.error('Une erreur est survenue lors de la confirmation de remise');
+    } finally {
+      setIsLoading(false);
     }
-
-    // Convertir l'ancien format en nouveau format si nécessaire
-    if (!Array.isArray(remisesData[participantId].badge)) {
-      remisesData[participantId].badge = remisesData[participantId].badge 
-        ? [remisesData[participantId].badge] 
-        : [];
-    }
-    if (!Array.isArray(remisesData[participantId].kit)) {
-      remisesData[participantId].kit = remisesData[participantId].kit 
-        ? [remisesData[participantId].kit] 
-        : [];
-    }
-
-    // Ajouter la nouvelle date de remise
-    remisesData[participantId][type].push(new Date().toISOString());
-
-    // Sauvegarder
-    localStorage.setItem('remisesDocuments', JSON.stringify(remisesData));
-
-    // Toast de confirmation
-    const labels = {
-      badge: 'Badge',
-      kit: 'Kit'
-    };
-    
-    const count = remisesData[participantId][type].length;
-    
-    toast.success(`${labels[type]} remis`, {
-      description: `${participantName} (${count} remise${count > 1 ? 's' : ''})`,
-    });
-
-    // Fermer le dialogue
-    setConfirmDialog({
-      open: false,
-      participantId: '',
-      type: 'badge',
-      participantName: '',
-    });
   };
 
   const resetFilters = () => {
@@ -342,7 +318,7 @@ export function DocumentsParticipantsPage() {
     const csvContent = [
       headers.join(','),
       ...participantsFinalisés.map(p => {
-        const org = getOrganisationById(p.organisationId);
+        const org = p.organisation;
         const paymentInfo = getPaymentInfo(p);
         const remisesCount = getParticipantRemisesCount(p.id);
         return [
@@ -392,7 +368,7 @@ export function DocumentsParticipantsPage() {
       // Générer chaque badge
       for (let i = 0; i < participantsFinalisés.length; i++) {
         const participant = participantsFinalisés[i];
-        const organisation = getOrganisationById(participant.organisationId);
+        const organisation = participant.organisation;
         
         // Créer le badge HTML
         const badgeElement = createBadgeElement(participant, organisation);
@@ -466,7 +442,7 @@ export function DocumentsParticipantsPage() {
   };
 
   // Fonction helper pour créer un élément de badge
-  const createBadgeElement = (participant: Participant, organisation: any) => {
+  const createBadgeElement = (participant: any, organisation: any) => {
     const container = document.createElement('div');
     // Isoler complètement l'élément des styles globaux
     container.style.all = 'initial';
@@ -735,7 +711,7 @@ export function DocumentsParticipantsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes les organisations</SelectItem>
-                {organisations.map((org: any) => (
+                {participants.map((org) => (
                   <SelectItem key={org.id} value={org.id}>
                     {org.nom}
                   </SelectItem>
@@ -826,9 +802,9 @@ export function DocumentsParticipantsPage() {
                 }
 
                 return filtered.map((participant, index) => {
-                  const organisation = getOrganisationById(participant.organisationId);
+                  const organisation = participant.organisation;
                   // Reçu et facture disponibles uniquement après paiement finalisé
-                  const hasReceipt = participant.statutInscription === 'finalisée' && 
+                  const hasReceipt = participant.statut_inscription === 'finalisée' && 
                                     (participant.statut === 'membre' || participant.statut === 'non-membre');
                   const paymentInfo = getPaymentInfo(participant);
                   // Obtenir les compteurs de remises pour ce participant
@@ -866,7 +842,7 @@ export function DocumentsParticipantsPage() {
                             {/* Organisation */}
                             <div>
                               <p className="text-xs text-gray-500 mb-1">Organisation</p>
-                              <p className="text-sm text-gray-900">{organisation?.nom || 'N/A'}</p>
+                              <p className="text-sm text-gray-900">{participant?.company?.name || 'N/A'}</p>
                             </div>
 
                             {/* Contact */}
@@ -879,11 +855,11 @@ export function DocumentsParticipantsPage() {
                             <div>
                               <p className="text-xs text-gray-500 mb-1">Paiement</p>
                               <p className="text-sm text-gray-900">
-                                {paymentInfo.datePaiement ? new Date(paymentInfo.datePaiement).toLocaleDateString('fr-FR') : 'N/A'}
+                                {participant.date_paiement ? new Date(participant.date_paiement).toLocaleDateString('fr-FR') : 'N/A'}
                               </p>
-                              {paymentInfo.modePaiement && (
+                              {participant.mode_paiement && (
                                 <Badge variant="outline" className="text-xs mt-1">
-                                  {paymentInfo.modePaiement}
+                                  {participant.mode_paiement}
                                 </Badge>
                               )}
                             </div>
@@ -933,10 +909,10 @@ export function DocumentsParticipantsPage() {
                             className="gap-2 border-purple-200 text-purple-700 hover:bg-purple-50"
                           >
                             <QrCode className="w-4 h-4" />
-                            ({remisesCount.badge}) Remise badge
+                            ({remisesCount.badge}) Remise de kit
                           </Button>
                           
-                          <Button
+                          {/* <Button
                             variant="outline"
                             size="sm"
                             onClick={() => openConfirmDialog(participant.id, 'kit')}
@@ -944,7 +920,7 @@ export function DocumentsParticipantsPage() {
                           >
                             <PackageOpen className="w-4 h-4" />
                             ({remisesCount.kit}) Remise kit
-                          </Button>
+                          </Button> */}
                         </div>
                         </div>
                       </Card>
@@ -1014,7 +990,7 @@ export function DocumentsParticipantsPage() {
               </DialogHeader>
               <ReceiptGenerator participant={{
                 ...selectedParticipant,
-                organisation: getOrganisationById(selectedParticipant.organisationId)?.nom || 'N/A'
+                organisation: selectedParticipant.organisation?.nom || 'N/A'
               }} open={isReceiptOpen} onOpenChange={setIsReceiptOpen} />
             </DialogContent>
           </Dialog>
