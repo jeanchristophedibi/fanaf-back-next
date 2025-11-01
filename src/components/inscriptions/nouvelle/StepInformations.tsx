@@ -1,13 +1,19 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '../../ui/card';
 import { Label } from '../../ui/label';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command';
 import { motion } from 'motion/react';
-import { User, Mail, Phone, MapPin, IdCard } from 'lucide-react';
+import { User, Mail, Phone, MapPin, IdCard, Check, ChevronsUpDown } from 'lucide-react';
+import { fanafApi } from '../../../services/fanafApi';
+import { Skeleton } from '../../ui/skeleton';
+import { cn } from '../../ui/utils';
 
 interface ParticipantPrincipalState {
   nom: string;
@@ -16,7 +22,7 @@ interface ParticipantPrincipalState {
   pays: string;
   telephone: string;
   typeIdentite: 'passeport' | 'cni';
-  numeroIdentite: string;
+  numeroIdentite: string; 
 }
 
 interface StepInformationsProps {
@@ -28,6 +34,20 @@ export const StepInformations: React.FC<StepInformationsProps> = ({
   participantPrincipal,
   onChange,
 }) => {
+  // Récupérer les pays depuis l'API
+  const { data: countriesResponse, isLoading: isLoadingCountries } = useQuery({
+    queryKey: ['countries'],
+    queryFn: async () => {
+      return await fanafApi.getCountries();
+    },
+    staleTime: 10 * 60 * 1000, // Cache pendant 10 minutes
+    gcTime: 30 * 60 * 1000, // Garder en cache pendant 30 minutes
+  });
+
+  const countries = countriesResponse?.data || [];
+  
+  const [open, setOpen] = useState(false);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -119,12 +139,64 @@ export const StepInformations: React.FC<StepInformationsProps> = ({
               <Button type="button" variant="outline" className="h-12 px-4 rounded-r-none rounded-l-xl border-2 border-r-0 border-orange-600 bg-orange-600 flex items-center justify-center">
                 <MapPin className="w-5 h-5 text-white" />
               </Button>
-              <Input
-                value={participantPrincipal.pays}
-                onChange={(e) => onChange({ pays: e.target.value })}
-                placeholder="Ex : Côte d’Ivoire"
-                className="h-12 text-base bg-white border-2 border-gray-200 border-l-0 -ml-px rounded-none rounded-r-xl shadow-sm focus:border-orange-500 focus:ring-orange-500/30"
-              />
+              {isLoadingCountries ? (
+                <Skeleton className="h-12 flex-1 rounded-none rounded-r-xl" />
+              ) : (
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={open}
+                      className="h-12 text-base bg-white border-2 border-gray-200 border-l-0 -ml-px rounded-none rounded-r-xl justify-between hover:bg-gray-50 focus:ring-orange-500/30 focus:border-orange-500"
+                    >
+                      <span className="truncate">
+                        {participantPrincipal.pays
+                          ? countries.find((country) => country.name === participantPrincipal.pays)?.name || participantPrincipal.pays
+                          : "Sélectionnez un pays"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Rechercher un pays..." />
+                      <CommandList className="max-h-[200px] overflow-y-auto">
+                        <CommandEmpty>Aucun pays trouvé.</CommandEmpty>
+                        <CommandGroup>
+                          {countries.map((country) => (
+                            <CommandItem
+                              key={country.id}
+                              value={country.name}
+                              onSelect={() => {
+                                onChange({ pays: country.name });
+                                setOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  participantPrincipal.pays === country.name ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex items-center gap-2">
+                                {country.flag_url && (
+                                  <img 
+                                    src={country.flag_url} 
+                                    alt={country.name}
+                                    className="w-5 h-3 object-cover"
+                                  />
+                                )}
+                                <span>{country.name}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
           </div>
 

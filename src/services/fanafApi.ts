@@ -135,7 +135,41 @@ class FanafApiService {
         // Extraire le message d'erreur de différentes structures possibles
         let errorMessage = `Erreur HTTP: ${response.status}`;
         
-        if (responseData) {
+        // Pour les erreurs de validation (422), formater les erreurs spécifiques
+        if (response.status === 422 && responseData?.errors) {
+          const formatValidationErrors = (errors: any): string => {
+            if (typeof errors === 'string') {
+              return errors;
+            }
+            
+            if (Array.isArray(errors)) {
+              return errors.map((e: any) => 
+                typeof e === 'string' ? e : e.message || String(e)
+              ).join(', ');
+            }
+            
+            if (typeof errors === 'object' && errors !== null) {
+              // Format Laravel: { field: ["message1", "message2"], ... }
+              const errorParts: string[] = [];
+              for (const [field, messages] of Object.entries(errors)) {
+                if (Array.isArray(messages)) {
+                  messages.forEach((msg: any) => {
+                    errorParts.push(`${field}: ${typeof msg === 'string' ? msg : String(msg)}`);
+                  });
+                } else if (typeof messages === 'string') {
+                  errorParts.push(`${field}: ${messages}`);
+                } else {
+                  errorParts.push(`${field}: ${String(messages)}`);
+                }
+              }
+              return errorParts.length > 0 ? errorParts.join('; ') : 'Erreur de validation';
+            }
+            
+            return String(errors);
+          };
+          
+          errorMessage = `Erreur de validation: ${formatValidationErrors(responseData.errors)}`;
+        } else if (responseData) {
           // Essayer différentes structures courantes
           if (responseData.error) {
             errorMessage = typeof responseData.error === 'string' 
@@ -576,6 +610,143 @@ class FanafApiService {
     // Utiliser l'endpoint /participants (remplace /registrations)
     const endpoint = `/api/v1/admin/participants${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     return this.fetchApi<any>(endpoint);
+  }
+
+  /**
+   * Créer une inscription individuelle
+   * @param data - Données de l'inscription
+   * @returns Promise avec la réponse de l'API
+   */
+  async createRegistration(data: {
+    civility: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    country_id: string;
+    phone: string;
+    registration_fee_id: string;
+    registration_type: 'individual' | 'group';
+    passport_number?: string;
+    job_title?: string;
+    is_association?: boolean;
+    company_name?: string;
+    company_country_id?: string;
+    company_sector?: string;
+    company_description?: string;
+    company_website?: string;
+    company_phone?: string;
+    company_email?: string;
+    company_address?: string;
+  }): Promise<any> {
+    return this.fetchApi<any>('/api/v1/admin/registrations/simple', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Créer une inscription groupée (bulk)
+   * @param data - Données de l'inscription groupée
+   * @returns Promise avec la réponse de l'API
+   */
+  async createBulkRegistration(data: {
+    registration_fee_id: string;
+    registration_type: 'group';
+    is_association?: boolean;
+    company_name?: string;
+    company_country_id?: string;
+    company_sector?: string;
+    company_description?: string;
+    company_website?: string;
+    company_phone?: string;
+    company_email?: string;
+    company_address?: string;
+    users: Array<{
+      civility: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone: string;
+      country_id: string;
+      passport_number?: string;
+      job_title?: string;
+      is_lead: boolean;
+    }>;
+  }): Promise<any> {
+    return this.fetchApi<any>('/api/v1/admin/registrations/bulk', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Récupérer les types d'inscription (registration types/fees)
+   * @returns Promise avec la liste des types d'inscription
+   */
+  async getRegistrationTypes(): Promise<{
+    status: number;
+    message: string;
+    data: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      amount: string;
+      amount_formatted: string;
+      valid_from: string;
+      valid_until: string;
+    }>;
+  }> {
+    return this.fetchApi<{
+      status: number;
+      message: string;
+      data: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        amount: string;
+        amount_formatted: string;
+        valid_from: string;
+        valid_until: string;
+      }>;
+    }>('/api/v1/registration-types');
+  }
+
+  /**
+   * Récupérer la liste des pays
+   * @returns Promise avec la liste des pays
+   */
+  async getCountries(): Promise<{
+    status: number;
+    message: string;
+    data: Array<{
+      id: string;
+      name: string;
+      code: string;
+      alpha2: string | null;
+      flag_url: string;
+      phone_code: string;
+      currency_code: string;
+      currency_symbol: string;
+      created_at: string;
+      updated_at: string;
+    }>;
+  }> {
+    return this.fetchApi<{
+      status: number;
+      message: string;
+      data: Array<{
+        id: string;
+        name: string;
+        code: string;
+        alpha2: string | null;
+        flag_url: string;
+        phone_code: string;
+        currency_code: string;
+        currency_symbol: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>('/api/v1/common/countries');
   }
 
   // ==================== FLIGHT PLANS ====================

@@ -1,9 +1,12 @@
 'use client';
 
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '../../ui/card';
 import { motion } from 'motion/react';
 import { Shield, Briefcase, Check } from 'lucide-react';
+import { fanafApi } from '../../../services/fanafApi';
+import { Skeleton } from '../../ui/skeleton';
 
 export type StatutParticipant = 'membre' | 'non-membre' | 'vip' | 'speaker';
 
@@ -13,24 +16,94 @@ interface StepTypeProps {
 }
 
 export const StepType: React.FC<StepTypeProps> = ({ typeParticipant, setTypeParticipant }) => {
-  const options = [
-    {
-      id: 'membre',
-      label: 'Membre FANAF',
-      description: 'Organisation membre',
-      price: '350 000 FCFA',
-      icon: Shield,
-      color: 'blue',
+  // Récupérer les types d'inscription depuis l'API
+  const { data: registrationTypesResponse, isLoading: isLoadingTypes, isError: isErrorTypes } = useQuery({
+    queryKey: ['registrationTypes'],
+    queryFn: async () => {
+      return await fanafApi.getRegistrationTypes();
     },
-    {
-      id: 'non-membre',
-      label: 'Non-membre',
-      description: 'Autre organisation',
-      price: '400 000 FCFA',
-      icon: Briefcase,
-      color: 'orange',
-    },
-  ] as const;
+    staleTime: 5 * 60 * 1000, // Cache pendant 5 minutes
+    gcTime: 10 * 60 * 1000, // Garder en cache pendant 10 minutes
+  });
+
+  const registrationTypes = registrationTypesResponse?.data || [];
+
+  // Mapper les données de l'API vers les options
+  const options = registrationTypes.map((rt) => {
+    // Déterminer le type de participant selon le slug
+    let id: StatutParticipant = 'non-membre';
+    let icon = Briefcase;
+    let color = 'orange';
+    let description = 'Autre organisation';
+
+    if (rt.slug === 'membre-fanaf') {
+      id = 'membre';
+      icon = Shield;
+      color = 'blue';
+      description = 'Organisation membre';
+    }
+
+    return {
+      id,
+      label: rt.name,
+      description,
+      price: rt.amount_formatted,
+      icon,
+      color,
+      slug: rt.slug,
+    };
+  });
+
+  // Afficher un loader pendant le chargement
+  if (isLoadingTypes) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex justify-center"
+      >
+        <Card className="p-10 rounded-2xl bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100 w-full max-w-5xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900">Choisissez le type de participant</h2>
+            <p className="text-gray-600 mt-2 text-lg">Chargement des tarifs...</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-16">
+            {registrationTypes.length > 0 
+              ? registrationTypes.map((_, i) => (
+                  <Skeleton key={i} className="w-64 h-64 rounded-full" />
+                ))
+              : [1, 2].map((i) => (
+                  <Skeleton key={i} className="w-64 h-64 rounded-full" />
+                ))}
+          </div>
+        </Card>
+      </motion.div>
+    );
+  }
+
+  // Afficher une erreur si le chargement a échoué ou si aucune donnée n'est disponible
+  if (isErrorTypes || options.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex justify-center"
+      >
+        <Card className="p-10 rounded-2xl bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100 w-full max-w-5xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900">Choisissez le type de participant</h2>
+            <p className="text-red-600 mt-2 text-lg">
+              {isErrorTypes 
+                ? 'Erreur lors du chargement des types d\'inscription. Veuillez réessayer.'
+                : 'Aucun type d\'inscription disponible.'}
+            </p>
+          </div>
+        </Card>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

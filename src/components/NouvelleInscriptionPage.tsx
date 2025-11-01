@@ -29,6 +29,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import html2canvas from 'html2canvas';
 import Router from 'next/router';
 import { usePathname, useRouter } from 'next/navigation';
+import { fanafApi } from '../services/fanafApi';
 
 interface ParticipantFormData {
   nom: string;
@@ -99,6 +100,61 @@ export const NouvelleInscriptionPage = () => {
   const [organisationSelectionnee, setOrganisationSelectionnee] = useState<string>('');
   const { organisations: allOrganisations = [] } = useOrganisationsQuery();
   const organisationsMembres = allOrganisations.filter(org => org.statut === 'membre');
+  
+  // Query pour récupérer les types d'inscription (registration fees)
+  const { data: registrationTypesResponse, isLoading: isLoadingRegistrationTypes } = useQuery({
+    queryKey: ['registrationTypes'],
+    queryFn: async () => {
+      return await fanafApi.getRegistrationTypes();
+    },
+    staleTime: 5 * 60 * 1000, // Cache pendant 5 minutes
+    gcTime: 10 * 60 * 1000, // Garder en cache pendant 10 minutes
+  });
+  
+  const registrationTypes = registrationTypesResponse?.data || [];
+  
+  // Query pour récupérer les pays
+  const { data: countriesResponse } = useQuery({
+    queryKey: ['countries'],
+    queryFn: async () => {
+      return await fanafApi.getCountries();
+    },
+    staleTime: 10 * 60 * 1000, // Cache pendant 10 minutes (rarement mis à jour)
+    gcTime: 30 * 60 * 1000, // Garder en cache pendant 30 minutes
+  });
+  
+  const countries = countriesResponse?.data || [];
+  
+  // Fonction helper pour obtenir le registration_fee_id selon le type de participant
+  const getRegistrationFeeId = (participantType: StatutParticipant | ''): string | null => {
+    if (!participantType || registrationTypes.length === 0) return null;
+    
+    // Mapper le type de participant vers le slug
+    let slugToFind = '';
+    if (participantType === 'membre') {
+      slugToFind = 'membre-fanaf';
+    } else if (participantType === 'non-membre') {
+      slugToFind = 'non-membre';
+    } else {
+      // Pour VIP ou speaker, utiliser non-membre par défaut (ou selon votre logique)
+      slugToFind = 'non-membre';
+    }
+    
+    const registrationType = registrationTypes.find(rt => rt.slug === slugToFind);
+    return registrationType?.id || null;
+  };
+  
+  // Fonction helper pour obtenir le country_id depuis le nom du pays
+  const getCountryId = (countryName: string): string | null => {
+    if (!countryName || countries.length === 0) return null;
+    
+    // Chercher par nom exact (insensible à la casse)
+    const country = countries.find(c => 
+      c.name.toLowerCase().trim() === countryName.toLowerCase().trim()
+    );
+    
+    return country?.id || null;
+  };
   
   const handleOrganisationSelect = (orgId: string) => {
     setOrganisationSelectionnee(orgId);
@@ -425,10 +481,21 @@ export const NouvelleInscriptionPage = () => {
   };
 
   const calculerMontantTotal = () => {
+    // Utiliser les montants de l'API si disponibles, sinon fallback sur les prix hardcodés
+    const registrationTypes = registrationTypesResponse?.data || [];
+    
     let prixUnitaire = 0;
-    if (typeParticipant === 'membre') prixUnitaire = PRIX.membre;
-    else if (typeParticipant === 'non-membre') prixUnitaire = PRIX.nonMembre;
-    else if (typeParticipant === 'vip' || typeParticipant === 'speaker') prixUnitaire = PRIX.vip;
+    
+    // Chercher le montant correspondant au type de participant depuis l'API
+    if (typeParticipant === 'membre') {
+      const membreType = registrationTypes.find((rt: any) => rt.slug === 'membre-fanaf');
+      prixUnitaire = membreType ? parseFloat(membreType.amount) : PRIX.membre;
+    } else if (typeParticipant === 'non-membre') {
+      const nonMembreType = registrationTypes.find((rt: any) => rt.slug === 'non-membre');
+      prixUnitaire = nonMembreType ? parseFloat(nonMembreType.amount) : PRIX.nonMembre;
+    } else if (typeParticipant === 'vip' || typeParticipant === 'speaker') {
+      prixUnitaire = PRIX.vip; // Pas de type VIP dans l'API pour l'instant
+    }
 
     if (typeInscription === 'individuel') {
       return prixUnitaire;
@@ -445,12 +512,20 @@ export const NouvelleInscriptionPage = () => {
     else if (etapeActuelle === 5) setEtapeActuelle(4);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    console.log('handleNext appelé, etapeActuelle:', etapeActuelle);
     if (etapeActuelle === 1) return validerEtape1();
     if (etapeActuelle === 2) return validerEtape2();
     if (etapeActuelle === 3) return validerEtape3();
     if (etapeActuelle === 4) return validerEtape4();
-    if (etapeActuelle === 5) return finaliserInscription();
+    if (etapeActuelle === 5) {
+      console.log('Appel de finaliserInscription depuis handleNext');
+      try {
+        await finaliserInscription();
+      } catch (error) {
+        console.error('Erreur dans handleNext lors de finalisation:', error);
+      }
+    }
   };
 
   // Raison de désactivation du bouton Suivant par étape
@@ -508,92 +583,551 @@ export const NouvelleInscriptionPage = () => {
   };
 
   const finaliserInscription = async () => {
+    console.log('=== Début de finalisation ===');
+    console.log('typeInscription:', typeInscription);
+    console.log('typeParticipant:', typeParticipant);
+    
     setLoading(true);
 
     try {
-      const organisationId = `org-${Date.now()}`;
-      const organisation: Organisation = {
-        id: organisationId,
-        nom: organisationData.nom,
-        contact: organisationData.contact,
-        email: organisationData.email,
-        pays: participantPrincipal.pays,
-        dateCreation: new Date().toISOString(),
-      statut: typeParticipant === 'membre' ? 'membre' : 'non-membre'
-      };
-
-      const participants: Participant[] = [];
-      const groupeId = typeInscription === 'groupe' ? `grp-${Date.now()}` : undefined;
-
-      const participantPrincipalId = `part-${Date.now()}`;
-      const referencePrincipal = `REF-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
-      
-      const principalParticipant: Participant = {
-        id: participantPrincipalId,
-        reference: referencePrincipal,
-        nom: participantPrincipal.nom,
-        prenom: participantPrincipal.prenom,
-        email: participantPrincipal.email,
-        telephone: participantPrincipal.telephone,
-        pays: participantPrincipal.pays,
-        organisationId,
-        statut: typeParticipant as StatutParticipant,
-        statutInscription: typeParticipant === 'vip' || typeParticipant === 'speaker' ? 'finalisée' : 'non-finalisée',
-        dateInscription: new Date().toISOString(),
-        groupeId,
-        nomGroupe: typeInscription === 'groupe' ? `Groupe ${organisationData.nom}` : undefined
-      };
-      
-      participants.push(principalParticipant);
-
-      if (typeInscription === 'groupe') {
-        participantsGroupe.forEach((p, index) => {
-          const participantId = `part-${Date.now()}-${index + 1}`;
-          const reference = `REF-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
+      // Pour les inscriptions individuelles, utiliser l'API
+      if (typeInscription === 'individuel') {
+        console.log('Traitement inscription individuelle...');
+        console.log('participantPrincipal.pays:', participantPrincipal.pays);
+        console.log('countries disponibles:', countries.length);
+        
+        // Récupérer le country_id depuis le nom du pays
+        const countryId = getCountryId(participantPrincipal.pays);
+        console.log('countryId trouvé:', countryId);
+        if (!countryId) {
+          console.error('Erreur: countryId est null');
+          toast.error(`Impossible de trouver le pays "${participantPrincipal.pays}". Veuillez vérifier le nom du pays.`);
+          setLoading(false);
+          return;
+        }
+        
+        console.log('registrationTypes disponibles:', registrationTypes.length);
+        console.log('typeParticipant:', typeParticipant);
+        
+        // Récupérer le registration_fee_id selon le type de participant
+        const registrationFeeId = getRegistrationFeeId(typeParticipant);
+        console.log('registrationFeeId trouvé:', registrationFeeId);
+        if (!registrationFeeId) {
+          console.error('Erreur: registrationFeeId est null');
+          toast.error('Impossible de déterminer le type d\'inscription. Veuillez réessayer.');
+          setLoading(false);
+          return;
+        }
+        
+        // Fonction pour nettoyer et valider le numéro de téléphone
+        const cleanPhoneNumber = (phone: string): string => {
+          if (!phone || phone.trim() === '') {
+            throw new Error('Le numéro de téléphone est requis');
+          }
           
-          const participant: Participant = {
-            id: participantId,
-            reference,
-            nom: p.nom,
-            prenom: p.prenom,
-            email: p.email,
-            telephone: organisationData.contact,
+          // Vérifier que ce n'est pas du texte de placeholder ou d'exemple
+          const phoneLower = phone.toLowerCase().trim();
+          const placeholderWords = ['exemple', 'example', 'test', 'lorem', 'ipsum', 'dolor', 'eveniet', 'earum', 'placeholder', 'xx', 'xxx', 'xxx', 'aaaa', 'bbbb'];
+          const isPlaceholder = placeholderWords.some(word => phoneLower.includes(word));
+          
+          if (isPlaceholder) {
+            throw new Error(`Le champ téléphone contient du texte invalide. Veuillez saisir un numéro de téléphone valide (ex: +225 01 23 45 67 89)`);
+          }
+          
+          // Supprimer les espaces, tirets, parenthèses et autres caractères non numériques sauf +
+          let cleaned = phone.replace(/[\s\-\(\)\.]/g, '').trim();
+          
+          // S'assurer qu'il commence par + (code pays)
+          if (!cleaned.startsWith('+')) {
+            cleaned = `+${cleaned}`;
+          }
+          
+          // Vérifier que le numéro contient au moins 8 chiffres (code pays + numéro)
+          const digitsOnly = cleaned.replace(/\D/g, '');
+          if (digitsOnly.length < 8) {
+            throw new Error(`Le numéro de téléphone "${phone}" n'est pas valide. Il doit contenir au moins 8 chiffres (ex: +225 01 23 45 67 89)`);
+          }
+          
+          // Vérifier qu'il n'y a pas trop de caractères non numériques (signe d'un texte)
+          const nonDigits = cleaned.replace(/\d/g, '').replace('+', '').length;
+          if (nonDigits > 5) {
+            throw new Error(`Le numéro de téléphone "${phone}" semble contenir du texte invalide. Veuillez saisir uniquement des chiffres avec le code pays (ex: +225 01 23 45 67 89)`);
+          }
+          
+          return cleaned;
+        };
+        
+        // Déterminer la civilité (par défaut 'mr', peut être amélioré avec un champ dans le formulaire)
+        // TODO: Ajouter un champ civility dans le formulaire
+        const civility = 'mr'; // mr = Monsieur, mrs = Madame, mlle = Mademoiselle
+        
+        // Valider et nettoyer le numéro de téléphone du participant principal
+        console.log('Validation du numéro de téléphone...');
+        let participantPhone: string;
+        try {
+          participantPhone = cleanPhoneNumber(participantPrincipal.telephone);
+          console.log('Numéro de téléphone validé:', participantPhone);
+        } catch (error) {
+          console.error('Erreur validation téléphone:', error);
+          toast.error(error instanceof Error ? error.message : 'Le numéro de téléphone du participant principal n\'est pas valide.');
+          setLoading(false);
+          return;
+        }
+        
+        // Préparer les données pour l'API
+        const registrationData: any = {
+          civility,
+          first_name: participantPrincipal.prenom,
+          last_name: participantPrincipal.nom,
+          email: participantPrincipal.email,
+          country_id: countryId,
+          phone: participantPhone,
+          registration_fee_id: registrationFeeId,
+          registration_type: 'individual',
+          is_association: false,
+        };
+        
+        // Ajouter passport_number seulement si présent
+        if (participantPrincipal.numeroIdentite) {
+          registrationData.passport_number = participantPrincipal.numeroIdentite;
+        }
+        // TODO: Ajouter un champ job_title dans le formulaire
+
+        // Ajouter les informations de l'entreprise si disponibles
+        if (organisationData.nom) {
+          // Utiliser le même pays pour l'entreprise par défaut, ou permettre un pays différent si nécessaire
+          const companyCountryId = countryId; // Pour l'instant, utiliser le même pays que le participant
+          
+          // Valider et nettoyer le numéro de téléphone de l'entreprise si présent
+          let companyPhone: string | undefined;
+          if (organisationData.contact) {
+            try {
+              companyPhone = cleanPhoneNumber(organisationData.contact);
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : 'Le numéro de téléphone de l\'entreprise n\'est pas valide.');
+              setLoading(false);
+              return;
+            }
+          }
+          
+          registrationData.company_name = organisationData.nom;
+          registrationData.company_country_id = companyCountryId;
+          registrationData.company_sector = organisationData.domaineActivite;
+          registrationData.company_email = organisationData.email;
+          registrationData.company_phone = companyPhone;
+          registrationData.company_address = organisationData.adresse;
+          // Ne pas ajouter company_website et company_description si undefined
+          // TODO: Ajouter un champ website dans le formulaire si nécessaire
+          // TODO: Ajouter un champ description dans le formulaire si nécessaire
+        }
+        
+        // Nettoyer les données : supprimer les valeurs undefined du payload
+        console.log('Nettoyage des données...');
+        const cleanRegistrationData = Object.fromEntries(
+          Object.entries(registrationData).filter(([_, value]) => value !== undefined)
+        );
+        console.log('Données nettoyées:', cleanRegistrationData);
+
+        try {
+          // Debug: log des données envoyées
+          console.log('Données envoyées à l\'API simple:', JSON.stringify(cleanRegistrationData, null, 2));
+          console.log('Appel API createRegistration...');
+          
+          // Appel à l'API pour créer l'inscription
+          const response = await fanafApi.createRegistration(cleanRegistrationData);
+          console.log('Réponse API reçue:', response);
+          
+          console.log('Réponse API simple:', response);
+          console.log('Montant dans la réponse API:', {
+            amount: response?.data?.amount,
+            total_amount: response?.data?.total_amount,
+            montant_total: response?.data?.montant_total,
+            registration_fee: response?.data?.registration_fee,
+            fee_amount: response?.data?.fee_amount,
+            fullResponse: response
+          });
+          
+          toast.success('Inscription créée avec succès via l\'API !');
+          
+          // Créer un objet Participant pour l'affichage local (compatibilité avec le reste de l'app)
+          const organisationId = `org-${Date.now()}`;
+          const organisation: Organisation = {
+            id: organisationId,
+            nom: organisationData.nom || '',
+            contact: organisationData.contact || '',
+            email: organisationData.email || '',
+            pays: participantPrincipal.pays,
+            dateCreation: new Date().toISOString(),
+            statut: typeParticipant === 'membre' ? 'membre' : 'non-membre'
+          };
+
+          const participantPrincipalId = response?.data?.id || `part-${Date.now()}`;
+          const referencePrincipal = response?.data?.reference || response?.data?.registration_number || `REF-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
+          
+          const principalParticipant: Participant = {
+            id: participantPrincipalId,
+            reference: referencePrincipal,
+            nom: participantPrincipal.nom,
+            prenom: participantPrincipal.prenom,
+            email: participantPrincipal.email,
+            telephone: participantPrincipal.telephone,
             pays: participantPrincipal.pays,
             organisationId,
             statut: typeParticipant as StatutParticipant,
-            statutInscription: typeParticipant === 'vip' || typeParticipant === 'speaker' ? 'finalisée' : 'non-finalisée',
+            statutInscription: 'non-finalisée', // L'API gère le statut
+            dateInscription: new Date().toISOString(),
+          };
+
+          const numeroFacture = response?.data?.invoice_number || `PRO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
+          
+          // Utiliser le montant retourné par l'API au lieu du calcul local
+          // L'API peut retourner le montant dans différents champs : amount, total_amount, montant_total, etc.
+          const montantAPI = response?.data?.amount 
+            || response?.data?.total_amount 
+            || response?.data?.montant_total 
+            || response?.data?.registration_fee?.amount
+            || response?.data?.fee_amount
+            || calculerMontantTotal(); // Fallback sur le calcul local si non trouvé
+
+          setInscriptionFinalisee({
+            participants: [principalParticipant],
+            organisation,
+            numeroFacture,
+            montantTotal: typeof montantAPI === 'string' ? parseFloat(montantAPI) : montantAPI
+          });
+
+          return; // Sortir après succès de l'inscription individuelle
+        } catch (apiError: any) {
+          console.error('Erreur API lors de la création de l\'inscription:', apiError);
+          const errorMessage = apiError?.message || 'Erreur lors de la création de l\'inscription via l\'API';
+          toast.error(errorMessage);
+          throw apiError; // Re-lancer pour être capturé par le catch externe
+        }
+      }
+
+      // Pour les inscriptions de groupe, utiliser l'API bulk
+      if (typeInscription === 'groupe') {
+        console.log('Traitement inscription groupée...');
+        // Récupérer le country_id depuis le nom du pays
+        const countryId = getCountryId(participantPrincipal.pays);
+        if (!countryId) {
+          toast.error(`Impossible de trouver le pays "${participantPrincipal.pays}". Veuillez vérifier le nom du pays.`);
+          setLoading(false);
+          return;
+        }
+        
+        // Récupérer le registration_fee_id selon le type de participant
+        const registrationFeeId = getRegistrationFeeId(typeParticipant);
+        if (!registrationFeeId) {
+          toast.error('Impossible de déterminer le type d\'inscription. Veuillez réessayer.');
+          setLoading(false);
+          return;
+        }
+        
+        // Déterminer la civilité (par défaut 'mr', peut être amélioré avec un champ dans le formulaire)
+        // TODO: Ajouter un champ civility dans le formulaire
+        const mapCivility = (civility: string): string => {
+          const lower = civility.toLowerCase();
+          if (lower === 'm' || lower === 'mr' || lower === 'monsieur') return 'mr';
+          if (lower === 'mme' || lower === 'mrs' || lower === 'madame') return 'mrs';
+          if (lower === 'mlle' || lower === 'mademoiselle') return 'mlle';
+          return 'mr'; // Par défaut
+        };
+        
+        const defaultCivility = 'mr'; // Par défaut pour le participant principal
+        const defaultCivilityGroupe = 'mrs'; // Par défaut pour les autres participants
+        
+        // Préparer le tableau des utilisateurs
+        const users: Array<{
+          civility: string;
+          first_name: string;
+          last_name: string;
+          email: string;
+          phone: string;
+          country_id: string;
+          passport_number?: string;
+          job_title?: string;
+          is_lead: boolean;
+        }> = [];
+        
+        // Fonction pour nettoyer et valider le numéro de téléphone
+        const cleanPhoneNumber = (phone: string): string => {
+          if (!phone || phone.trim() === '') {
+            throw new Error('Le numéro de téléphone est requis');
+          }
+          
+          // Vérifier que ce n'est pas du texte de placeholder ou d'exemple
+          const phoneLower = phone.toLowerCase().trim();
+          const placeholderWords = ['exemple', 'example', 'test', 'lorem', 'ipsum', 'dolor', 'eveniet', 'earum', 'placeholder', 'xx', 'xxx', 'xxx', 'aaaa', 'bbbb'];
+          const isPlaceholder = placeholderWords.some(word => phoneLower.includes(word));
+          
+          if (isPlaceholder) {
+            throw new Error(`Le champ téléphone contient du texte invalide. Veuillez saisir un numéro de téléphone valide (ex: +225 01 23 45 67 89)`);
+          }
+          
+          // Supprimer les espaces, tirets, parenthèses et autres caractères non numériques sauf +
+          let cleaned = phone.replace(/[\s\-\(\)\.]/g, '').trim();
+          
+          // S'assurer qu'il commence par + (code pays)
+          if (!cleaned.startsWith('+')) {
+            cleaned = `+${cleaned}`;
+          }
+          
+          // Vérifier que le numéro contient au moins 8 chiffres (code pays + numéro)
+          const digitsOnly = cleaned.replace(/\D/g, '');
+          if (digitsOnly.length < 8) {
+            throw new Error(`Le numéro de téléphone "${phone}" n'est pas valide. Il doit contenir au moins 8 chiffres (ex: +225 01 23 45 67 89)`);
+          }
+          
+          // Vérifier qu'il n'y a pas trop de caractères non numériques (signe d'un texte)
+          const nonDigits = cleaned.replace(/\d/g, '').replace('+', '').length;
+          if (nonDigits > 5) {
+            throw new Error(`Le numéro de téléphone "${phone}" semble contenir du texte invalide. Veuillez saisir uniquement des chiffres avec le code pays (ex: +225 01 23 45 67 89)`);
+          }
+          
+          return cleaned;
+        };
+        
+        // Ajouter le participant principal (is_lead: true)
+        let principalPhone: string;
+        try {
+          principalPhone = cleanPhoneNumber(participantPrincipal.telephone);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Le numéro de téléphone du participant principal n\'est pas valide.');
+          setLoading(false);
+          return;
+        }
+        
+        const principalUser: any = {
+          civility: mapCivility(defaultCivility),
+          first_name: participantPrincipal.prenom,
+          last_name: participantPrincipal.nom,
+          email: participantPrincipal.email,
+          phone: principalPhone,
+          country_id: countryId,
+          is_lead: true,
+        };
+        
+        // Ajouter passport_number seulement si présent
+        if (participantPrincipal.numeroIdentite) {
+          principalUser.passport_number = participantPrincipal.numeroIdentite;
+        }
+        // TODO: Ajouter un champ job_title dans le formulaire
+        
+        users.push(principalUser);
+        
+        // Ajouter les participants du groupe (is_lead: false)
+        participantsGroupe.forEach((p, index) => {
+          // Utiliser le contact de l'organisation ou celui du participant principal
+          const phoneToUse = organisationData.contact || participantPrincipal.telephone;
+          
+          let groupPhone: string;
+          try {
+            groupPhone = cleanPhoneNumber(phoneToUse);
+          } catch (error) {
+            toast.error(`Le numéro de téléphone du participant ${index + 2} n'est pas valide: ${error instanceof Error ? error.message : 'Format invalide'}`);
+            setLoading(false);
+            return;
+          }
+          
+          // Générer un numéro de passeport unique pour chaque participant du groupe
+          // Utiliser le numéro du participant principal comme base et ajouter un suffixe unique
+          let passportNumber: string;
+          if (participantPrincipal.numeroIdentite) {
+            // Ajouter un suffixe unique basé sur l'index du participant (ex: ABC123 -> ABC123-001)
+            const baseNumber = participantPrincipal.numeroIdentite;
+            const suffix = String(index + 1).padStart(3, '0'); // 001, 002, 003, etc.
+            passportNumber = `${baseNumber}-${suffix}`;
+          } else {
+            // Si le participant principal n'a pas de numéro, générer un numéro temporaire
+            // TODO: Ajouter un champ passport_number spécifique pour chaque participant du groupe dans le formulaire
+            passportNumber = `TEMP-${Date.now()}-${index}`;
+          }
+          
+          const groupUser: any = {
+            civility: mapCivility(defaultCivilityGroupe),
+            first_name: p.prenom,
+            last_name: p.nom,
+            email: p.email,
+            phone: groupPhone,
+            country_id: countryId, // Utiliser le même pays que le participant principal (pourrait être étendu plus tard)
+            is_lead: false,
+            passport_number: passportNumber,
+          };
+          
+          // TODO: Ajouter un champ job_title pour chaque participant du groupe
+          
+          users.push(groupUser);
+        });
+        
+        // Préparer les données pour l'API bulk
+        const bulkRegistrationData: any = {
+          registration_fee_id: registrationFeeId,
+          registration_type: 'group',
+          is_association: false, // TODO: Déterminer si c'est une association selon le type de participant
+          users,
+        };
+        
+        // Ajouter les informations de l'entreprise si disponibles
+        if (organisationData.nom) {
+          // Utiliser le même pays pour l'entreprise par défaut
+          bulkRegistrationData.company_name = organisationData.nom;
+          bulkRegistrationData.company_country_id = countryId;
+          bulkRegistrationData.company_sector = organisationData.domaineActivite;
+          bulkRegistrationData.company_email = organisationData.email;
+          bulkRegistrationData.company_phone = organisationData.contact;
+          bulkRegistrationData.company_address = organisationData.adresse;
+          // Ne pas ajouter company_website et company_description si undefined
+          // TODO: Ajouter un champ website dans le formulaire si nécessaire
+          // TODO: Ajouter un champ description dans le formulaire si nécessaire
+        }
+        
+        // Nettoyer les données : supprimer les valeurs undefined du payload
+        const cleanBulkData = Object.fromEntries(
+          Object.entries(bulkRegistrationData).filter(([_, value]) => value !== undefined)
+        );
+        
+        // Nettoyer aussi les users : supprimer les champs undefined
+        if (cleanBulkData.users) {
+          cleanBulkData.users = cleanBulkData.users.map((user: any) => 
+            Object.fromEntries(
+              Object.entries(user).filter(([_, value]) => value !== undefined)
+            )
+          );
+        }
+        
+        try {
+          // Debug: log des données envoyées
+          console.log('Données envoyées à l\'API bulk:', JSON.stringify(cleanBulkData, null, 2));
+          
+          // Appel à l'API pour créer l'inscription groupée
+          const response = await fanafApi.createBulkRegistration(cleanBulkData);
+          
+          console.log('Réponse API bulk:', response);
+          console.log('Montant dans la réponse API:', {
+            amount: response?.data?.amount,
+            total_amount: response?.data?.total_amount,
+            montant_total: response?.data?.montant_total,
+            registration_fee: response?.data?.registration_fee,
+            fee_amount: response?.data?.fee_amount,
+            fullResponse: response
+          });
+          
+          toast.success('Inscription groupée créée avec succès via l\'API !');
+          
+          // Créer des objets Participant pour l'affichage local (compatibilité avec le reste de l'app)
+          const organisationId = `org-${Date.now()}`;
+          const organisation: Organisation = {
+            id: organisationId,
+            nom: organisationData.nom || '',
+            contact: organisationData.contact || '',
+            email: organisationData.email || '',
+            pays: participantPrincipal.pays,
+            dateCreation: new Date().toISOString(),
+            statut: typeParticipant === 'membre' ? 'membre' : 'non-membre'
+          };
+          
+          const participants: Participant[] = [];
+          const groupeId = `grp-${Date.now()}`;
+          
+          // Créer le participant principal depuis la réponse de l'API
+          const principalFromApi = response?.data?.users?.find((u: any) => u.is_lead) || users[0];
+          const participantPrincipalId = principalFromApi?.id || `part-${Date.now()}`;
+          const referencePrincipal = principalFromApi?.reference || principalFromApi?.registration_number || `REF-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
+          
+          const principalParticipant: Participant = {
+            id: participantPrincipalId,
+            reference: referencePrincipal,
+            nom: participantPrincipal.nom,
+            prenom: participantPrincipal.prenom,
+            email: participantPrincipal.email,
+            telephone: participantPrincipal.telephone,
+            pays: participantPrincipal.pays,
+            organisationId,
+            statut: typeParticipant as StatutParticipant,
+            statutInscription: 'non-finalisée', // L'API gère le statut
             dateInscription: new Date().toISOString(),
             groupeId,
             nomGroupe: `Groupe ${organisationData.nom}`
           };
           
-          participants.push(participant);
-        });
+          participants.push(principalParticipant);
+          
+          // Créer les autres participants depuis la réponse de l'API
+          const otherUsersFromApi = response?.data?.users?.filter((u: any) => !u.is_lead) || users.slice(1);
+          participantsGroupe.forEach((p, index) => {
+            const userFromApi = otherUsersFromApi[index] || users[index + 1];
+            const participantId = userFromApi?.id || `part-${Date.now()}-${index + 1}`;
+            const reference = userFromApi?.reference || userFromApi?.registration_number || `REF-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
+            
+            const participant: Participant = {
+              id: participantId,
+              reference,
+              nom: p.nom,
+              prenom: p.prenom,
+              email: p.email,
+              telephone: organisationData.contact || participantPrincipal.telephone,
+              pays: participantPrincipal.pays,
+              organisationId,
+              statut: typeParticipant as StatutParticipant,
+              statutInscription: 'non-finalisée', // L'API gère le statut
+              dateInscription: new Date().toISOString(),
+              groupeId,
+              nomGroupe: `Groupe ${organisationData.nom}`
+            };
+            
+            participants.push(participant);
+          });
+          
+          const numeroFacture = response?.data?.invoice_number || `PRO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
+          
+          // Utiliser le montant retourné par l'API au lieu du calcul local
+          // L'API peut retourner le montant dans différents champs : amount, total_amount, montant_total, etc.
+          const montantAPI = response?.data?.amount 
+            || response?.data?.total_amount 
+            || response?.data?.montant_total 
+            || response?.data?.registration_fee?.amount
+            || response?.data?.fee_amount
+            || calculerMontantTotal(); // Fallback sur le calcul local si non trouvé
+
+          setInscriptionFinalisee({
+            participants,
+            organisation,
+            numeroFacture,
+            montantTotal: typeof montantAPI === 'string' ? parseFloat(montantAPI) : montantAPI
+          });
+
+          return; // Sortir après succès de l'inscription groupée
+        } catch (apiError: any) {
+          console.error('Erreur API lors de la création de l\'inscription groupée:', apiError);
+          const errorMessage = apiError?.message || 'Erreur lors de la création de l\'inscription groupée via l\'API';
+          toast.error(errorMessage);
+          throw apiError; // Re-lancer pour être capturé par le catch externe
+        }
       }
 
-      const existingParticipants = JSON.parse(localStorage.getItem('dynamicParticipants') || '[]');
-      
-      existingParticipants.push(...participants);
-
-      localStorage.setItem('dynamicParticipants', JSON.stringify(existingParticipants));
-      // Note: Les organisations sont maintenant gérées par l'API, pas besoin de localStorage
-      
-      window.dispatchEvent(new Event('storage'));
-
-      const numeroFacture = `PRO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
-
-      setInscriptionFinalisee({
-        participants,
-        organisation,
-        numeroFacture,
-        montantTotal: calculerMontantTotal()
-      });
-
-      toast.success('Inscription créée avec succès !');
+      // Fallback: Si ce n'est ni individuel ni groupe (ne devrait pas arriver)
+      console.error('Type d\'inscription non reconnu:', typeInscription);
+      toast.error('Type d\'inscription non reconnu');
+      setLoading(false);
     } catch (error) {
-      console.error('Erreur lors de la finalisation:', error);
-      toast.error('Erreur lors de la finalisation de l\'inscription');
+      console.error('=== Erreur lors de la finalisation ===', error);
+      
+      // Afficher un message d'erreur plus détaillé
+      let errorMessage = 'Erreur lors de la finalisation de l\'inscription';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        console.error('Message d\'erreur:', error.message);
+        console.error('Stack:', error.stack);
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
+      toast.error(errorMessage);
     } finally {
+      console.log('=== Fin de finalisation (finally) ===');
       setLoading(false);
     }
   };
