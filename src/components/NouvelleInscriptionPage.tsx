@@ -806,6 +806,9 @@ export const NouvelleInscriptionPage = () => {
           company_address?: string;
         };
         console.log('Données nettoyées:', cleanRegistrationData);
+        console.log('Téléphone final:', cleanRegistrationData.phone);
+        console.log('Company sector:', cleanRegistrationData.company_sector);
+        console.log('Company name:', cleanRegistrationData.company_name);
 
         try {
           // Debug: log des données envoyées
@@ -913,17 +916,37 @@ export const NouvelleInscriptionPage = () => {
           if (errorData) {
             // Structure JSON API avec errors array
             if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
-              // Combiner tous les messages d'erreur
-              const errorMessages = errorData.errors.map((err: any) => {
+              // Extraire les messages d'erreur de validation
+              const validationErrors: string[] = [];
+              
+              errorData.errors.forEach((err: any) => {
+                // Si detail est un objet avec des champs de validation (comme phone, company_sector, etc.)
                 if (err.detail && typeof err.detail === 'object') {
-                  // Si detail est un objet, extraire les clés-valeurs
-                  return Object.entries(err.detail)
-                    .map(([key, value]) => `${key}: ${value}`)
-                    .join(', ');
+                  // Parcourir les clés du détail pour extraire les messages de validation
+                  Object.entries(err.detail).forEach(([field, messages]) => {
+                    if (Array.isArray(messages)) {
+                      messages.forEach((msg: any) => {
+                        validationErrors.push(`${field}: ${msg}`);
+                      });
+                    } else if (typeof messages === 'string') {
+                      validationErrors.push(`${field}: ${messages}`);
+                    } else if (typeof messages === 'object' && messages !== null) {
+                      // Si messages est un objet (comme {is_valid: false})
+                      Object.entries(messages).forEach(([key, value]) => {
+                        validationErrors.push(`${field}: ${key} = ${value}`);
+                      });
+                    }
+                  });
+                } else {
+                  // Sinon utiliser les autres champs
+                  const msg = err.detail || err.title || err.message || String(err);
+                  if (msg) validationErrors.push(msg);
                 }
-                return err.detail || err.title || err.message || String(err);
               });
-              errorMessage = errorMessages.join('. ');
+              
+              errorMessage = validationErrors.length > 0 
+                ? validationErrors.join('. ')
+                : 'Erreur de validation des données';
             } 
             // Structure standard avec message
             else if (errorData.message) {

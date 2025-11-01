@@ -210,7 +210,7 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 sticky top-0 h-screen overflow-hidden">
       <div className="p-6">
         <div className="space-y-3">
-          <Logo className="h-10 w-auto object-contain" alt="ASACI Technologies" />
+          <Logo className="h-16 w-auto object-contain" alt="ASACI Technologies" />
           <div>
             <h1 className="text-gray-900">FANAF 2026</h1>
             <p className="text-xs text-gray-500">{menuConfig.title}</p>
