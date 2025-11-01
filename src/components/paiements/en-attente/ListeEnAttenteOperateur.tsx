@@ -605,8 +605,8 @@ export function ListeEnAttenteOperateur() {
                         className="w-4 h-4 text-green-600 focus:ring-green-500"
                       />
                       <label htmlFor="espece" className="flex items-center gap-2 cursor-pointer">
-                        <span className="text-2xl">💵</span>
-                        <span className="text-sm text-gray-700">Espèce</span>
+                        <span className="text-2xl">💳</span>
+                        <span className="text-sm text-gray-700">Chèque</span>
                       </label>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -620,8 +620,8 @@ export function ListeEnAttenteOperateur() {
                         className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                       />
                       <label htmlFor="carte" className="flex items-center gap-2 cursor-pointer">
-                        <span className="text-2xl">💳</span>
-                        <span className="text-sm text-gray-700">Carte Bancaire</span>
+                        <span className="text-2xl">🏦</span>
+                        <span className="text-sm text-gray-700">Virement Bancaire</span>
                       </label>
                     </div>
                   </div>
