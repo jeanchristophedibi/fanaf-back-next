@@ -167,21 +167,29 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
       });
       
       // Invalider tous les caches liés aux sponsors pour rafraîchir les listes et widgets
-      // Utiliser predicate pour invalider toutes les queries qui commencent par ces clés
       const sponsorQueryKeys = ['sponsors', 'listeSponsors', 'widgetSponsors', 'sponsorTypes'];
       
-      // Invalider toutes les queries liées aux sponsors
-      await Promise.all(
-        sponsorQueryKeys.map(key => 
-          queryClient.invalidateQueries({ queryKey: [key] })
-        )
-      );
-      
-      // Forcer le refetch immédiat de toutes les queries liées aux sponsors pour mettre à jour les widgets
+      // Invalider toutes les queries liées aux sponsors (avec predicate pour capturer toutes les sous-clés)
       await Promise.all([
-        queryClient.refetchQueries({ queryKey: ['widgetSponsors'] }),
-        queryClient.refetchQueries({ queryKey: ['listeSponsors'] }),
-        queryClient.refetchQueries({ queryKey: ['sponsors'] }),
+        queryClient.invalidateQueries({ 
+          predicate: (query) => {
+            const key = query.queryKey;
+            if (!Array.isArray(key) || key.length === 0) return false;
+            return sponsorQueryKeys.includes(key[0] as string);
+          }
+        }),
+      ]);
+      
+      // Forcer le refetch immédiat de toutes les queries liées aux sponsors
+      await Promise.all([
+        queryClient.refetchQueries({ 
+          predicate: (query) => {
+            const key = query.queryKey;
+            if (!Array.isArray(key) || key.length === 0) return false;
+            const firstKey = key[0] as string;
+            return ['widgetSponsors', 'listeSponsors', 'sponsors'].includes(firstKey);
+          }
+        }),
       ]);
       
       // Appeler le callback si fourni (avant la réinitialisation)
@@ -192,6 +200,12 @@ export function CreateSponsorDialog({ open, onOpenChange, onCreateSponsor }: Cre
       // Reset form et fermer le dialog
       resetForm();
       onOpenChange(false);
+      
+      // Recharger la page après un court délai pour garantir la mise à jour de tous les widgets
+      // Cela garantit que même si l'invalidation ne fonctionne pas immédiatement, les widgets seront mis à jour
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     },
     onError: (err: any) => {
       const errorMessage = err?.message || err?.response?.data?.message || 'Erreur lors de la création du sponsor';
