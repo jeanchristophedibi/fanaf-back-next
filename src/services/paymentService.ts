@@ -93,7 +93,7 @@ class PaymentService {
     }
 
     const response = await axiosInstance.get<any>(
-      `${this.baseUrl}?${params.toString()}`
+      `${this.baseUrlRegistration}/pending?${params.toString()}`
     )
     return response.data
   }
@@ -118,7 +118,7 @@ class PaymentService {
     }
 
     const response = await axiosInstance.get<any>(
-      `${this.baseUrl}/en-attente/stats?${params.toString()}`
+      `${this.baseUrl}/stats?${params.toString()}`
     )
     return response.data
   }

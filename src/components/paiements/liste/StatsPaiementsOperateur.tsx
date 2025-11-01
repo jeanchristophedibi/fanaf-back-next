@@ -8,25 +8,51 @@ import paymentService from "@/services/paymentService";
 import { toast } from "sonner";
 
 export function StatsPaiementsOperateur() {
-  const [statsPaiements, setStatsPaiements] = useState<any>({});
+  type PaymentStats = {
+    totals: {
+      count: number;
+      amount: number;
+      fees: number;
+    };
+    by_method: Array<{
+      payment_method: string;
+      count: number;
+      total_amount: number;
+    }>;
+  };
+
+  const [statsData, setStatsData] = useState<PaymentStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const fetchTransactions = async () => {
+    const fetchStats = async () => {
       setIsLoading(true);
       try {
         const response = await paymentService.getStats();
-        console.log('statsPaiements', response);
-        setStatsPaiements(response);
+        console.log('Stats paiements finalisés:', response);
+        setStatsData(response?.data || response);
       } catch (error) {
-        toast?.error('Impossible de récupérer les paiements');
-        setStatsPaiements({});
+        console.error('Erreur récupération stats:', error);
+        toast?.error('Impossible de récupérer les statistiques');
+        setStatsData(null);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchTransactions();
+    fetchStats();
   }, []);
+
+  // Calculer les totaux pour l'affichage
+  const totalAmount = statsData?.totals?.amount || 0;
+  
+  // Calculer les montants par canal (externe vs asapay)
+  const offlineAmount = statsData?.by_method
+    ?.filter(m => m.payment_method !== 'asapay')
+    ?.reduce((sum, m) => sum + m.total_amount, 0) || 0;
+    
+  const onlineAmount = statsData?.by_method
+    ?.find(m => m.payment_method === 'asapay')
+    ?.total_amount || 0;
   
   // // Calculer les statistiques pour les paiements finalisés
   // const stats = useMemo(() => {
@@ -80,9 +106,9 @@ export function StatsPaiementsOperateur() {
             </div>
             <div>
               <p className="text-sm text-blue-700">Total paiements</p>
-              <p className="text-3xl text-blue-900">{statsPaiements?.total_amount}</p>
+              <p className="text-3xl text-blue-900">{statsData?.totals?.count || 0}</p>
               <p className="text-xs text-blue-600 mt-1">
-                {statsPaiements?.total_amount?.toLocaleString() || 0} FCFA
+                {totalAmount.toLocaleString()} FCFA
               </p>
             </div>
           </div>
@@ -101,9 +127,9 @@ export function StatsPaiementsOperateur() {
             </div>
             <div>
               <p className="text-sm text-blue-700">Canal Externe</p>
-              <p className="text-3xl text-blue-900">{statsPaiements?.offline_amount}</p>
+              <p className="text-3xl text-blue-900">{statsData?.by_method?.filter(m => m.payment_method !== 'asapay').reduce((sum, m) => sum + m.count, 0) || 0}</p>
               <p className="text-xs text-blue-600 mt-1">
-                {statsPaiements?.offline_amount?.toLocaleString() || 0} FCFA
+                {offlineAmount.toLocaleString()} FCFA
               </p>
             </div>
           </div>
@@ -122,9 +148,9 @@ export function StatsPaiementsOperateur() {
             </div>
             <div>
               <p className="text-sm text-orange-700">Canal ASAPAY</p>
-              <p className="text-3xl text-orange-900">{statsPaiements?.online_amount}</p>
+              <p className="text-3xl text-orange-900">{statsData?.by_method?.find(m => m.payment_method === 'asapay')?.count || 0}</p>
               <p className="text-xs text-orange-600 mt-1">
-                {statsPaiements?.online_amount?.toLocaleString() || 0} FCFA
+                {onlineAmount.toLocaleString()} FCFA
               </p>
             </div>
           </div>
