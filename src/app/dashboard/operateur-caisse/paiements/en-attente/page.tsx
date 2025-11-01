@@ -1,6 +1,5 @@
 'use client';
 
-import { WidgetEnAttenteOperateur } from '../../../../../components/paiements/en-attente/WidgetEnAttenteOperateur';
 import { ListeEnAttenteOperateur } from '../../../../../components/paiements/en-attente/ListeEnAttenteOperateur';
 
 export default function OperateurCaissePaiementsAttentePage() {
@@ -15,7 +14,6 @@ export default function OperateurCaissePaiementsAttentePage() {
         </p>
       </div>
     </div>
-    <WidgetEnAttenteOperateur />
     <ListeEnAttenteOperateur />  
     </div>
   );

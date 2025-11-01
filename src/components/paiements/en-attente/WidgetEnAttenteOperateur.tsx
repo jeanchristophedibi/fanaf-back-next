@@ -83,24 +83,7 @@ export function WidgetEnAttenteOperateur() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-    >
-      <Card className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center">
-            <AlertCircle className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <p className="text-sm text-orange-700">Total en attente</p>
-            <p className="text-3xl text-orange-900">{stats.total}</p>
-          </div>
-        </div>
-      </Card>
-    </motion.div>
-
+    
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -150,6 +133,24 @@ export function WidgetEnAttenteOperateur() {
           <div>
             <p className="text-sm text-gray-600">Chèque</p>
             <p className="text-3xl text-gray-900">{stats.cheque}</p>
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+    >
+      <Card className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <p className="text-sm text-orange-700">AsaPay</p>
+            <p className="text-3xl text-orange-900">{stats.asapay}</p>
           </div>
         </div>
       </Card>
