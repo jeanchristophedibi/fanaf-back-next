@@ -137,15 +137,18 @@ export function DocumentsParticipantsPage() {
 
   // Fonction helper pour obtenir les infos de paiement (depuis participant ou localStorage)
   const getPaymentInfo = (participant: any) => {
-    // Si les infos sont déjà dans le participant, les retourner
-    if (participant.datePaiement && participant.modePaiement) {
+    // Vérifier les deux formats possibles de champs (snake_case et camelCase)
+    const datePaiement = participant.date_paiement || participant.datePaiement;
+    const modePaiement = participant.mode_paiement || participant.modePaiement;
+    
+    if (datePaiement || modePaiement) {
       return {
-        datePaiement: participant.datePaiement,
-        modePaiement: participant.modePaiement,
+        datePaiement,
+        modePaiement,
       };
     }
     
-    // Sinon, chercher dans localStorage
+    // Sinon, chercher dans localStorage (pour compatibilité avec anciennes données)
     if (typeof window === 'undefined') return { datePaiement: null, modePaiement: null };
     const finalisedPayments = JSON.parse(localStorage.getItem('finalisedPayments') || '{}');
     const paymentInfo = finalisedPayments[participant.id];
@@ -180,10 +183,11 @@ export function DocumentsParticipantsPage() {
         filters.payment_method = filtreModePaiement;
       }
       
-      // Organisation
-      if (filtreOrganisation !== 'all') {
-        filters.organization_id = filtreOrganisation;
-      }
+      // Organisation (filtrer côté client car l'API n'a peut-être pas ce filtre)
+      // La propriété est organisation_id dans les données
+      // if (filtreOrganisation !== 'all') {
+      //   filters.organization_id = filtreOrganisation;
+      // }
 
       const response = searchTerm
         ? await participantService.search(searchTerm, filters)
@@ -207,15 +211,20 @@ export function DocumentsParticipantsPage() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Recharger quand les filtres changent
+  // Recharger quand les filtres changent (organisation filtrée côté client)
   useEffect(() => {
     fetchParticipants();
-  }, [filtreModePaiement, filtreOrganisation]);
+  }, [filtreModePaiement]);
   
   const participantsFinalisés = useMemo(() => {
     let filtered = participants.filter(p => 
       p.statut_inscription === 'finalisée' || finalisedParticipantsIds.has(p.id)
     );
+
+    // Filtre par organisation (côté client)
+    if (filtreOrganisation !== 'all') {
+      filtered = filtered.filter(p => p.organisation_id === filtreOrganisation);
+    }
 
     // Filtre par période de paiement (local uniquement car complexe)
     if (filtrePeriode !== 'all') {
@@ -263,9 +272,35 @@ export function DocumentsParticipantsPage() {
       'lettre': 'Lettre d\'invitation',
       'facture': 'Facture',
     };
-    toast.success(`${docNames[type]} téléchargé(e)`, {
-      description: `${participant.prenom} ${participant.nom}`,
-    });
+
+    // Récupérer l'URL du document depuis l'API
+    let documentUrl: string | null = null;
+    
+    if (type === 'badge' && participant.documents?.badge) {
+      documentUrl = participant.documents.badge;
+    } else if (type === 'lettre' && participant.documents?.invitation) {
+      documentUrl = participant.documents.invitation;
+    } else if (type === 'recu' && participant.documents?.invoices?.length > 0) {
+      // Prendre le premier reçu disponible
+      const invoice = participant.documents.invoices.find((inv: any) => inv.receipt_url);
+      documentUrl = invoice?.receipt_url || null;
+    } else if (type === 'facture' && participant.documents?.invoices?.length > 0) {
+      // Prendre la première facture disponible
+      const invoice = participant.documents.invoices.find((inv: any) => inv.invoice_path);
+      documentUrl = invoice?.invoice_path || null;
+    }
+
+    if (documentUrl) {
+      // Ouvrir le document dans un nouvel onglet
+      window.open(documentUrl, '_blank');
+      toast.success(`${docNames[type]} ouvert(e)`, {
+        description: `${participant.prenom} ${participant.nom}`,
+      });
+    } else {
+      toast.error(`${docNames[type]} non disponible`, {
+        description: `${participant.prenom} ${participant.nom}`,
+      });
+    }
   };
 
   // Ouvrir la boîte de dialogue de confirmation
@@ -711,9 +746,14 @@ export function DocumentsParticipantsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes les organisations</SelectItem>
-                {participants.map((org) => (
+                {/* Extraire les organisations uniques depuis les participants */}
+                {Array.from(new Map(
+                  participants
+                    .filter(p => p.organisation?.id)
+                    .map(p => [p.organisation.id, p.organisation])
+                ).values()).map((org: any) => (
                   <SelectItem key={org.id} value={org.id}>
-                    {org.nom}
+                    {org.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -803,9 +843,12 @@ export function DocumentsParticipantsPage() {
 
                 return filtered.map((participant, index) => {
                   const organisation = participant.organisation;
-                  // Reçu et facture disponibles uniquement après paiement finalisé
-                  const hasReceipt = participant.statut_inscription === 'finalisée' && 
-                                    (participant.statut === 'membre' || participant.statut === 'non-membre');
+                  // Vérifier la disponibilité des documents depuis l'API
+                  const hasBadge = participant.documents?.has_badge || participant.documents?.badge;
+                  const hasInvitation = participant.documents?.has_invitation || participant.documents?.invitation;
+                  const hasInvoices = participant.documents?.invoices_count > 0 || participant.documents?.invoices?.length > 0;
+                  const hasReceipt = hasInvoices && participant.documents?.invoices?.some((inv: any) => inv.receipt_url);
+                  const hasInvoice = hasInvoices && participant.documents?.invoices?.some((inv: any) => inv.invoice_path);
                   const paymentInfo = getPaymentInfo(participant);
                   // Obtenir les compteurs de remises pour ce participant
                   const remisesCount = getParticipantRemisesCount(participant.id);
@@ -842,7 +885,7 @@ export function DocumentsParticipantsPage() {
                             {/* Organisation */}
                             <div>
                               <p className="text-xs text-gray-500 mb-1">Organisation</p>
-                              <p className="text-sm text-gray-900">{participant?.company?.name || 'N/A'}</p>
+                              <p className="text-sm text-gray-900">{participant?.organisation?.name || 'N/A'}</p>
                             </div>
 
                             {/* Contact */}
@@ -879,21 +922,26 @@ export function DocumentsParticipantsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleDownloadDocument(participant, 'badge')}>
+                              <DropdownMenuItem 
+                                onClick={() => handleDownloadDocument(participant, 'badge')}
+                                disabled={!hasBadge}
+                              >
                                 <QrCode className="w-4 h-4 mr-2" />
                                 Télécharger Badge
                               </DropdownMenuItem>
+                              {hasInvitation && (
+                                <DropdownMenuItem onClick={() => handleDownloadDocument(participant, 'lettre')}>
+                                  <Mail className="w-4 h-4 mr-2" />
+                                  Télécharger Lettre
+                                </DropdownMenuItem>
+                              )}
                               {hasReceipt && (
                                 <DropdownMenuItem onClick={() => handleDownloadDocument(participant, 'recu')}>
                                   <Receipt className="w-4 h-4 mr-2" />
                                   Télécharger Reçu
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem onClick={() => handleDownloadDocument(participant, 'lettre')}>
-                                <Mail className="w-4 h-4 mr-2" />
-                                Télécharger Lettre
-                              </DropdownMenuItem>
-                              {hasReceipt && (
+                              {hasInvoice && (
                                 <DropdownMenuItem onClick={() => handleDownloadDocument(participant, 'facture')}>
                                   <FileDown className="w-4 h-4 mr-2" />
                                   Télécharger Facture

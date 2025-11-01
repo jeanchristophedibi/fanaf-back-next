@@ -9,16 +9,9 @@ import { toast } from "sonner";
 
 export function StatsPaiementsOperateur() {
   type PaymentStats = {
-    totals: {
-      count: number;
-      amount: number;
-      fees: number;
-    };
-    by_method: Array<{
-      payment_method: string;
-      count: number;
-      total_amount: number;
-    }>;
+    total_amount: number;
+    online_amount: number;
+    offline_amount: number;
   };
 
   const [statsData, setStatsData] = useState<PaymentStats | null>(null);
@@ -42,17 +35,10 @@ export function StatsPaiementsOperateur() {
     fetchStats();
   }, []);
 
-  // Calculer les totaux pour l'affichage
-  const totalAmount = statsData?.totals?.amount || 0;
-  
-  // Calculer les montants par canal (externe vs asapay)
-  const offlineAmount = statsData?.by_method
-    ?.filter(m => m.payment_method !== 'asapay')
-    ?.reduce((sum, m) => sum + m.total_amount, 0) || 0;
-    
-  const onlineAmount = statsData?.by_method
-    ?.find(m => m.payment_method === 'asapay')
-    ?.total_amount || 0;
+  // Extraire les montants
+  const totalAmount = statsData?.total_amount || 0;
+  const offlineAmount = statsData?.offline_amount || 0;
+  const onlineAmount = statsData?.online_amount || 0;
   
   // // Calculer les statistiques pour les paiements finalisés
   // const stats = useMemo(() => {
@@ -106,10 +92,8 @@ export function StatsPaiementsOperateur() {
             </div>
             <div>
               <p className="text-sm text-blue-700">Total paiements</p>
-              <p className="text-3xl text-blue-900">{statsData?.totals?.count || 0}</p>
-              <p className="text-xs text-blue-600 mt-1">
-                {totalAmount.toLocaleString()} FCFA
-              </p>
+              <p className="text-3xl text-blue-900">{totalAmount.toLocaleString()}</p>
+              <p className="text-xs text-blue-600 mt-1">FCFA</p>
             </div>
           </div>
         </Card>
@@ -127,10 +111,8 @@ export function StatsPaiementsOperateur() {
             </div>
             <div>
               <p className="text-sm text-blue-700">Canal Externe</p>
-              <p className="text-3xl text-blue-900">{statsData?.by_method?.filter(m => m.payment_method !== 'asapay').reduce((sum, m) => sum + m.count, 0) || 0}</p>
-              <p className="text-xs text-blue-600 mt-1">
-                {offlineAmount.toLocaleString()} FCFA
-              </p>
+              <p className="text-3xl text-blue-900">{offlineAmount.toLocaleString()}</p>
+              <p className="text-xs text-blue-600 mt-1">FCFA</p>
             </div>
           </div>
         </Card>
@@ -148,10 +130,8 @@ export function StatsPaiementsOperateur() {
             </div>
             <div>
               <p className="text-sm text-orange-700">Canal ASAPAY</p>
-              <p className="text-3xl text-orange-900">{statsData?.by_method?.find(m => m.payment_method === 'asapay')?.count || 0}</p>
-              <p className="text-xs text-orange-600 mt-1">
-                {onlineAmount.toLocaleString()} FCFA
-              </p>
+              <p className="text-3xl text-orange-900">{onlineAmount.toLocaleString()}</p>
+              <p className="text-xs text-orange-600 mt-1">FCFA</p>
             </div>
           </div>
         </Card>
