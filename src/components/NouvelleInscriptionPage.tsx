@@ -1135,17 +1135,23 @@ export const NouvelleInscriptionPage = () => {
         
         const principalUser: any = {
           civility: mapCivility(defaultCivility),
-          first_name: participantPrincipal.prenom,
-          last_name: participantPrincipal.nom,
-          email: participantPrincipal.email,
+          first_name: participantPrincipal.prenom.trim(),
+          last_name: participantPrincipal.nom.trim(),
+          email: participantPrincipal.email.trim(),
           phone: principalPhone,
           country_id: countryId,
           is_lead: true,
         };
         
+        // Track le numéro de passeport du participant principal pour éviter les doublons
+        const usedPassportNumbers = new Set<string>();
+        
         // Ajouter passport_number seulement si présent
         if (participantPrincipal.numeroIdentite && participantPrincipal.numeroIdentite.trim() !== '') {
-          principalUser.passport_number = participantPrincipal.numeroIdentite.trim();
+          const principalPassport = participantPrincipal.numeroIdentite.trim();
+          principalUser.passport_number = principalPassport;
+          usedPassportNumbers.add(principalPassport);
+          console.log('Numéro de passeport participant principal:', principalPassport);
         }
         // TODO: Ajouter un champ job_title dans le formulaire pour le participant principal
         
@@ -1159,46 +1165,86 @@ export const NouvelleInscriptionPage = () => {
         
         users.push(principalUser);
         
+        // Vérifier les emails dupliqués avant d'ajouter les participants
+        const allEmails = [participantPrincipal.email, ...participantsGroupe.map(p => p.email)];
+        const uniqueEmails = new Set(allEmails);
+        if (uniqueEmails.size !== allEmails.length) {
+          const duplicates = allEmails.filter((email, index) => allEmails.indexOf(email) !== index);
+          toast.error(`Email(s) dupliqué(s) détecté(s): ${[...new Set(duplicates)].join(', ')}. Chaque participant doit avoir un email unique.`);
+          setLoading(false);
+          return;
+        }
+        
+        // Réutiliser le Set des numéros de passeport pour éviter les doublons dans le groupe
+        
         // Ajouter les participants du groupe (is_lead: false)
         participantsGroupe.forEach((p, index) => {
-          // Pour l'instant, utiliser le téléphone du participant principal pour tous les participants du groupe
+          // Utiliser le téléphone du participant principal pour tous les participants du groupe
           // TODO: Ajouter un champ téléphone spécifique pour chaque participant du groupe dans le formulaire
           const phoneToUse = participantPrincipal.telephone;
           
           let groupPhone: string;
           try {
             groupPhone = cleanPhoneNumber(phoneToUse);
+            console.log(`Téléphone validé pour participant ${index + 2}:`, groupPhone);
           } catch (error) {
-            toast.error(`Le numéro de téléphone du participant ${index + 2} n'est pas valide: ${error instanceof Error ? error.message : 'Format invalide'}`);
+            console.error(`Erreur validation téléphone participant ${index + 2}:`, error);
+            toast.error(`Le numéro de téléphone du participant ${index + 2} (${p.prenom} ${p.nom}) n'est pas valide: ${error instanceof Error ? error.message : 'Format invalide'}`);
             setLoading(false);
             return;
           }
           
-          // Pour l'instant, utiliser le même numéro d'identité que le participant principal
-          // TODO: Ajouter un champ passport_number spécifique pour chaque participant du groupe dans le formulaire
+          // Générer un numéro de passeport unique pour chaque participant du groupe
+          // Si le participant principal a un numéro, on génère des variations uniques
           let passportNumber: string | undefined;
-          if (participantPrincipal.numeroIdentite) {
-            passportNumber = participantPrincipal.numeroIdentite;
+          if (participantPrincipal.numeroIdentite && participantPrincipal.numeroIdentite.trim() !== '') {
+            const baseNumber = participantPrincipal.numeroIdentite.trim();
+            // Générer un numéro unique en ajoutant un suffixe basé sur l'index
+            // Si le numéro de base est déjà utilisé, générer une variante
+            let uniquePassport = baseNumber;
+            let suffix = 1;
+            
+            // Chercher un numéro unique
+            while (usedPassportNumbers.has(uniquePassport) && suffix < 1000) {
+              uniquePassport = `${baseNumber}-${String(suffix).padStart(3, '0')}`;
+              suffix++;
+            }
+            
+            // Si après 1000 tentatives on n'a pas trouvé, ne pas inclure le passport_number pour ce participant
+            if (suffix < 1000) {
+              passportNumber = uniquePassport;
+              usedPassportNumbers.add(uniquePassport);
+              console.log(`Numéro de passeport unique généré pour participant ${index + 2}:`, passportNumber);
+            } else {
+              console.warn(`Impossible de générer un numéro de passeport unique pour participant ${index + 2}, sera omis`);
+            }
           }
-          // Si le participant principal n'a pas de numéro, on ne l'ajoute pas (undefined sera filtré)
           
           const groupUser: any = {
             civility: mapCivility(defaultCivilityGroupe),
-            first_name: p.prenom,
-            last_name: p.nom,
-            email: p.email,
+            first_name: p.prenom.trim(),
+            last_name: p.nom.trim(),
+            email: p.email.trim(),
             phone: groupPhone,
             country_id: countryId, // Utiliser le même pays que le participant principal (pourrait être étendu plus tard)
             is_lead: false,
           };
           
-          // Ajouter passport_number seulement si présent
-          if (passportNumber) {
-            groupUser.passport_number = passportNumber;
+          // Ajouter passport_number seulement s'il est unique et présent
+          if (passportNumber && passportNumber.trim() !== '') {
+            groupUser.passport_number = passportNumber.trim();
           }
           
           // TODO: Ajouter un champ job_title pour chaque participant du groupe dans le formulaire
           // job_title sera ajouté plus tard quand le champ sera disponible dans le formulaire
+          
+          console.log(`Participant ${index + 2} ajouté:`, { 
+            first_name: groupUser.first_name, 
+            last_name: groupUser.last_name, 
+            email: groupUser.email,
+            has_passport: !!groupUser.passport_number,
+            passport: groupUser.passport_number
+          });
           
           users.push(groupUser);
         });
@@ -1225,10 +1271,15 @@ export const NouvelleInscriptionPage = () => {
           // Valider et nettoyer le numéro de téléphone de l'entreprise si présent
           if (organisationData.contact && organisationData.contact.trim() !== '') {
             try {
-              bulkRegistrationData.company_phone = cleanPhoneNumber(organisationData.contact);
+              const cleanedCompanyPhone = cleanPhoneNumber(organisationData.contact);
+              console.log('Numéro de téléphone entreprise validé:', cleanedCompanyPhone);
+              bulkRegistrationData.company_phone = cleanedCompanyPhone;
             } catch (error) {
-              console.warn('Numéro de téléphone de l\'entreprise invalide, ignoré:', error);
-              // On continue sans le numéro de téléphone de l'entreprise plutôt que de bloquer
+              console.error('Erreur validation téléphone entreprise:', error);
+              const errorMessage = error instanceof Error ? error.message : 'Format invalide';
+              toast.error(`Le numéro de téléphone de l'entreprise n'est pas valide: ${errorMessage}`);
+              // On ne bloque pas mais on n'ajoute pas le numéro invalide
+              console.warn('Numéro de téléphone de l\'entreprise invalide, ignoré');
             }
           }
           
