@@ -12,7 +12,7 @@ export interface ParticipantFilters {
 class ParticipantService {
   private baseUrl = '/admin/participants'
   private baseUrlRegistration = '/admin/registrations'
-
+  private baseUrlOperateur = '/admin/operateurs'
   /**
    * Récupérer tous les participants avec pagination
    */
@@ -49,6 +49,31 @@ class ParticipantService {
    */
   async search(query: string, filters?: Omit<ParticipantFilters, 'search'>): Promise<any> {
     return this.getAll({ search: query, ...filters })
+  }
+
+  /**
+   * Rechercher des participants avec filtres
+   */
+  /**
+   * Récupérer les stats des paiements en attente
+   */
+  async getStats(filters?: ParticipantFilters): Promise<any> {
+    const params = new URLSearchParams()
+    
+    if (filters?.search) {
+      params.append('q', filters.search)
+    }
+    if (filters?.page) {
+      params.append('page', filters.page.toString())
+    }
+    if (filters?.per_page) {
+      params.append('per_page', filters.per_page.toString())
+    }
+
+    const response = await axiosInstance.get<any>(
+      `${this.baseUrlOperateur}/stats?${params.toString()}`
+    )
+    return response.data
   }
 
   /**

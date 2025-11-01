@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Badge as BadgeUI } from '../../../components/ui/badge';
 import { 
@@ -14,64 +14,43 @@ import {
   Award,
   Calendar
 } from 'lucide-react';
-import { useDynamicInscriptions } from '../../../components/hooks/useDynamicInscriptions';
 import { AnimatedStat } from '../../../components/AnimatedStat';
+import { toast } from 'sonner';
+import participantService from '@/services/participantService';
+
+type DashboardStats = {
+  pending_payments: number;
+  finalized_registrations: number;
+  grouped_registrations: number;
+  participants: number;
+  last_24h: number;
+  by_type: {
+    member: number;
+    not_member: number;
+    vip: number;
+  };
+};
 
 export default function OperateurBadgeDashboard() {
-  const { participants, organisations } = useDynamicInscriptions({ includeOrganisations: true });
-
-  // Statistiques globales
-  const stats = useMemo(() => {
-    const finalisés = participants.filter(p => p.statutInscription === 'finalisée');
-    const enAttente = participants.filter(p => 
-      p.statutInscription === 'non-finalisée' && 
-      (p.statut === 'membre' || p.statut === 'non-membre')
-    );
-    const exonérés = participants.filter(p => 
-      p.statut === 'vip' || p.statut === 'speaker'
-    );
-
-    // Documents générés aujourd'hui (simulation)
-    const aujourdhui = new Date().toISOString().split('T')[0];
-    const aujourdhuiDocs = finalisés.filter(p => {
-      // Simulation: on considère que 30% des documents ont été générés aujourd'hui
-      return Math.random() > 0.7;
-    }).length;
-
-    // Par type de participant
-    const parType = {
-      membre: finalisés.filter(p => p.statut === 'membre').length,
-      nonMembre: finalisés.filter(p => p.statut === 'non-membre').length,
-      vip: finalisés.filter(p => p.statut === 'vip').length,
-      speaker: finalisés.filter(p => p.statut === 'speaker').length,
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchStats = async () => {
+      setIsLoading(true);
+      try {
+        const response = await participantService.getStats();
+        console.log('Stats participants:', response);
+        setStats(response?.data || response);
+      } catch (error) {
+        console.error('Erreur récupération stats:', error);
+        toast?.error('Impossible de récupérer les statistiques');
+      } finally {
+        setIsLoading(false);
+      }
     };
-
-    // Top 5 organisations
-    const orgStats = new Map<string, number>();
-    finalisés.forEach(p => {
-      const count = orgStats.get(p.organisationId) || 0;
-      orgStats.set(p.organisationId, count + 1);
-    });
-    
-    const topOrganisations = Array.from(orgStats.entries())
-      .map(([orgId, count]) => ({
-        org: organisations.find(o => o.id === orgId),
-        count
-      }))
-      .filter(item => item.org !== undefined)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    return {
-      badgesGénérés: finalisés.length,
-      badgesEnAttente: enAttente.length,
-      documentsAujourdhui: aujourdhuiDocs,
-      exonérés: exonérés.length,
-      total: participants.length,
-      parType,
-      topOrganisations
-    };
-  }, [participants, organisations]);
+    fetchStats();
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
@@ -98,7 +77,7 @@ export default function OperateurBadgeDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <AnimatedStat value={stats.badgesGénérés} className="text-3xl text-gray-900 mb-1" />
+            <AnimatedStat value={stats?.finalized_registrations || 0} className="text-3xl text-gray-900 mb-1" />
             <p className="text-xs text-gray-500">Documents disponibles</p>
           </CardContent>
         </Card>
@@ -107,12 +86,12 @@ export default function OperateurBadgeDashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-gray-600 flex items-center gap-2">
               <Clock className="w-4 h-4 text-orange-600" />
-              Badges en attente
+              Paiements en attente
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <AnimatedStat value={stats.badgesEnAttente} className="text-3xl text-gray-900 mb-1" />
-            <p className="text-xs text-gray-500">Paiements à finaliser</p>
+            <AnimatedStat value={stats?.pending_payments || 0} className="text-3xl text-gray-900 mb-1" />
+            <p className="text-xs text-gray-500">À finaliser</p>
           </CardContent>
         </Card>
 
@@ -120,25 +99,25 @@ export default function OperateurBadgeDashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-gray-600 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
-              Aujourd'hui
+              Dernières 24h
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <AnimatedStat value={stats.documentsAujourdhui} className="text-3xl text-gray-900 mb-1" />
-            <p className="text-xs text-gray-500">Documents générés</p>
+            <AnimatedStat value={stats?.last_24h || 0} className="text-3xl text-gray-900 mb-1" />
+            <p className="text-xs text-gray-500">Nouvelles inscriptions</p>
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-l-purple-600">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-gray-600 flex items-center gap-2">
-              <Award className="w-4 h-4 text-purple-600" />
-              Participants VIP
+              <Users className="w-4 h-4 text-purple-600" />
+              Total participants
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <AnimatedStat value={stats.exonérés} className="text-3xl text-gray-900 mb-1" />
-            <p className="text-xs text-gray-500">VIP & Speakers</p>
+            <AnimatedStat value={stats?.participants || 0} className="text-3xl text-gray-900 mb-1" />
+            <p className="text-xs text-gray-500">Inscrits</p>
           </CardContent>
         </Card>
       </div>
@@ -161,12 +140,12 @@ export default function OperateurBadgeDashboard() {
                     <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
                     <span className="text-sm text-gray-700">Membres</span>
                   </div>
-                  <span className="text-gray-900">{stats.parType.membre}</span>
+                  <span className="text-gray-900">{stats?.by_type?.member || 0}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
                     className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${stats.badgesGénérés > 0 ? (stats.parType.membre / stats.badgesGénérés) * 100 : 0}%` }}
+                    style={{ width: `${stats?.participants ? ((stats?.by_type?.member || 0) / stats.participants) * 100 : 0}%` }}
                   ></div>
                 </div>
               </div>
@@ -177,12 +156,12 @@ export default function OperateurBadgeDashboard() {
                     <div className="w-3 h-3 bg-orange-600 rounded-full"></div>
                     <span className="text-sm text-gray-700">Non-membres</span>
                   </div>
-                  <span className="text-gray-900">{stats.parType.nonMembre}</span>
+                  <span className="text-gray-900">{stats?.by_type?.not_member || 0}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
                     className="bg-orange-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${stats.badgesGénérés > 0 ? (stats.parType.nonMembre / stats.badgesGénérés) * 100 : 0}%` }}
+                    style={{ width: `${stats?.participants ? ((stats?.by_type?.not_member || 0) / stats.participants) * 100 : 0}%` }}
                   ></div>
                 </div>
               </div>
@@ -193,28 +172,12 @@ export default function OperateurBadgeDashboard() {
                     <div className="w-3 h-3 bg-purple-600 rounded-full"></div>
                     <span className="text-sm text-gray-700">VIP</span>
                   </div>
-                  <span className="text-gray-900">{stats.parType.vip}</span>
+                  <span className="text-gray-900">{stats?.by_type?.vip || 0}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
                     className="bg-purple-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${stats.badgesGénérés > 0 ? (stats.parType.vip / stats.badgesGénérés) * 100 : 0}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-                    <span className="text-sm text-gray-700">Speakers</span>
-                  </div>
-                  <span className="text-gray-900">{stats.parType.speaker}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-green-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${stats.badgesGénérés > 0 ? (stats.parType.speaker / stats.badgesGénérés) * 100 : 0}%` }}
+                    style={{ width: `${stats?.participants ? ((stats?.by_type?.vip || 0) / stats.participants) * 100 : 0}%` }}
                   ></div>
                 </div>
               </div>
@@ -222,55 +185,43 @@ export default function OperateurBadgeDashboard() {
 
             <div className="mt-6 p-4 bg-teal-50 rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-700">Total badges générés</span>
-                <span className="text-lg text-teal-700">{stats.badgesGénérés}</span>
+                <span className="text-sm text-gray-700">Total participants</span>
+                <span className="text-lg text-teal-700">{stats?.participants || 0}</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Top organisations */}
+        {/* Inscriptions groupées */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-teal-600" />
-              Top 5 Organisations
+              <Building className="w-5 h-5 text-teal-600" />
+              Types d'inscriptions
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {stats.topOrganisations.map((item, index) => (
-                <div key={item.org!.id} className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    index === 0 ? 'bg-yellow-100 text-yellow-700' :
-                    index === 1 ? 'bg-gray-100 text-gray-700' :
-                    index === 2 ? 'bg-orange-100 text-orange-700' :
-                    'bg-teal-50 text-teal-700'
-                  }`}>
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-gray-900">{item.org!.nom}</span>
-                      <span className="text-sm text-gray-600">{item.count} badges</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div 
-                        className="bg-teal-600 h-1.5 rounded-full transition-all duration-500"
-                        style={{ width: `${(item.count / stats.badgesGénérés) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
+            <div className="space-y-6">
+              <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg">
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Building className="w-8 h-8 text-white" />
                 </div>
-              ))}
-            </div>
-
-            {stats.topOrganisations.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Building className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Aucune organisation pour le moment</p>
+                <div className="text-3xl text-blue-900 mb-2">{stats?.grouped_registrations || 0}</div>
+                <div className="text-sm text-blue-700">Inscriptions groupées</div>
+                <div className="text-xs text-blue-600 mt-1">Entreprises et associations</div>
               </div>
-            )}
+
+              <div className="text-center p-6 bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg">
+                <div className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Users className="w-8 h-8 text-white" />
+                </div>
+                <div className="text-3xl text-teal-900 mb-2">
+                  {(stats?.participants || 0) - (stats?.grouped_registrations || 0)}
+                </div>
+                <div className="text-sm text-teal-700">Inscriptions individuelles</div>
+                <div className="text-xs text-teal-600 mt-1">Participants individuels</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -290,8 +241,8 @@ export default function OperateurBadgeDashboard() {
                 <CheckCircle2 className="w-6 h-6 text-white" />
               </div>
               <div className="text-2xl text-gray-900 mb-1">
-                {stats.badgesGénérés > 0 
-                  ? ((stats.badgesGénérés / stats.total) * 100).toFixed(1) 
+                {stats?.participants 
+                  ? ((stats.finalized_registrations / stats.participants) * 100).toFixed(1) 
                   : 0}%
               </div>
               <div className="text-sm text-gray-600">Taux de finalisation</div>
@@ -302,7 +253,7 @@ export default function OperateurBadgeDashboard() {
                 <Users className="w-6 h-6 text-white" />
               </div>
               <div className="text-2xl text-gray-900 mb-1">
-                {stats.parType.membre + stats.parType.nonMembre}
+                {(stats?.by_type?.member || 0) + (stats?.by_type?.not_member || 0)}
               </div>
               <div className="text-sm text-gray-600">Participants payants</div>
             </div>
@@ -312,9 +263,9 @@ export default function OperateurBadgeDashboard() {
                 <Award className="w-6 h-6 text-white" />
               </div>
               <div className="text-2xl text-gray-900 mb-1">
-                {stats.exonérés}
+                {stats?.by_type?.vip || 0}
               </div>
-              <div className="text-sm text-gray-600">Invités spéciaux</div>
+              <div className="text-sm text-gray-600">Invités VIP</div>
             </div>
           </div>
         </CardContent>
@@ -332,7 +283,7 @@ export default function OperateurBadgeDashboard() {
               Les badges sont générés automatiquement lorsque le statut d'inscription passe à "finalisée". 
               Vous pouvez télécharger les badges individuels ou groupés depuis la section Documents.
             </p>
-          </div>
+          </div> 
         </div>
       </div>
     </div>

@@ -11,7 +11,7 @@ import { Search, Filter, Download, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "../../ui/dialog";
-import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, Mail, Phone, Globe, Building, Calendar, ChevronLeft, ChevronRight, Upload, File } from "lucide-react";
+import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, Mail, Phone, Globe, Building, Calendar, ChevronLeft, ChevronRight, Upload, File, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import paymentService from "@/services/paymentService";
 
@@ -227,7 +227,6 @@ export function ListeEnAttenteOperateur() {
       toast.error('Aucun participant sélectionné');
       return;
     }
-
     setIsLoading(true);
     try {
       console.log('Validation paiement:', {
@@ -244,27 +243,38 @@ export function ListeEnAttenteOperateur() {
       
       if (response.success === true || response.status === 'success' || response.message?.includes('success')) {
         toast.success('Paiement validé avec succès');
+        
+        // Recharger les transactions AVANT de fermer le dialog
+        await fetchTransactions();
+        
+        // Fermer le dialog et nettoyer après le rechargement
         setShowConfirmDialog(false);
         setSelectedParticipant(null);
         setUploadedFile(null);
         setSelectedModePaiement('cash');
-        // Recharger les transactions après un court délai
-        setTimeout(() => {
-          fetchTransactions();
-        }, 500);
+        setIsLoading(false);
       } else if (response.success === false) {
         toast.error(response.message || 'Erreur lors de la validation du paiement');
+        setIsLoading(false);
+        // Ne pas fermer le dialog en cas d'erreur pour que l'utilisateur puisse réessayer
       } else {
         toast.success('Paiement traité');
+        
+        // Recharger les transactions AVANT de fermer le dialog
+        await fetchTransactions();
+        
         setShowConfirmDialog(false);
-        fetchTransactions();
+        setSelectedParticipant(null);
+        setUploadedFile(null);
+        setSelectedModePaiement('cash');
+        setIsLoading(false);
       }
     } catch (error: any) {
       console.error('Erreur validation:', error);
       const errorMessage = error?.response?.data?.message || error?.message || 'Erreur lors de la validation du paiement';
       toast.error(errorMessage);
-    } finally {
       setIsLoading(false);
+      // Ne pas fermer le dialog en cas d'erreur pour que l'utilisateur puisse réessayer
     }
   };
 
@@ -657,12 +667,20 @@ export function ListeEnAttenteOperateur() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel disabled={isLoading}>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => handleValidatePayment()}
-              className="bg-green-600 hover:bg-green-700"
+              disabled={isLoading}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Oui, confirmer l'encaissement
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Validation en cours...
+                </>
+              ) : (
+                'Oui, confirmer l\'encaissement'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
