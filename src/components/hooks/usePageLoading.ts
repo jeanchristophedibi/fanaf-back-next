@@ -19,19 +19,31 @@ export function usePageLoading(options: UsePageLoadingOptions = {}) {
   } = options;
 
   // Utiliser React Query pour charger les participants
-  const { isLoading: isLoadingParticipants } = useParticipantsQuery({
+  const { isLoading: isLoadingParticipants, error: participantsError } = useParticipantsQuery({
     enabled: true,
   });
 
-  const { isLoading: isLoadingOrganisations } = useOrganisationsQuery({
+  const { isLoading: isLoadingOrganisations, error: organisationsError } = useOrganisationsQuery({
     enabled: includeOrganisations,
   });
 
-  // État de chargement global
-  const isLoading = isLoadingParticipants || (includeOrganisations && isLoadingOrganisations);
+  // Si une erreur se produit, ne pas bloquer indéfiniment
+  // Attendre seulement si on charge activement (pas d'erreur = chargement en cours normalement)
+  // Mais si une erreur survient, ne pas bloquer indéfiniment - permettre à la page de s'afficher
+  const isLoading = isLoadingParticipants || 
+    (includeOrganisations && isLoadingOrganisations && !organisationsError && !participantsError);
+
+  // Logger les erreurs mais ne pas bloquer le chargement indéfiniment
+  if (participantsError) {
+    console.warn('[usePageLoading] Erreur lors du chargement des participants:', participantsError);
+  }
+  if (organisationsError) {
+    console.warn('[usePageLoading] Erreur lors du chargement des organisations:', organisationsError);
+  }
 
   return {
     isLoading,
+    error: participantsError || (includeOrganisations ? organisationsError : null),
   };
 }
 

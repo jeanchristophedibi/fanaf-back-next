@@ -139,6 +139,8 @@ export function Sidebar({ activeNav, onNavChange, onSwitchProfile }: AdminSideba
               let isActive = false;
               if (subItem.id === 'inscriptions-liste') {
                 isActive = pathname === '/dashboard/admin/inscriptions' || pathname === '/dashboard/admin/inscriptions/liste';
+              } else if (subItem.id === 'inscriptions-creer') {
+                isActive = pathname === '/dashboard/admin/inscriptions/creer';
               } else if (subItem.id === 'inscriptions-membre') {
                 isActive = pathname?.includes('/inscriptions/membre');
               } else if (subItem.id === 'inscriptions-non-membre') {

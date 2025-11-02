@@ -37,6 +37,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return 'companies';
     }
     if (pathname?.includes('/inscriptions')) {
+      if (pathname?.includes('/inscriptions/creer')) return 'inscriptions-creer';
       if (pathname?.includes('/inscriptions/membre')) return 'inscriptions-membre';
       if (pathname?.includes('/inscriptions/non-membre')) return 'inscriptions-non-membre';
       if (pathname?.includes('/inscriptions/vip')) return 'inscriptions-vip';
@@ -92,6 +93,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         break;
       case 'inscriptions':
         router.push('/dashboard/admin/inscriptions');
+        break;
+      case 'inscriptions-creer':
+        router.push('/dashboard/admin/inscriptions/creer');
         break;
       case 'inscriptions-liste':
         router.push('/dashboard/admin/inscriptions/liste');

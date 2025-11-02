@@ -6,3 +6,4 @@ export default function AdminOrganisationsSponsorPage() {
   return <OrganisationsPage filter="sponsor" readOnly={false} />;
 }
 
+

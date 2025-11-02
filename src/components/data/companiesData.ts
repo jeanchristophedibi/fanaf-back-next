@@ -94,9 +94,9 @@ function mapApiStatutToOrganisationStatut(
  * Récupère toutes les organisations depuis l'API avec gestion de la pagination
  */
 export async function fetchOrganisations(): Promise<Organisation[]> {
+  const allOrganisations: Organisation[] = [];
   try {
     console.log('[fetchOrganisations] ===== DÉBUT DU CHARGEMENT DES ORGANISATIONS =====');
-    const allOrganisations: Organisation[] = [];
     const seenIds = new Set<string>();
     const perPage = 100;
 
@@ -239,12 +239,55 @@ export async function fetchOrganisations(): Promise<Organisation[]> {
 
           page++;
         } catch (pageError: any) {
-          console.error(`[fetchOrganisations] ❌ ${orgType} - Erreur page ${page}:`, {
-            error: pageError?.message || String(pageError),
-            stack: pageError?.stack,
-            errorType: typeof pageError
-          });
-          hasMore = false; // Arrêter en cas d'erreur
+          // Améliorer la gestion d'erreur pour afficher plus de détails
+          let errorMessage = 'Erreur inconnue';
+          
+          // Essayer de récupérer le message d'erreur de différentes façons
+          if (pageError?.message) {
+            errorMessage = pageError.message;
+          } else if (pageError?.response?.data?.message) {
+            errorMessage = pageError.response.data.message;
+          } else if (typeof pageError === 'string') {
+            errorMessage = pageError;
+          } else if (pageError?.toString && pageError.toString() !== '[object Object]') {
+            errorMessage = pageError.toString();
+          }
+
+          const errorDetails: any = {
+            errorType: typeof pageError,
+            errorName: pageError?.name,
+            errorMessage,
+            hasStack: !!pageError?.stack,
+            errorKeys: pageError && typeof pageError === 'object' ? Object.keys(pageError) : [],
+            errorStringified: JSON.stringify(pageError, Object.getOwnPropertyNames(pageError), 2),
+          };
+
+          // Si c'est une erreur avec response (erreur API)
+          if (pageError?.response) {
+            errorDetails.apiError = {
+              status: pageError.response?.status,
+              statusText: pageError.response?.statusText,
+              data: pageError.response?.data,
+            };
+          }
+
+          // Si c'est une erreur avec status (erreur HTTP)
+          if (pageError?.status) {
+            errorDetails.httpStatus = pageError.status;
+          }
+
+          // Logger l'erreur mais pas en mode error pour ne pas polluer la console
+          // Utiliser warn pour les erreurs attendues (404) et error pour les autres
+          const is404 = pageError?.status === 404 || pageError?.response?.status === 404;
+          
+          if (is404) {
+            console.warn(`[fetchOrganisations] ⚠️ ${orgType} - Page ${page}: Type non trouvé (404), arrêt du chargement pour ce type`);
+          } else {
+            console.warn(`[fetchOrganisations] ⚠️ ${orgType} - Page ${page}:`, errorDetails);
+          }
+          
+          // Pour toutes les erreurs, arrêter le chargement de ce type (mais continuer pour les autres types)
+          hasMore = false;
         }
       }
       
@@ -263,8 +306,16 @@ export async function fetchOrganisations(): Promise<Organisation[]> {
     );
     return allOrganisations;
   } catch (error: any) {
-    console.error('Erreur lors du chargement des organisations:', error);
-    throw error;
+    // Logger l'erreur mais retourner les organisations déjà chargées (ou un tableau vide)
+    // plutôt que de lancer une exception qui bloquerait React Query
+    console.error('[fetchOrganisations] ❌ Erreur globale lors du chargement des organisations:', {
+      error: error?.message || String(error),
+      errorType: typeof error,
+      errorName: error?.name,
+      organisationsLoaded: allOrganisations.length,
+    });
+    // Retourner les organisations déjà chargées (s'il y en a) plutôt que de bloquer
+    return allOrganisations;
   }
 }
 

@@ -6,3 +6,4 @@ export default function AdminOrganisationsNonMembrePage() {
   return <OrganisationsPage filter="non-membre" readOnly={false} />;
 }
 
+
