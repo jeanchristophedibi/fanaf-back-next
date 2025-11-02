@@ -3,8 +3,8 @@
  * Provides axios-compatible interface for backward compatibility
  */
 
-// const API_BASE_URL = 'https://core-f26.asacitechnologies.com/api/v1';
-const API_BASE_URL = 'https://cors.ddev.site/api/v1';
+const API_BASE_URL = 'https://core-f26.asacitechnologies.com/api/v1';
+// const API_BASE_URL = 'https://cors.ddev.site/api/v1';
 
 interface AxiosRequestConfig {
   headers?: Record<string, string>;

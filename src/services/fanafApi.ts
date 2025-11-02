@@ -3,8 +3,8 @@
  * Base URL: https://core-f26.asacitechnologies.com
  */
 
-// const API_BASE_URL = 'https://core-f26.asacitechnologies.com';
-const API_BASE_URL = 'https://cors.ddev.site';
+const API_BASE_URL = 'https://core-f26.asacitechnologies.com';
+// const API_BASE_URL = 'https://cors.ddev.site';
 
 /**
  * Classe d'erreur personnalisée pour les erreurs de connexion
