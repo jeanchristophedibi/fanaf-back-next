@@ -182,16 +182,22 @@ class PaymentService {
   /**
    * Valider un paiement en attente
    */
-  async validatePayment(id: string, modePaiement: string, proof: File): Promise<any> {
-    const formData = new FormData();
-    // formData.append('method', modePaiement);
-    // formData.append('proof', proof);
-    // const response = await axiosInstance.post<any>(`${this.baseUrlRegistration}/${id}/finalize`, formData);
-    // return response.data;
-    return {
-      success: true,
-      message: 'Paiement validé avec succès'
+  async validatePayment(id: string, data: any): Promise<any> {
+    // Logger le contenu
+    if (data instanceof FormData) {
+      console.log('PaymentService - FormData reçu:');
+      for (const [key, value] of data.entries()) {
+        console.log(`  ${key}:`, value);
+      }
+    } else {
+      console.log('PaymentService - Data reçu:', data);
     }
+    
+    const response = await axiosInstance.post<any>(
+      `${this.baseUrlRegistration}/${id}/finalize`, 
+      data
+    );
+    return response.data;
   }
 }
 

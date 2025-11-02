@@ -229,16 +229,18 @@ export function ListeEnAttenteOperateur() {
     }
     setIsLoading(true);
     try {
-      console.log('Validation paiement:', {
-        id: selectedParticipant.id,
-        mode: selectedModePaiement
-      });
+      const formData = new FormData();
+      formData.append('method', selectedModePaiement);
+      if (uploadedFile) {
+        formData.append('proof', uploadedFile, uploadedFile.name);
+      }
 
-      const response = await paymentService.validatePayment(
-        selectedParticipant.id, 
-        selectedModePaiement,
-        uploadedFile as unknown as File
-      );
+      console.log('FormData avant envoi:');
+      for (const [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value);
+      }
+      
+      const response = await paymentService.validatePayment(selectedParticipant.id, formData);
       
       console.log('Réponse API:', response);
       

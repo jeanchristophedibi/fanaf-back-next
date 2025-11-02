@@ -13,6 +13,8 @@ class ParticipantService {
   private baseUrl = '/admin/participants'
   private baseUrlRegistration = '/admin/registrations'
   private baseUrlOperateur = '/admin/operateurs'
+  private baseUrlOrganisations = '/admin/companies'
+  private baseUrlDashboard = '/admin/dashboard'
   /**
    * Récupérer tous les participants avec pagination
    */
@@ -77,10 +79,18 @@ class ParticipantService {
   }
 
   /**
-   *  Confirmation de remise
+   *  Confirmation de remise du badge
    */
-  async confirmRemise(id: string): Promise<any> {
-    const response = await axiosInstance.post<any>(`${this.baseUrlRegistration}/${id}/kit/collect`)
+  async confirmRemiseBadge(registrationId: string): Promise<any> {
+    const response = await axiosInstance.post<any>(`${this.baseUrlRegistration}/${registrationId}/badge/increment`)
+    return response.data
+  }
+
+  /**
+   *  Confirmation de remise du kit
+   */
+  async confirmRemiseKit(registrationId: string): Promise<any> {
+    const response = await axiosInstance.post<any>(`${this.baseUrlRegistration}/${registrationId}/kit/increment`)
     return response.data
   }
 
@@ -89,6 +99,22 @@ class ParticipantService {
    */
   async refreshDocument(id: string): Promise<any> {
     const response = await axiosInstance.post<any>(`${this.baseUrlOperateur}/${id}/document/refresh`)
+    return response.data
+  }
+
+  /**
+   * Récupérer le top 5 des organisations
+   */
+  async getStatsByType(): Promise<any> {
+    const response = await axiosInstance.get<any>(`${this.baseUrlDashboard}/participant-type-distribution`)
+    return response.data
+  }
+
+  /**
+   * Récupérer le top 5 des organisations
+   */
+  async getTopOrganisations(): Promise<any> {
+    const response = await axiosInstance.get<any>(`${this.baseUrlOrganisations}/top-associations-by-registrations`)
     return response.data
   }
 }

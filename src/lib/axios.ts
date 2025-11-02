@@ -43,10 +43,10 @@ class AxiosInstance {
   /**
    * Build headers with authentication
    */
-  private buildHeaders(customHeaders?: Record<string, string>): Record<string, string> {
+  private buildHeaders(customHeaders?: Record<string, string>, isFormData: boolean = false): Record<string, string> {
     const token = this.getToken();
     const headers: Record<string, string> = {
-      ...this.defaultHeaders,
+      ...(isFormData ? {} : this.defaultHeaders), // Ne pas ajouter Content-Type pour FormData
       ...customHeaders,
     };
 
@@ -87,7 +87,10 @@ class AxiosInstance {
     config?: AxiosRequestConfig
   ): Promise<AxiosResponse<T>> {
     const fullURL = this.buildURL(url, config?.params);
-    const headers = this.buildHeaders(config?.headers);
+    
+    // Détecter si c'est du FormData
+    const isFormData = config?.data instanceof FormData;
+    const headers = this.buildHeaders(config?.headers, isFormData);
 
     const fetchOptions: RequestInit = {
       method,
@@ -95,7 +98,8 @@ class AxiosInstance {
     };
 
     if (config?.data && method !== 'GET' && method !== 'HEAD') {
-      fetchOptions.body = JSON.stringify(config.data);
+      // Si c'est FormData, l'envoyer tel quel, sinon JSON.stringify
+      fetchOptions.body = isFormData ? config.data : JSON.stringify(config.data);
     }
 
     try {
