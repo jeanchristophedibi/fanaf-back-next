@@ -215,17 +215,32 @@ export function InscriptionsEvolutionChart() {
       currentDate.setDate(currentDate.getDate() + 5);
     }
 
-    // Calculer les données hebdomadaires
-    const weeklyMap = new Map<number, { semaine: string; total: number; membres: number; nonMembres: number }>();
+    // Calculer les données hebdomadaires (à partir de T0 = première inscription)
+    const weeklyMap = new Map<number, { 
+      semaine: string; 
+      total: number; 
+      membres: number; 
+      nonMembres: number;
+      weekStart: Date; // Date de début de la semaine pour l'affichage
+    }>();
     
-    // Grouper par semaine
+    // Grouper par semaine depuis T0
     for (const participant of sortedParticipants) {
       const participantDate = new Date(participant.dateInscription || (participant as any).created_at);
       const weekNum = getWeekNumber(participantDate, firstDate);
+      
+      // Calculer la date de début de cette semaine (lundi de cette semaine)
+      const weekStartDate = getWeekStart(participantDate);
       const weekKey = `Sem ${weekNum}`;
       
       if (!weeklyMap.has(weekNum)) {
-        weeklyMap.set(weekNum, { semaine: weekKey, total: 0, membres: 0, nonMembres: 0 });
+        weeklyMap.set(weekNum, { 
+          semaine: weekKey, 
+          total: 0, 
+          membres: 0, 
+          nonMembres: 0,
+          weekStart: weekStartDate
+        });
       }
       
       const weekData = weeklyMap.get(weekNum)!;
@@ -475,7 +490,9 @@ export function InscriptionsEvolutionChart() {
               Répartition hebdomadaire
             </span>
           </CardTitle>
-          <p className="text-sm text-gray-600 ml-11">Nouvelles inscriptions par semaine avec détails</p>
+          <p className="text-sm text-gray-600 ml-11">
+            Nouvelles inscriptions par semaine depuis T0 (première inscription) avec détails
+          </p>
         </CardHeader>
         <CardContent className="pt-6">
           <ResponsiveContainer width="100%" height={320}>
