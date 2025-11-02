@@ -3,7 +3,8 @@
  * Base URL: https://core-f26.asacitechnologies.com
  */
 
-const API_BASE_URL = 'https://core-f26.asacitechnologies.com';
+// const API_BASE_URL = 'https://core-f26.asacitechnologies.com';
+const API_BASE_URL = 'https://cors.ddev.site';
 
 /**
  * Classe d'erreur personnalisée pour les erreurs de connexion
@@ -192,6 +193,12 @@ class FanafApiService {
     // Ajouter le token d'authentification si disponible
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+      // Log pour vérifier que le token est bien ajouté (seulement les 20 premiers caractères pour sécurité)
+      if (endpoint.includes('toggle-status')) {
+        console.log('[fanafApi] Token ajouté au header Authorization:', `${token.substring(0, 20)}...`);
+      }
+    } else if (requireAuth) {
+      console.warn('[fanafApi] Aucun token disponible pour endpoint nécessitant authentification:', endpoint);
     }
     
     // Ajouter Accept pour FormData aussi
@@ -233,6 +240,18 @@ class FanafApiService {
                               (endpoint.includes('/auth') && endpoint.includes('login'));
       const isLoginAttempt = !requireAuth && isLoginEndpoint;
 
+      // Logger les headers pour le debug (surtout pour toggle-status)
+      if (endpoint.includes('toggle-status')) {
+        console.log('[fanafApi] Headers envoyés:', {
+          'Content-Type': headers['Content-Type'],
+          'Authorization': headers['Authorization'] ? `${headers['Authorization'].substring(0, 27)}...` : 'NON DÉFINI',
+          'Accept': headers['Accept'],
+          allHeaders: Object.keys(headers),
+        });
+        console.log('[fanafApi] URL complète:', `${API_BASE_URL}${endpoint}`);
+        console.log('[fanafApi] Méthode:', fetchOptions?.method || 'GET');
+      }
+      
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...fetchOptions,
         headers,
@@ -404,6 +423,7 @@ class FanafApiService {
         
         // Logger différemment selon le type d'erreur
         const isNotFound = response.status === 404;
+        const isMethodNotAllowed = response.status === 405;
         const isServerError = response.status >= 500;
         const isHtmlResponse = responseData?.error === 'HTML_RESPONSE';
         
@@ -413,6 +433,12 @@ class FanafApiService {
         } else if (isNotFound) {
           // Pour les erreurs 404, logger en warn (endpoint peut ne pas exister)
           console.warn(`Endpoint non trouvé [${endpoint}]:`, errorMessage);
+        } else if (isMethodNotAllowed) {
+          // Pour les erreurs 405, indiquer que la méthode HTTP n'est pas autorisée
+          const method = (options as any)?.method || 'GET';
+          const enhancedMessage = `Méthode ${method} non autorisée sur l'endpoint ${endpoint}. L'endpoint n'accepte peut-être pas cette méthode HTTP ou n'est pas encore implémenté.`;
+          console.error(`Erreur API [${endpoint}]:`, enhancedMessage);
+          errorMessage = enhancedMessage;
         } else if (isServerError && isHtmlResponse) {
           // Pour les erreurs serveur avec HTML (500+), ne pas logger
           // car c'est souvent une erreur côté serveur qui sera corrigée par l'équipe backend
@@ -661,6 +687,287 @@ class FanafApiService {
     per_page?: number;
   }): Promise<PaginatedResponse<any>> {
     return this.getCompanies(params);
+  }
+
+  /**
+   * Basculer le statut d'une compagnie (activer si désactivée, désactiver si activée)
+   * @param companyId - ID de la compagnie
+   * @returns Promise avec la réponse de l'API
+   */
+  async toggleCompanyStatus(companyId: string): Promise<any> {
+    // Log pour le debug
+    console.log('[fanafApi] Toggle statut compagnie:', companyId);
+    const endpoint = `/api/v1/admin/companies/${companyId}/toggle-status`;
+    console.log('[fanafApi] Endpoint complet:', `${API_BASE_URL}${endpoint}`);
+    
+    // Vérifier que le token est disponible
+    const token = this.getToken();
+    console.log('[fanafApi] ===== DÉBUT TOGGLE STATUS =====');
+    console.log('[fanafApi] Company ID:', companyId);
+    console.log('[fanafApi] Endpoint:', endpoint);
+    console.log('[fanafApi] Token disponible:', token ? `${token.substring(0, 20)}...` : 'AUCUN TOKEN');
+    
+    try {
+      const response = await this.fetchApi<any>(endpoint, {
+        method: 'POST',
+        requireAuth: true, // S'assurer que l'authentification est requise
+      });
+      console.log('[fanafApi] Réponse toggleCompanyStatus:', response);
+      console.log('[fanafApi] ===== SUCCÈS TOGGLE STATUS =====');
+      return response;
+    } catch (error: any) {
+      // Logger l'erreur complète pour le debug
+      // fetchApi peut lancer différents types d'erreurs:
+      // - NetworkError: pour les erreurs réseau (Failed to fetch, CORS, etc.)
+      // - LoginError: pour les erreurs d'authentification lors de la connexion
+      // - ServerError: pour les erreurs serveur (500+)
+      // - Error standard avec status et response pour les autres erreurs HTTP
+      
+      // D'abord, logger directement toutes les informations disponibles IMMÉDIATEMENT
+      console.error('[fanafApi] ===== ERREUR TOGGLE STATUT =====');
+      console.error('[fanafApi] Erreur brute capturée:', error);
+      console.error('[fanafApi] Erreur existe?', error !== undefined && error !== null);
+      console.error('[fanafApi] Type d\'erreur:', typeof error);
+      console.error('[fanafApi] Error constructor:', error?.constructor?.name);
+      console.error('[fanafApi] Error instanceof Error:', error instanceof Error);
+      console.error('[fanafApi] Error instanceof NetworkError:', error instanceof NetworkError);
+      console.error('[fanafApi] Error message direct:', error?.message);
+      console.error('[fanafApi] Error name direct:', error?.name);
+      console.error('[fanafApi] Error status direct:', error?.status);
+      console.error('[fanafApi] Error response direct:', error?.response);
+      
+      // Capturer toutes les propriétés (enumerable et non-enumerable)
+      const errorDetails: any = {
+        companyId,
+        endpoint: endpoint,
+        fullEndpoint: `${API_BASE_URL}${endpoint}`,
+        errorExists: error !== undefined && error !== null,
+        errorType: typeof error,
+        errorConstructor: error?.constructor?.name || 'undefined',
+        isErrorInstance: error instanceof Error,
+      };
+      
+      console.error('[fanafApi] errorDetails initial:', errorDetails);
+
+      // Extraire toutes les propriétés possibles de l'erreur
+      if (error) {
+        // Propriétés standard
+        if (error.message !== undefined) {
+          errorDetails.message = error.message;
+          console.error('[fanafApi] Error.message:', error.message);
+        }
+        
+        if (error.name !== undefined) {
+          errorDetails.name = error.name;
+          console.error('[fanafApi] Error.name:', error.name);
+        }
+        
+        // Vérifier si c'est une NetworkError (erreur réseau)
+        if (error instanceof NetworkError || error.name === 'NetworkError') {
+          errorDetails.errorType = 'NetworkError';
+          errorDetails.isNetworkError = true;
+          console.error('[fanafApi] C\'est une NetworkError - problème de connexion réseau');
+          // Les NetworkError n'ont pas de status ou response
+        } else {
+          // Status HTTP (défini directement sur l'erreur par fetchApi pour les erreurs HTTP)
+          if (error.status !== undefined) {
+            errorDetails.status = error.status;
+            errorDetails.errorType = 'HTTPError';
+            console.error('[fanafApi] Error.status:', error.status);
+          } else {
+            console.error('[fanafApi] Error.status est undefined');
+          }
+          
+          // Données de réponse (définies directement sur l'erreur par fetchApi)
+          if (error.response !== undefined) {
+            errorDetails.response = error.response;
+            console.error('[fanafApi] Error.response:', error.response);
+            
+            // Extraire le message depuis response si disponible
+            if (error.response && typeof error.response === 'object') {
+              if (error.response.message) {
+                errorDetails.responseMessage = error.response.message;
+                console.error('[fanafApi] Error.response.message:', error.response.message);
+              }
+              if (error.response.errors) {
+                errorDetails.responseErrors = error.response.errors;
+                console.error('[fanafApi] Error.response.errors:', error.response.errors);
+              }
+            }
+          } else {
+            console.error('[fanafApi] Error.response est undefined');
+          }
+        }
+        
+        // Capturer toutes les propriétés de l'erreur (enumerable)
+        try {
+          errorDetails.errorKeys = Object.keys(error);
+          console.error('[fanafApi] Error keys (Object.keys):', Object.keys(error));
+        } catch (e) {
+          errorDetails.errorKeysError = String(e);
+        }
+        
+        // Capturer toutes les propriétés (incluant non-enumerable)
+        try {
+          errorDetails.allErrorKeys = Object.getOwnPropertyNames(error);
+          console.error('[fanafApi] Error all keys (getOwnPropertyNames):', Object.getOwnPropertyNames(error));
+        } catch (e) {
+          errorDetails.allErrorKeysError = String(e);
+        }
+        
+        // Tenter de stringifier l'erreur complète
+        try {
+          errorDetails.errorStringified = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+          console.error('[fanafApi] Error stringifié:', errorDetails.errorStringified);
+        } catch (e) {
+          errorDetails.stringifyError = String(e);
+          // Essayer sans getOwnPropertyNames
+          try {
+            errorDetails.errorStringifiedSimple = JSON.stringify(error);
+            console.error('[fanafApi] Error stringifié simple:', errorDetails.errorStringifiedSimple);
+          } catch (e2) {
+            errorDetails.stringifyError2 = String(e2);
+          }
+        }
+        
+        // Extraire le message final depuis différentes sources
+        let errorMessage = error.message;
+        
+        // Si c'est une NetworkError, utiliser le message directement
+        if (error instanceof NetworkError || error.name === 'NetworkError') {
+          errorMessage = error.message || 'Erreur de connexion réseau';
+        } else if (error.response && typeof error.response === 'object') {
+          // Pour les erreurs HTTP, extraire depuis response
+          if (error.response.message) {
+            errorMessage = error.response.message;
+          } else if (error.response.errors) {
+            if (Array.isArray(error.response.errors)) {
+              errorMessage = error.response.errors.map((e: any) => 
+                e.detail || e.message || e.title || String(e)
+              ).join(', ');
+            } else if (typeof error.response.errors === 'object') {
+              errorMessage = Object.entries(error.response.errors)
+                .map(([key, values]: [string, any]) => {
+                  if (Array.isArray(values)) {
+                    return `${key}: ${values.join(', ')}`;
+                  }
+                  return `${key}: ${values}`;
+                })
+                .join('; ');
+            }
+          }
+        }
+        
+        // Message final avec plus de contexte
+        if (error instanceof NetworkError || error.name === 'NetworkError') {
+          errorDetails.finalMessage = errorMessage || 'Impossible de joindre le serveur. Vérifiez votre connexion réseau.';
+        } else if (error.status) {
+          errorDetails.finalMessage = errorMessage || `Erreur HTTP ${error.status} lors du basculement du statut de la compagnie ${companyId}`;
+        } else {
+          errorDetails.finalMessage = errorMessage || `Erreur lors du basculement du statut de la compagnie ${companyId}`;
+        }
+      } else {
+        errorDetails.note = 'L\'erreur est null ou undefined';
+        console.error('[fanafApi] Erreur est null/undefined');
+      }
+
+      console.error('[fanafApi] Détails complets de l\'erreur avant finalisation:', JSON.stringify(errorDetails, null, 2));
+      console.error('[fanafApi] errorDetails object keys:', Object.keys(errorDetails));
+      console.error('[fanafApi] errorDetails values:', Object.values(errorDetails));
+      console.error('[fanafApi] Détails complets de l\'erreur:', errorDetails);
+      console.error('[fanafApi] ===== FIN ERREUR TOGGLE STATUT =====');
+      
+      // Relancer l'erreur avec le message amélioré
+      const finalErrorMessage = errorDetails.finalMessage || 
+                               error?.message || 
+                               `Erreur lors du basculement du statut de la compagnie ${companyId}`;
+      
+      const enhancedError: any = new Error(finalErrorMessage);
+      enhancedError.originalError = error;
+      enhancedError.companyId = companyId;
+      enhancedError.endpoint = endpoint;
+      enhancedError.errorType = errorDetails.errorType || 'Unknown';
+      
+      // Copier les propriétés importantes selon le type d'erreur
+      if (error?.status !== undefined) {
+        enhancedError.status = error.status;
+      }
+      if (error?.response !== undefined) {
+        enhancedError.response = error.response;
+      }
+      if (error instanceof NetworkError) {
+        enhancedError.isNetworkError = true;
+      }
+      
+      throw enhancedError;
+    }
+  }
+
+  /**
+   * Créer une nouvelle compagnie
+   * @param data - Données de la compagnie
+   * @returns Promise avec la réponse de l'API
+   */
+  async createCompany(data: {
+    name: string;
+    type: 'company' | 'association';
+    country_id: string;
+    sector?: string;
+    email?: string;
+    website?: string;
+    phone?: string;
+    address?: string;
+    description?: string;
+  }): Promise<any> {
+    // Log des données envoyées pour le debug
+    console.log('[fanafApi] Création compagnie avec données:', data);
+    
+    // Essayer différents endpoints possibles basés sur les patterns existants
+    const possibleEndpoints = [
+      '/api/v1/admin/companies',
+      '/api/v1/admin/companies/store',
+      '/api/v1/admin/companies/create',
+    ];
+    
+    let lastError: any = null;
+    
+    // Essayer le premier endpoint (le plus probable)
+    const endpoint = possibleEndpoints[0];
+    console.log('[fanafApi] Endpoint tenté:', `${API_BASE_URL}${endpoint}`);
+    
+    try {
+      const response = await this.fetchApi<any>(endpoint, {
+        method: 'POST',
+        body: data,
+      });
+      console.log('[fanafApi] Réponse createCompany:', response);
+      return response;
+    } catch (error: any) {
+      // Logger l'erreur complète pour le debug
+      console.error('[fanafApi] Erreur lors de la création de la compagnie:', {
+        error,
+        message: error?.message,
+        status: error?.response?.status || error?.status,
+        data: error?.response?.data || error?.data,
+        endpoint: endpoint,
+        body: data,
+      });
+      
+      lastError = error;
+      
+      // Si l'endpoint n'accepte pas la méthode POST (405), essayer les autres endpoints possibles
+      if (error?.message?.includes('405') || error?.message?.includes('Method Not Allowed') || error?.message?.includes('non autorisée')) {
+        console.warn(`[fanafApi] Endpoint ${endpoint} n'accepte pas POST, l'endpoint backend n'est peut-être pas encore implémenté.`);
+        throw new Error(`L'endpoint ${endpoint} n'accepte pas la méthode POST. L'endpoint n'est peut-être pas encore implémenté côté backend. Veuillez vérifier avec l'équipe backend que l'endpoint POST est disponible sur /api/v1/admin/companies avec le payload suivant: ${JSON.stringify(data, null, 2)}`);
+      }
+      
+      // Si l'endpoint n'est pas trouvé (404), suggérer de vérifier l'endpoint
+      if (error?.message?.includes('non trouvé') || error?.message?.includes('NOT_FOUND') || error?.message?.includes('404')) {
+        throw new Error(`L'endpoint ${endpoint} n'existe pas encore sur le serveur. Veuillez vérifier avec l'équipe backend ou utiliser un endpoint alternatif.`);
+      }
+      
+      throw error;
+    }
   }
 
   // ==================== SPONSORS ====================

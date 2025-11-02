@@ -182,6 +182,8 @@ export function ComiteOrganisationPage() {
     agentsScan: membresComite.filter((m: MembreComite) => m.profil === 'scan_agent').length,
     agentsRegistration: membresComite.filter((m: MembreComite) => m.profil === 'agent_registration').length,
     badgeOperators: membresComite.filter((m: MembreComite) => m.profil === 'badge_operator').length,
+// "cashier", "agent_registration", "badge_operator", "scan_agent"
+
   };
 
   const handleMembreCreated = () => {

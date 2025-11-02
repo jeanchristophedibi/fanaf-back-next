@@ -6,16 +6,24 @@ import { usePathname, useRouter } from 'next/navigation';
 
 export type NavItem =
   | 'home'
+  | 'compagnies'
+  | 'inscriptions'
   | 'paiements-attente'
   | 'paiements';
 
-export default function OperateurCaisseLayout({ children }: { children: React.ReactNode }) {
+export default function AdminAsaciLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
   // Déterminer l'élément actif basé sur l'URL
   const getActiveNav = (): NavItem => {
     // Vérifier les chemins les plus spécifiques en premier
+    if (pathname?.includes('/compagnies')) {
+      return 'compagnies';
+    }
+    if (pathname?.includes('/inscriptions')) {
+      return 'inscriptions';
+    }
     if (pathname?.includes('/paiements/attente') || pathname?.includes('/paiements/en-attente')) {
       return 'paiements-attente';
     }
@@ -31,13 +39,19 @@ export default function OperateurCaisseLayout({ children }: { children: React.Re
   const handleNavChange = (nav: string) => {
     switch (nav) {
       case 'home':
-        router.push('/dashboard/operateur-caisse');
+        router.push('/dashboard/admin-asaci');
+        break;
+      case 'compagnies':
+        router.push('/dashboard/admin-asaci/compagnies');
+        break;
+      case 'inscriptions':
+        router.push('/dashboard/admin-asaci/inscriptions');
         break;
       case 'paiements-attente':
-        router.push('/dashboard/operateur-caisse/paiements/attente');
+        router.push('/dashboard/admin-asaci/paiements/attente');
         break;
       case 'paiements':
-        router.push('/dashboard/operateur-caisse/paiements/liste');
+        router.push('/dashboard/admin-asaci/paiements/liste');
         break;
     }
   };
@@ -46,7 +60,7 @@ export default function OperateurCaisseLayout({ children }: { children: React.Re
     <UnifiedLayout
       activeNav={activeNav}
       onNavChange={handleNavChange}
-      userProfile="operateur-caisse"
+      userProfile="admin-asaci"
       onSwitchProfile={() => {}}
     >
       {children}

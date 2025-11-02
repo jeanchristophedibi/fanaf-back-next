@@ -8,7 +8,7 @@ import { TopBar } from './TopBar';
 interface UnifiedLayoutProps {
   activeNav: string;
   onNavChange: (nav: string) => void;
-  userProfile: 'agence' | 'admin-fanaf' | 'admin-asaci' | 'agent-inscription' | 'operateur-caisse' | 'operateur-badge';
+  userProfile: 'agence' | 'admin-fanaf' | 'admin-asaci' | 'admin' | 'agent-inscription' | 'operateur-caisse' | 'operateur-badge';
   onSwitchProfile?: () => void;
   showSidebar?: boolean;
   children: React.ReactNode;
@@ -29,6 +29,7 @@ export function UnifiedLayout({ activeNav, onNavChange, userProfile, onSwitchPro
       const bgByProfile: Record<UnifiedLayoutProps['userProfile'], string> = {
         'admin-asaci': 'bg-gradient-to-br from-blue-50 to-white',
         'admin-fanaf': 'bg-gradient-to-br from-orange-50 to-white',
+        'admin': 'bg-gradient-to-br from-purple-50 to-white',
         'agence': 'bg-gradient-to-br from-teal-50 to-white',
         'agent-inscription': 'bg-gradient-to-br from-amber-50 to-white',
         'operateur-caisse': 'bg-white',

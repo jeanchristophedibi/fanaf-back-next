@@ -29,9 +29,21 @@ export function WidgetEnAttenteOperateur() {
         const response = await paymentService.getStatsEnAttente();
         console.log('Stats paiements en attente:', response);
         setStatsData(response?.data?.data || response);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erreur récupération stats:', error);
-        toast?.error('Impossible de récupérer les statistiques');
+        
+        // Afficher un message d'erreur plus spécifique selon le type d'erreur
+        let errorMessage = 'Impossible de récupérer les statistiques';
+        
+        if (error?.name === 'NetworkError' || error?.message?.includes('Failed to fetch')) {
+          errorMessage = 'Erreur de connexion: Impossible de contacter le serveur. Vérifiez votre connexion réseau.';
+        } else if (error?.message) {
+          errorMessage = error.message;
+        }
+        
+        toast?.error(errorMessage, {
+          duration: 5000,
+        });
         setStatsData(null);
       } finally {
         setIsLoading(false);

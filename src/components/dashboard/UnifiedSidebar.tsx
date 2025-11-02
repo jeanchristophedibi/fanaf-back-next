@@ -2,13 +2,13 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake, UserPlus, Loader2 } from 'lucide-react';
+import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake, UserPlus, Loader2, BarChart3, Settings, Shield } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Button } from '../ui/button';
 import { Logo } from '../ui/Logo';
 
-type UserProfile = 'agence' | 'admin-fanaf' | 'admin-asaci' | 'agent-inscription' | 'operateur-caisse' | 'operateur-badge';
+type UserProfile = 'agence' | 'admin-fanaf' | 'admin-asaci' | 'admin' | 'agent-inscription' | 'operateur-caisse' | 'operateur-badge';
 
 interface UnifiedSidebarProps {
   activeNav: string;
@@ -90,10 +90,27 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
           title: 'Administration FANAF',
         };
 
+      case 'admin':
+        return {
+          mainNavItems: [
+            { id: 'home', label: 'Accueil', icon: Home },
+            { id: 'users', label: 'Utilisateurs', icon: UserCog },
+            { id: 'companies', label: 'Compagnies', icon: Building2 },
+            { id: 'statistiques', label: 'Statistiques', icon: BarChart3 },
+          ],
+          showInscriptions: true,
+          showOrganisations: true,
+          showNetworking: true,
+          showPaiements: true,
+          showTresorerie: true,
+          title: 'Administration globale',
+        };
+
       case 'admin-asaci':
         return {
           mainNavItems: [
             { id: 'home', label: 'Accueil', icon: Home },
+            { id: 'compagnies', label: 'Compagnies', icon: Building2 },
             { id: 'inscriptions', label: 'Liste des inscriptions', icon: FileText },
           ],
           showInscriptions: false,

@@ -31,6 +31,13 @@ export function middleware(request: NextRequest) {
     const d3 = deny(pathname.startsWith('/dashboard/admin-asaci') && role !== 'admin_asaci');
     if (d3) return d3;
 
+    // Admin global (super admin) - Vérifier APRÈS admin-asaci et admin-fanaf pour éviter les conflits
+    const d7 = deny(pathname.startsWith('/dashboard/admin') && 
+                   !pathname.startsWith('/dashboard/admin-asaci') && 
+                   !pathname.startsWith('/dashboard/admin-fanaf') &&
+                   role !== 'admin' && role !== 'admin_platform');
+    if (d7) return d7;
+
     // Agent inscription (FANAF)
     const d4 = deny(pathname.startsWith('/dashboard/agent-inscription') && role !== 'agent_fanaf');
     if (d4) return d4;
@@ -47,8 +54,22 @@ export function middleware(request: NextRequest) {
   // Si c'est la page de login et que l'utilisateur est déjà connecté (cookie présent), rediriger vers le dashboard
   if (pathname === '/login' || pathname === '/signin') {
     if (token) {
-      // Si déjà connecté, envoyer vers une page neutre pour choix/contrôle
-      return NextResponse.redirect(new URL('/no-access', request.url));
+      // Déterminer le dashboard selon le rôle
+      const roleToPath = (r: string | null | undefined): string => {
+        switch (r) {
+          case 'admin_agency': return '/dashboard/agence';
+          case 'admin_fanaf': return '/dashboard/admin-fanaf';
+          case 'admin_asaci': return '/dashboard/admin-asaci';
+          case 'admin_platform': return '/dashboard/admin';
+          case 'admin': return '/dashboard/admin';
+          case 'agent_fanaf': return '/dashboard/agent-inscription';
+          case 'cashier': return '/dashboard/operateur-caisse';
+          case 'badge_operator': return '/dashboard/operateur-badge';
+          default: return '/no-access';
+        }
+      };
+      const dashboardPath = roleToPath(role);
+      return NextResponse.redirect(new URL(dashboardPath, request.url));
     }
   }
 

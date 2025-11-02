@@ -34,6 +34,8 @@ function SignInFormContent() {
           case 'admin_agency': return '/dashboard/agence';
           case 'admin_fanaf': return '/dashboard/admin-fanaf';
           case 'admin_asaci': return '/dashboard/admin-asaci';
+          case 'admin_platform': return '/dashboard/admin';
+          case 'admin': return '/dashboard/admin';
           case 'agent_fanaf': return '/dashboard/agent-inscription';
           case 'cashier': return '/dashboard/operateur-caisse';
           case 'badge_operator': return '/dashboard/operateur-badge';
@@ -133,6 +135,7 @@ function SignInFormContent() {
                     case 'admin_agency': return '/dashboard/agence';
                     case 'admin_fanaf': return '/dashboard/admin-fanaf';
                     case 'admin_asaci': return '/dashboard/admin-asaci';
+                    case 'admin_platform': return '/dashboard/admin';
                     case 'agent_fanaf': return '/dashboard/agent-inscription';
                     case 'cashier': return '/dashboard/operateur-caisse';
                     case 'badge_operator': return '/dashboard/operateur-badge';

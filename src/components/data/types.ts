@@ -49,6 +49,7 @@ export interface Organisation {
   statut: 'membre' | 'non-membre' | 'sponsor';
   secteurActivite?: string;
   referent?: Referent;
+  is_active?: boolean; // Statut d'activation/désactivation de la compagnie
 }
 
 export type StatutRendezVous = 'acceptée' | 'en-attente' | 'occupée' | 'annulée';

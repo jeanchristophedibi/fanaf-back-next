@@ -119,9 +119,12 @@ class PaymentService {
       params.append('assignment_id', filters.assignment_id)
     }
 
-    const response = await axiosInstance.get<any>(
-      `${this.baseUrl}/stats?${params.toString()}`
-    )
+    const queryString = params.toString()
+    const url = queryString 
+      ? `${this.baseUrl}/stats?${queryString}`
+      : `${this.baseUrl}/stats`
+
+    const response = await axiosInstance.get<any>(url)
     return response.data
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Home, FileText, Users, ChevronDown, RefreshCw, CreditCard } from 'lucide-react';
+import { Home, FileText, Users, ChevronDown, RefreshCw, CreditCard, Building2 } from 'lucide-react';
 import { Separator } from '../../../components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 import { Button } from '../../../components/ui/button';
@@ -19,6 +19,7 @@ export function Sidebar({ activeNav, onNavChange, onSwitchProfile }: OperateurCa
 
   const mainNavItems = [
     { id: 'home' as NavItem, label: 'Accueil', icon: Home },
+    { id: 'compagnies' as NavItem, label: 'Compagnies', icon: Building2 },
     { id: 'paiements-attente' as NavItem, label: 'Paiements en attente', icon: CreditCard },
     { id: 'paiements' as NavItem, label: 'Liste des paiements', icon: FileText },
   ];
@@ -34,10 +35,10 @@ export function Sidebar({ activeNav, onNavChange, onSwitchProfile }: OperateurCa
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
       <div className="p-6">
         <div className="space-y-3">
-          <Logo className="h-10 w-auto object-contain" alt="Operateur Caisse" />
+          <Logo className="h-10 w-auto object-contain" alt="Administration ASACI" />
           <div>
             <h1 className="text-gray-900">FANAF 2026</h1>
-            <p className="text-xs text-gray-500">Operateur Caisse</p>
+            <p className="text-xs text-gray-500">Administration ASACI</p>
           </div>
         </div>
       </div>
@@ -113,7 +114,7 @@ export function Sidebar({ activeNav, onNavChange, onSwitchProfile }: OperateurCa
       <div className="p-4 space-y-3">
         <div className="p-3 bg-gray-50 rounded-lg">
           <p className="text-xs text-gray-500">Connecté en tant que</p>
-          <p className="text-sm text-gray-900">Operateur Caisse</p>
+          <p className="text-sm text-gray-900">Administration ASACI</p>
         </div>
         {onSwitchProfile && (
           <Button 

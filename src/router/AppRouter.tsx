@@ -4,7 +4,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Dashboard from '../app/dashboard/agence/Dashboard';
 import AdminFanafDashboard from '../app/dashboard/admin-fanaf/Dashboard';
-import AdminAsaciDashboard from '../app/dashboard/admin-asaci-old/page';
+import AdminAsaciDashboard from '../app/dashboard/admin-asaci/Dashboard';
 import OperateurCaisseMain from '../app/dashboard/operateur-caisse/Main';
 import OperateurBadgeMain from '../app/dashboard/operateur-badge/Main';
 import AgentInscriptionMain from '../app/dashboard/agent-inscription/Main';

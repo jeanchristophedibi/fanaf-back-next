@@ -17,8 +17,9 @@ export function mapApiAssociationToOrganisation(apiData: any): Organisation {
     email: apiData.email || apiData.contact_email || '',
     pays: apiData.pays || apiData.country || apiData.country_name || '',
     dateCreation: apiData.date_creation || apiData.dateCreation || apiData.created_at || new Date().toISOString(),
-    statut: mapApiStatutToOrganisationStatut(apiData.statut || apiData.status || apiData.type),
+    statut: mapApiStatutToOrganisationStatut(apiData.is_member, apiData.type, apiData.statut || apiData.status),
     secteurActivite: apiData.secteur_activite || apiData.secteurActivite || apiData.sector || apiData.activity_sector,
+    is_active: apiData.is_active !== undefined ? apiData.is_active : (apiData.isActive !== undefined ? apiData.isActive : (apiData.enabled !== undefined ? apiData.enabled : true)),
     referent: apiData.referent_nom || apiData.referent ? {
       nom: apiData.referent_nom || apiData.referent?.nom || apiData.referent_nom || '',
       prenom: apiData.referent_prenom || apiData.referent?.prenom || apiData.referent_prenom || '',
@@ -31,18 +32,61 @@ export function mapApiAssociationToOrganisation(apiData: any): Organisation {
 
 /**
  * Mappe le statut de l'API vers le format StatutOrganisation
+ * Basé principalement sur is_member, avec fallback sur type et statut pour compatibilité
  */
-function mapApiStatutToOrganisationStatut(apiStatut: any): 'membre' | 'non-membre' | 'sponsor' {
-  if (!apiStatut) return 'non-membre';
-  
-  const statut = String(apiStatut).toLowerCase();
-  // L'API utilise 'company' -> non-membre, 'association' -> membre
-  if (statut === 'association' || statut === 'member' || statut === 'membre') {
-    return 'membre';
-  } else if (statut === 'sponsor') {
-    return 'sponsor';
+function mapApiStatutToOrganisationStatut(
+  isMember: any, 
+  type?: any, 
+  statut?: any
+): 'membre' | 'non-membre' | 'sponsor' {
+  // Priorité 1: Utiliser is_member si disponible (boolean ou 0/1)
+  if (isMember !== undefined && isMember !== null) {
+    const isMemberValue = typeof isMember === 'boolean' 
+      ? isMember 
+      : String(isMember) === 'true' || String(isMember) === '1' || Number(isMember) === 1;
+    
+    // Si c'est un sponsor, retourner sponsor (is_member peut être true mais c'est un sponsor)
+    if (statut) {
+      const statutStr = String(statut).toLowerCase();
+      if (statutStr === 'sponsor') {
+        return 'sponsor';
+      }
+    }
+    if (type) {
+      const typeStr = String(type).toLowerCase();
+      if (typeStr === 'sponsor') {
+        return 'sponsor';
+      }
+    }
+    
+    // Sinon, baser sur is_member
+    return isMemberValue ? 'membre' : 'non-membre';
   }
-  // Par défaut, si c'est 'company', c'est non-membre
+  
+  // Fallback: Utiliser le type si is_member n'est pas disponible
+  if (type) {
+    const typeStr = String(type).toLowerCase();
+    if (typeStr === 'association') {
+      return 'membre';
+    } else if (typeStr === 'sponsor') {
+      return 'sponsor';
+    }
+    // 'company' -> non-membre
+    return 'non-membre';
+  }
+  
+  // Fallback: Utiliser statut si disponible
+  if (statut) {
+    const statutStr = String(statut).toLowerCase();
+    if (statutStr === 'membre' || statutStr === 'member') {
+      return 'membre';
+    } else if (statutStr === 'sponsor') {
+      return 'sponsor';
+    }
+    return 'non-membre';
+  }
+  
+  // Par défaut: non-membre
   return 'non-membre';
 }
 
