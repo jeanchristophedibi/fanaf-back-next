@@ -1387,8 +1387,33 @@ export const NouvelleInscriptionPage = () => {
         });
         
         try {
-          // Debug: log des données envoyées
+          // Debug: log des données envoyées - Format complet pour débogage
+          console.log('=== PAYLOAD INSCRIPTION GROUPÉE ===');
           console.log('Données envoyées à l\'API bulk:', JSON.stringify(cleanBulkData, null, 2));
+          console.log('Structure du payload:', {
+            registration_fee_id: cleanBulkData.registration_fee_id,
+            registration_type: cleanBulkData.registration_type,
+            is_association: cleanBulkData.is_association,
+            company_name: cleanBulkData.company_name,
+            company_country_id: cleanBulkData.company_country_id,
+            company_sector: cleanBulkData.company_sector,
+            company_phone: cleanBulkData.company_phone,
+            company_email: cleanBulkData.company_email,
+            company_address: cleanBulkData.company_address,
+            users_count: cleanBulkData.users?.length || 0,
+            users: cleanBulkData.users?.map((u: any) => ({
+              civility: u.civility,
+              first_name: u.first_name,
+              last_name: u.last_name,
+              email: u.email,
+              phone: u.phone,
+              country_id: u.country_id,
+              is_lead: u.is_lead,
+              passport_number: u.passport_number,
+              job_title: u.job_title
+            }))
+          });
+          console.log('=== FIN PAYLOAD ===');
           
           // Vérification finale avant l'appel API
           if (!cleanBulkData.registration_fee_id) {
@@ -1399,6 +1424,7 @@ export const NouvelleInscriptionPage = () => {
           }
           
           // Appel à l'API pour créer l'inscription groupée
+          console.log('Appel API createBulkRegistration avec payload:', cleanBulkData);
           const response = await fanafApi.createBulkRegistration(cleanBulkData);
           
           console.log('Réponse API bulk:', response);
@@ -1498,8 +1524,33 @@ export const NouvelleInscriptionPage = () => {
           setLoading(false); // Arrêter le chargement après succès
           return; // Sortir après succès de l'inscription groupée
         } catch (apiError: any) {
-          console.error('Erreur API lors de la création de l\'inscription groupée:', apiError);
-          const errorMessage = apiError?.message || 'Erreur lors de la création de l\'inscription groupée via l\'API';
+          console.error('=== ERREUR API INSCRIPTION GROUPÉE ===');
+          console.error('Payload envoyé:', JSON.stringify(cleanBulkData, null, 2));
+          console.error('Erreur API:', apiError);
+          console.error('Détails de l\'erreur:', {
+            message: apiError?.message,
+            response: apiError?.response,
+            data: apiError?.response?.data || apiError?.data,
+            status: apiError?.response?.status || apiError?.status
+          });
+          console.error('=== FIN ERREUR ===');
+          
+          // Extraire un message d'erreur plus détaillé
+          let errorMessage = 'Erreur lors de la création de l\'inscription groupée via l\'API';
+          
+          // Essayer d'extraire le message depuis différentes structures d'erreur
+          if (apiError?.response?.data?.errors && Array.isArray(apiError.response.data.errors)) {
+            const errors = apiError.response.data.errors;
+            const errorDetails = errors.map((err: any) => err.detail || err.title || err.message).filter(Boolean);
+            if (errorDetails.length > 0) {
+              errorMessage = errorDetails.join('. ');
+            }
+          } else if (apiError?.response?.data?.message) {
+            errorMessage = apiError.response.data.message;
+          } else if (apiError?.message) {
+            errorMessage = apiError.message;
+          }
+          
           toast.error(errorMessage);
           throw apiError; // Re-lancer pour être capturé par le catch externe
         }
