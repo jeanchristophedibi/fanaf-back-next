@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Search, Filter, Download, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { Skeleton } from "../ui/skeleton";
+import { toast } from "sonner";
 
 export interface Column<T> {
   key: string;
@@ -174,12 +175,12 @@ export function List<T extends Record<string, any>>({
   })();
 
   // Calculer si le bouton d'export doit être désactivé
+  // L'export est une action de lecture, donc on l'autorise même en mode readOnly
   const isExportDisabled = (() => {
     const hasNoData = filteredData.length === 0;
-    const isReadOnly = readOnly;
     const missingConfig = !onExport && (!exportHeaders || !exportData);
     
-    return hasNoData || isReadOnly || missingConfig;
+    return hasNoData || missingConfig;
   })();
 
   // Pagination
@@ -268,10 +269,30 @@ export function List<T extends Record<string, any>>({
 
   // Export CSV (respecte filtres/tri, et colonnes visibles; exporte la sélection si présente)
   const handleExport = () => {
+    console.log('[List] handleExport called', { 
+      selectedItems: selectedItems.length, 
+      filteredData: filteredData.length,
+      exportHeaders: !!exportHeaders,
+      exportData: !!exportData,
+      onExport: !!onExport 
+    });
+    
     const dataset = selectedItems.length > 0 ? selectedItems : filteredData;
 
+    if (dataset.length === 0) {
+      console.warn('[List] No data to export');
+      toast.error('Aucune donnée à exporter');
+      return;
+    }
+
     if (onExport) {
-      onExport(dataset);
+      try {
+        onExport(dataset);
+        toast.success(`Export de ${dataset.length} élément(s) en cours...`);
+      } catch (error) {
+        console.error('[List] Erreur lors de l\'export personnalisé:', error);
+        toast.error('Erreur lors de l\'export');
+      }
       return;
     }
 
@@ -279,6 +300,13 @@ export function List<T extends Record<string, any>>({
     const effectiveHeaders = exportHeaders && exportHeaders.length > 0
       ? exportHeaders
       : columns.map((c) => c.header);
+
+    console.log('[List] Export config', {
+      effectiveHeaders,
+      hasExportData: !!exportData,
+      datasetLength: dataset.length,
+      exportFilename
+    });
 
     const effectiveRowBuilder = exportData
       ? exportData
@@ -292,24 +320,64 @@ export function List<T extends Record<string, any>>({
         });
 
     try {
-      const csvRows = [
-        effectiveHeaders.map(escapeCSVValue).join(","),
-        ...dataset.map(item => effectiveRowBuilder(item).map(escapeCSVValue).join(","))
-      ];
+      // Construire les lignes CSV
+      const headerRow = effectiveHeaders.map(escapeCSVValue).join(",");
+      const dataRows = dataset.map((item, index) => {
+        try {
+          const row = effectiveRowBuilder(item).map(escapeCSVValue).join(",");
+          return row;
+        } catch (rowError) {
+          console.error(`[List] Erreur lors de la construction de la ligne ${index}:`, rowError, item);
+          return '';
+        }
+      }).filter(row => row !== ''); // Filtrer les lignes vides en cas d'erreur
 
+      if (dataRows.length === 0) {
+        console.error('[List] Aucune ligne de données valide générée');
+        toast.error('Erreur lors de l\'export: aucune donnée valide');
+        return;
+      }
+
+      const csvRows = [headerRow, ...dataRows];
       const csvContent = csvRows.join("\n");
+      
+      console.log('[List] CSV generated', {
+        headerRowLength: headerRow.length,
+        dataRowsCount: dataRows.length,
+        csvContentLength: csvContent.length
+      });
+
       const BOM = '\uFEFF';
       const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+      
+      // Vérifier que le blob est valide
+      if (blob.size === 0) {
+        console.error('[List] Blob vide généré');
+        toast.error('Erreur lors de l\'export: fichier vide');
+        return;
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${exportFilename}-${new Date().toISOString().split("T")[0]}.csv`;
+      a.style.display = 'none'; // Masquer le lien
       document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      
+      // Forcer le téléchargement
+      setTimeout(() => {
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        const message = selectedItems.length > 0 
+          ? `${selectedItems.length} élément(s) sélectionné(s) exporté(s) avec succès`
+          : `${dataset.length} élément(s) exporté(s) avec succès`;
+        toast.success(message);
+      }, 100);
     } catch (error) {
       console.error('[List] Erreur lors de l\'export CSV:', error);
+      toast.error('Erreur lors de l\'export. Veuillez réessayer.');
     }
   };
 
@@ -413,18 +481,24 @@ export function List<T extends Record<string, any>>({
                     {filteredData.length} résultat{filteredData.length > 1 ? "s" : ""} trouvé{filteredData.length > 1 ? "s" : ""}
                   </p>
                   <Button
-                    onClick={handleExport}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('[List] Export button clicked', { isExportDisabled, filteredData: filteredData.length });
+                      handleExport();
+                    }}
                     variant="outline"
                     size="sm"
                     disabled={isExportDisabled}
+                    type="button"
                     title={
                       filteredData.length === 0 
                         ? "Aucune donnée à exporter"
-                        : readOnly 
-                        ? "Mode lecture seule"
                         : (!onExport && (!exportHeaders || !exportData))
                         ? "Configuration d'export manquante"
-                        : "Exporter les données au format CSV"
+                        : selectedItems.length > 0
+                        ? `Exporter ${selectedItems.length} élément(s) sélectionné(s) au format CSV`
+                        : `Exporter ${filteredData.length} élément(s) au format CSV`
                     }
                   >
                     <Download className="w-4 h-4 mr-2" />
