@@ -13,6 +13,7 @@ import { AnimatedStat } from '../../../components/AnimatedStat';
 import { toast } from 'sonner';
 import paymentService from '@/services/paymentService';
 import { motion } from 'motion/react';
+import { WidgetEnAttenteOperateur } from '@/components/paiements/en-attente/WidgetEnAttenteOperateur';
 
 type DashboardStats = {
   finalized: {
@@ -194,6 +195,10 @@ export default function OperateurCaisseDashboard() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Répartition par mode de paiement */}
+      <WidgetEnAttenteOperateur />
     </div>
+    
   );
 }

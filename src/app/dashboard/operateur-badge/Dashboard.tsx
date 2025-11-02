@@ -17,6 +17,8 @@ import {
 import { AnimatedStat } from '../../../components/AnimatedStat';
 import { toast } from 'sonner';
 import participantService from '@/services/participantService';
+import { TopOrganisationsWidget } from '../../../components/TopOrganisationsWidget';
+import { ParticipantTypeDistributionWidget } from '../../../components/ParticipantTypeDistributionWidget';
 
 type DashboardStats = {
   pending_payments: number;
@@ -125,106 +127,44 @@ export default function OperateurBadgeDashboard() {
       {/* Statistiques détaillées */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Répartition par type */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-teal-600" />
-              Répartition par type de participant
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
-                    <span className="text-sm text-gray-700">Membres</span>
-                  </div>
-                  <span className="text-gray-900">{stats?.by_type?.member || 0}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${stats?.participants ? ((stats?.by_type?.member || 0) / stats.participants) * 100 : 0}%` }}
-                  ></div>
-                </div>
-              </div>
+        <ParticipantTypeDistributionWidget />
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-orange-600 rounded-full"></div>
-                    <span className="text-sm text-gray-700">Non-membres</span>
-                  </div>
-                  <span className="text-gray-900">{stats?.by_type?.not_member || 0}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-orange-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${stats?.participants ? ((stats?.by_type?.not_member || 0) / stats.participants) * 100 : 0}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-purple-600 rounded-full"></div>
-                    <span className="text-sm text-gray-700">VIP</span>
-                  </div>
-                  <span className="text-gray-900">{stats?.by_type?.vip || 0}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-purple-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${stats?.participants ? ((stats?.by_type?.vip || 0) / stats.participants) * 100 : 0}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 p-4 bg-teal-50 rounded-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-700">Total participants</span>
-                <span className="text-lg text-teal-700">{stats?.participants || 0}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Inscriptions groupées */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building className="w-5 h-5 text-teal-600" />
-              Types d'inscriptions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Building className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-3xl text-blue-900 mb-2">{stats?.grouped_registrations || 0}</div>
-                <div className="text-sm text-blue-700">Inscriptions groupées</div>
-                <div className="text-xs text-blue-600 mt-1">Entreprises et associations</div>
-              </div>
-
-              <div className="text-center p-6 bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg">
-                <div className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-3xl text-teal-900 mb-2">
-                  {(stats?.participants || 0) - (stats?.grouped_registrations || 0)}
-                </div>
-                <div className="text-sm text-teal-700">Inscriptions individuelles</div>
-                <div className="text-xs text-teal-600 mt-1">Participants individuels</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Top 5 Organisations */}
+        <TopOrganisationsWidget />
       </div>
+
+      {/* Types d'inscriptions - Pleine largeur */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building className="w-5 h-5 text-teal-600" />
+            Types d'inscriptions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg">
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Building className="w-8 h-8 text-white" />
+              </div>
+              <div className="text-3xl text-blue-900 mb-2">{stats?.grouped_registrations || 0}</div>
+              <div className="text-sm text-blue-700">Inscriptions groupées</div>
+              <div className="text-xs text-blue-600 mt-1">Entreprises et associations</div>
+            </div>
+
+            <div className="text-center p-6 bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg">
+              <div className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              <div className="text-3xl text-teal-900 mb-2">
+                {(stats?.participants || 0) - (stats?.grouped_registrations || 0)}
+              </div>
+              <div className="text-sm text-teal-700">Inscriptions individuelles</div>
+              <div className="text-xs text-teal-600 mt-1">Participants individuels</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Indicateurs de performance */}
       <Card>
@@ -270,6 +210,8 @@ export default function OperateurBadgeDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      
 
       {/* Footer info */}
       <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card } from "../../ui/card";
-import { Coins, Banknote, Building2, FileText } from "lucide-react";
+import { Coins, Banknote, Building2, FileText, CreditCard, Smartphone } from "lucide-react";
 import { motion } from "motion/react";
 import { AlertCircle } from "lucide-react";
 import { AnimatedStat } from "../../AnimatedStat";
@@ -111,7 +111,7 @@ export function WidgetEnAttenteOperateur() {
       <Card className="p-6 border-gray-200">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center">
-            <AlertCircle className="w-6 h-6 text-white" />
+            <Smartphone className="w-6 h-6 text-white" />
           </div>
           <div>
             <p className="text-sm text-gray-600">AsaPay</p>

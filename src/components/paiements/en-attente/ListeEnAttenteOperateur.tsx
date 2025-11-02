@@ -15,7 +15,7 @@ import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, 
 import { toast } from "sonner";
 import paymentService from "@/services/paymentService";
 
-type ModePaiement = 'cash' | 'check' | 'transfer';
+type ModePaiement = 'cash' | 'check' | 'bank_transfer';
 
 export function ListeEnAttenteOperateur() {
   type RegistrationItem = {
@@ -74,7 +74,7 @@ export function ListeEnAttenteOperateur() {
       if (filterMode !== 'all') {
         const modeMap: Record<string, string> = {
           'espèce': 'cash',
-          'virement': 'transfer',
+          'virement': 'bank_transfer',
           'chèque': 'check',
           'carte bancaire': 'card',
           'orange money': 'orange_money',
@@ -236,7 +236,8 @@ export function ListeEnAttenteOperateur() {
 
       const response = await paymentService.validatePayment(
         selectedParticipant.id, 
-        selectedModePaiement, 
+        selectedModePaiement,
+        uploadedFile as unknown as File
       );
       
       console.log('Réponse API:', response);
@@ -645,14 +646,14 @@ export function ListeEnAttenteOperateur() {
                     <div className="flex items-center space-x-2">
                       <input
                         type="radio"
-                        id="transfer"
+                        id="bank_transfer"
                         name="modePaiement"
-                        value="transfer"
-                        checked={selectedModePaiement === 'transfer'}
+                        value="bank_transfer"
+                        checked={selectedModePaiement === 'bank_transfer'}
                         onChange={(e) => setSelectedModePaiement(e.target.value as ModePaiement)}
                         className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                       />
-                      <label htmlFor="transfer" className="flex items-center gap-2 cursor-pointer">
+                      <label htmlFor="bank_transfer" className="flex items-center gap-2 cursor-pointer">
                         <span className="text-2xl">🏦</span>
                         <span className="text-sm text-gray-700">Virement Bancaire</span>
                       </label>
