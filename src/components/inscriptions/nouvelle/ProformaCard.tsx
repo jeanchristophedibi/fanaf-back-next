@@ -6,14 +6,31 @@ import { Button } from '../../ui/button';
 import { Download } from 'lucide-react';
 import { ProformaInvoiceGenerator } from '../../ProformaInvoiceGenerator';
 
+interface RegistrationType {
+  id: string;
+  name: string;
+  slug: string;
+  amount: string;
+  amount_formatted: string;
+  valid_from: string;
+  valid_until: string;
+}
+
 interface ProformaCardProps {
   participants: any[];
   organisation: any;
   numeroFacture: string;
+  registrationTypes?: RegistrationType[];
   onDownload: () => void;
 }
 
-export const ProformaCard: React.FC<ProformaCardProps> = ({ participants, organisation, numeroFacture, onDownload }) => {
+export const ProformaCard: React.FC<ProformaCardProps> = ({ 
+  participants, 
+  organisation, 
+  numeroFacture, 
+  registrationTypes = [],
+  onDownload 
+}) => {
   return (
     <Card className="p-8 border-0 rounded-xl bg-white">
       <div className="flex items-center justify-between mb-8">
@@ -30,7 +47,13 @@ export const ProformaCard: React.FC<ProformaCardProps> = ({ participants, organi
         </Button>
       </div>
       <div id="facture-proforma-individuel">
-        <ProformaInvoiceGenerator participant={participants[0]} organisation={organisation} numeroFacture={numeroFacture} />
+        <ProformaInvoiceGenerator 
+          participant={participants[0]} 
+          organisation={organisation} 
+          numeroFacture={numeroFacture}
+          registrationTypes={registrationTypes}
+          quantite={participants.length}
+        />
       </div>
     </Card>
   );

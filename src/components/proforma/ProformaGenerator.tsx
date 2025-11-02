@@ -8,6 +8,8 @@ import { ProformaInvoiceGenerator } from '../ProformaInvoiceGenerator';
 import { Participant, Organisation } from '../data/types';
 import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { fanafApi } from '../../services/fanafApi';
 
 interface ProformaGeneratorProps {
   participant: Participant;
@@ -31,6 +33,18 @@ export function ProformaGenerator({
   trigger,
 }: ProformaGeneratorProps) {
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Charger les types d'inscription depuis l'API pour obtenir les vrais prix
+  const { data: registrationTypesResponse } = useQuery({
+    queryKey: ['registrationTypes'],
+    queryFn: async () => {
+      return await fanafApi.getRegistrationTypes();
+    },
+    staleTime: 5 * 60 * 1000, // Cache pendant 5 minutes
+    gcTime: 10 * 60 * 1000, // Garder en cache pendant 10 minutes
+  });
+
+  const registrationTypes = registrationTypesResponse?.data || [];
 
   // Générer le numéro de facture si non fourni
   const factureNumber = numeroFacture || 
@@ -65,13 +79,60 @@ export function ProformaGenerator({
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        logging: true, // Activer pour le débogage
+        logging: false, // Désactiver pour réduire le bruit
         allowTaint: true,
         backgroundColor: '#ffffff',
+        foreignObjectRendering: false, // Éviter les problèmes avec les couleurs non supportées
         onclone: (clonedDoc) => {
           const clonedElement = clonedDoc.getElementById(elementId);
           if (clonedElement) {
             clonedElement.style.backgroundColor = '#ffffff';
+            
+            // Convertir toutes les couleurs en format RGB pour éviter les erreurs avec lab(), oklch(), etc.
+            const allElements = clonedElement.querySelectorAll('*');
+            allElements.forEach((el: any) => {
+              if (el.style) {
+                // Convertir les couleurs de background
+                if (el.style.backgroundColor) {
+                  try {
+                    // Si c'est déjà en RGB ou hex, garder tel quel
+                    const bg = el.style.backgroundColor;
+                    if (!bg.match(/^(rgb|#|rgba)/i) && (bg.includes('lab') || bg.includes('oklch'))) {
+                      // Forcer une couleur par défaut si c'est lab() ou oklch()
+                      el.style.backgroundColor = '#ffffff';
+                    }
+                  } catch (e) {
+                    // En cas d'erreur, utiliser blanc
+                    el.style.backgroundColor = '#ffffff';
+                  }
+                }
+                
+                // Convertir les couleurs de texte
+                if (el.style.color) {
+                  try {
+                    const color = el.style.color;
+                    if (!color.match(/^(rgb|#|rgba)/i) && (color.includes('lab') || color.includes('oklch'))) {
+                      // Forcer une couleur par défaut si c'est lab() ou oklch()
+                      el.style.color = '#111827';
+                    }
+                  } catch (e) {
+                    el.style.color = '#111827';
+                  }
+                }
+                
+                // Convertir les couleurs de border
+                if (el.style.borderColor) {
+                  try {
+                    const borderColor = el.style.borderColor;
+                    if (!borderColor.match(/^(rgb|#|rgba)/i) && (borderColor.includes('lab') || borderColor.includes('oklch'))) {
+                      el.style.borderColor = '#e5e7eb';
+                    }
+                  } catch (e) {
+                    el.style.borderColor = '#e5e7eb';
+                  }
+                }
+              }
+            });
           }
         }
       }).catch((error) => {
@@ -159,6 +220,7 @@ export function ProformaGenerator({
                 participant={participant}
                 organisation={organisation}
                 numeroFacture={factureNumber}
+                registrationTypes={registrationTypes}
               />
             ) : (
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">

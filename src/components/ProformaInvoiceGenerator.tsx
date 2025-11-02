@@ -1,37 +1,94 @@
 import React from 'react';
 import { Participant, Organisation } from './data/types';
 
+interface RegistrationType {
+  id: string;
+  name: string;
+  slug: string;
+  amount: string;
+  amount_formatted: string;
+  valid_from: string;
+  valid_until: string;
+}
+
 interface ProformaInvoiceGeneratorProps {
   participant: Participant;
   organisation: Organisation;
   numeroFacture: string;
+  registrationTypes?: RegistrationType[]; // Types d'inscription depuis l'API
+  quantite?: number; // Nombre de participants (quantité à facturer), par défaut 1
 }
 
 export const ProformaInvoiceGenerator = ({ 
   participant, 
   organisation,
-  numeroFacture 
+  numeroFacture,
+  registrationTypes = [],
+  quantite = 1 // Par défaut, quantité = 1 (inscription individuelle)
 }: ProformaInvoiceGeneratorProps) => {
   const today = new Date();
   
-  // Calculer le montant selon le statut
-  const getMontant = () => {
-    switch (participant.statut) {
-      case 'membre':
-        return 350000;
-      case 'non-membre':
-        return 400000;
-      case 'vip':
-      case 'speaker':
-        return 0;
-      default:
-        return 0;
+  // Calculer le montant selon le statut en utilisant les vraies données de l'API
+  const getMontant = (): number => {
+    // VIP et speaker sont exonérés
+    if (participant.statut === 'vip' || participant.statut === 'speaker') {
+      return 0;
     }
+
+    // Si pas de registrationTypes, fallback sur les prix par défaut
+    if (!registrationTypes || registrationTypes.length === 0) {
+      console.warn('[ProformaInvoiceGenerator] Aucun type d\'inscription disponible, utilisation des prix par défaut');
+      switch (participant.statut) {
+        case 'membre':
+          return 350000;
+        case 'non-membre':
+          return 400000;
+        default:
+          return 0;
+      }
+    }
+
+    // Mapper le statut vers le slug
+    let slugToFind = '';
+    if (participant.statut === 'membre') {
+      slugToFind = 'membre-fanaf';
+    } else if (participant.statut === 'non-membre') {
+      slugToFind = 'non-membre';
+    } else {
+      return 0;
+    }
+
+    // Trouver le registration type correspondant
+    const registrationType = registrationTypes.find((rt) => rt.slug === slugToFind);
+    
+    if (!registrationType || !registrationType.amount) {
+      console.warn(`[ProformaInvoiceGenerator] Type d'inscription non trouvé pour slug: ${slugToFind}, utilisation du prix par défaut`);
+      // Fallback sur les prix par défaut
+      switch (participant.statut) {
+        case 'membre':
+          return 350000;
+        case 'non-membre':
+          return 400000;
+        default:
+          return 0;
+      }
+    }
+
+    // Convertir le montant de string en number
+    const montant = parseFloat(registrationType.amount);
+    if (isNaN(montant)) {
+      console.warn(`[ProformaInvoiceGenerator] Montant invalide pour ${slugToFind}: ${registrationType.amount}`);
+      return 0;
+    }
+
+    return montant;
   };
 
-  const montant = getMontant();
+  const montantUnitaire = getMontant();
+  const quantiteFacturee = quantite || 1;
+  const montantSousTotal = montantUnitaire * quantiteFacturee;
   const tva = 0; // Pas de TVA
-  const total = montant + tva;
+  const total = montantSousTotal + tva;
 
   // Format de date simple sans dépendance externe
   const formatDate = (date: Date) => {
@@ -147,17 +204,18 @@ export const ProformaInvoiceGenerator = ({
                   Inscription FANAF 2026 - {participant.statut === 'membre' ? 'Membre' : 
                     participant.statut === 'non-membre' ? 'Non-Membre' : 
                     participant.statut === 'vip' ? 'VIP' : 'Speaker'}
+                  {quantiteFacturee > 1 && ` (${quantiteFacturee} participants)`}
                 </p>
                 <p style={{ fontSize: '12px', color: '#4b5563', marginTop: '4px' }}>
                   46ème Assemblée Générale - 9-11 Février 2026
                 </p>
               </td>
-              <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#111827' }}>1</td>
+              <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#111827' }}>{quantiteFacturee}</td>
               <td style={{ padding: '16px', textAlign: 'right', fontSize: '14px', color: '#111827' }}>
-                {montant.toLocaleString('fr-FR')} FCFA
+                {montantUnitaire.toLocaleString('fr-FR')} FCFA
               </td>
               <td style={{ padding: '16px', textAlign: 'right', fontSize: '14px', color: '#111827' }}>
-                {montant.toLocaleString('fr-FR')} FCFA
+                {montantSousTotal.toLocaleString('fr-FR')} FCFA
               </td>
             </tr>
           </tbody>
@@ -169,7 +227,7 @@ export const ProformaInvoiceGenerator = ({
         <div style={{ width: '320px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
             <span style={{ fontSize: '14px', color: '#4b5563' }}>Sous-total:</span>
-            <span style={{ fontSize: '14px', color: '#111827' }}>{montant.toLocaleString('fr-FR')} FCFA</span>
+            <span style={{ fontSize: '14px', color: '#111827' }}>{montantSousTotal.toLocaleString('fr-FR')} FCFA</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
             <span style={{ fontSize: '14px', color: '#4b5563' }}>TVA:</span>

@@ -1623,10 +1623,45 @@ export const NouvelleInscriptionPage = () => {
         logging: false,
         allowTaint: true,
         backgroundColor: '#ffffff',
+        foreignObjectRendering: false, // Éviter les problèmes avec les couleurs non supportées
         onclone: (clonedDoc) => {
           const clonedElement = clonedDoc.getElementById(elementId);
           if (clonedElement) {
             clonedElement.style.backgroundColor = '#ffffff';
+            
+            // Convertir toutes les couleurs en format RGB pour éviter les erreurs avec lab(), oklch(), etc.
+            const allElements = clonedElement.querySelectorAll('*');
+            allElements.forEach((el: any) => {
+              if (el.style) {
+                // Convertir les couleurs de background
+                if (el.style.backgroundColor) {
+                  try {
+                    // Si c'est déjà en RGB ou hex, garder tel quel
+                    const bg = el.style.backgroundColor;
+                    if (!bg.match(/^(rgb|#|rgba)/i) && bg.includes('lab')) {
+                      // Forcer une couleur par défaut si c'est lab()
+                      el.style.backgroundColor = '#ffffff';
+                    }
+                  } catch (e) {
+                    // En cas d'erreur, utiliser blanc
+                    el.style.backgroundColor = '#ffffff';
+                  }
+                }
+                
+                // Convertir les couleurs de texte
+                if (el.style.color) {
+                  try {
+                    const color = el.style.color;
+                    if (!color.match(/^(rgb|#|rgba)/i) && color.includes('lab')) {
+                      // Forcer une couleur par défaut si c'est lab()
+                      el.style.color = '#111827';
+                    }
+                  } catch (e) {
+                    el.style.color = '#111827';
+                  }
+                }
+              }
+            });
           }
         }
       });
@@ -1690,7 +1725,13 @@ export const NouvelleInscriptionPage = () => {
           <SuccessBanner participantPrenom={participantPrincipal.prenom} participantsCount={inscriptionFinalisee.participants.length} />
 
           {/* Facture */}
-          <ProformaCard participants={inscriptionFinalisee.participants} organisation={inscriptionFinalisee.organisation} numeroFacture={inscriptionFinalisee.numeroFacture} onDownload={ouvrirChoixFacture} />
+          <ProformaCard 
+            participants={inscriptionFinalisee.participants} 
+            organisation={inscriptionFinalisee.organisation} 
+            numeroFacture={inscriptionFinalisee.numeroFacture} 
+            registrationTypes={registrationTypes}
+            onDownload={ouvrirChoixFacture} 
+          />
 
           {/* Dialog de choix de type de facture */}
           <AlertDialog open={showFactureDialog} onOpenChange={setShowFactureDialog}>
