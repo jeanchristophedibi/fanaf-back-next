@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Users, BarChart3, LineChart, AlertCircle, CheckCircle, XCircle, ScanLine } from 'lucide-react';
 import { DashboardAnalytics } from '../DashboardAnalytics';
-import { InscriptionsEvolutionChart } from '../InscriptionsEvolutionChart';
+import { InscriptionsEvolutionChart } from '../inscriptions/InscriptionsEvolutionChart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { AgentMissionsSection } from './AgentMissionsSection';
 import { InscriptionsSection } from './InscriptionsSection';

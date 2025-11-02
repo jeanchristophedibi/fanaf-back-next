@@ -1,29 +1,35 @@
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { TrendingUp, Calendar, Users, Sparkles } from 'lucide-react';
+import { useParticipantsQuery } from '../../hooks/useParticipantsQuery';
+import type { Participant } from '../data/types';
 
-// Données simulées d'évolution des inscriptions
-const evolutionData = [
-  { date: '01 Jan', membres: 5, nonMembres: 3, vip: 1, speakers: 0, total: 9 },
-  { date: '05 Jan', membres: 12, nonMembres: 8, vip: 2, speakers: 1, total: 23 },
-  { date: '10 Jan', membres: 18, nonMembres: 15, vip: 4, speakers: 2, total: 39 },
-  { date: '15 Jan', membres: 25, nonMembres: 22, vip: 6, speakers: 3, total: 56 },
-  { date: '20 Jan', membres: 32, nonMembres: 28, vip: 8, speakers: 4, total: 72 },
-  { date: '25 Jan', membres: 38, nonMembres: 34, vip: 9, speakers: 5, total: 86 },
-  { date: '30 Jan', membres: 45, nonMembres: 40, vip: 10, speakers: 5, total: 100 },
-];
+// Fonction helper pour formater la date
+const formatDate = (date: Date): string => {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date.toLocaleDateString('fr-FR', { month: 'short' });
+  return `${day} ${month}`;
+};
 
-// Données de répartition hebdomadaire
-const weeklyData = [
-  { semaine: 'Sem 1', total: 23, membres: 12, nonMembres: 11 },
-  { semaine: 'Sem 2', total: 16, membres: 9, nonMembres: 7 },
-  { semaine: 'Sem 3', total: 17, membres: 10, nonMembres: 7 },
-  { semaine: 'Sem 4', total: 14, membres: 8, nonMembres: 6 },
-  { semaine: 'Sem 5', total: 30, membres: 17, nonMembres: 13 },
-];
+// Fonction helper pour obtenir le début de la semaine (lundi)
+const getWeekStart = (date: Date): Date => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Ajuster pour lundi
+  return new Date(d.setDate(diff));
+};
+
+// Fonction helper pour obtenir le numéro de semaine depuis une date de référence
+const getWeekNumber = (date: Date, startDate: Date): number => {
+  const weekStart = getWeekStart(date);
+  const startWeekStart = getWeekStart(startDate);
+  const diffTime = weekStart.getTime() - startWeekStart.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return Math.floor(diffDays / 7) + 1;
+};
 
 // Custom Tooltip pour le graphique d'évolution
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -68,8 +74,272 @@ const WeeklyTooltip = ({ active, payload, label }: any) => {
 };
 
 export function InscriptionsEvolutionChart() {
+  const { participants, isLoading } = useParticipantsQuery({
+    enabled: true,
+    categories: ['member', 'not_member', 'vip']
+  });
+
+  // Calculer les données d'évolution dynamiquement
+  const { evolutionData, weeklyData, stats } = useMemo(() => {
+    if (!participants || participants.length === 0) {
+      return {
+        evolutionData: [],
+        weeklyData: [],
+        stats: {
+          growthRate: 0,
+          avgPerDay: 0,
+          recordWeek: { week: 0, count: 0 }
+        }
+      };
+    }
+
+    // Trier les participants par date d'inscription
+    const sortedParticipants = [...participants].sort((a, b) => {
+      const dateA = new Date(a.dateInscription || (a as any).created_at || 0);
+      const dateB = new Date(b.dateInscription || (b as any).created_at || 0);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    if (sortedParticipants.length === 0) {
+      return {
+        evolutionData: [],
+        weeklyData: [],
+        stats: {
+          growthRate: 0,
+          avgPerDay: 0,
+          recordWeek: { week: 0, count: 0 }
+        }
+      };
+    }
+
+    // Trouver la date de début (première inscription) et la date actuelle
+    const firstDate = new Date(sortedParticipants[0].dateInscription || (sortedParticipants[0] as any).created_at);
+    const lastDate = new Date(sortedParticipants[sortedParticipants.length - 1].dateInscription || (sortedParticipants[sortedParticipants.length - 1] as any).created_at);
+    const today = new Date();
+
+    // Créer des buckets de dates (tous les 5 jours)
+    const startDate = new Date(firstDate);
+    startDate.setHours(0, 0, 0, 0);
+    
+    // Créer un map pour stocker les cumuls par période
+    const evolutionDataMap = new Map<string, { date: string; membres: number; nonMembres: number; vip: number; speakers: number; total: number }>();
+    
+    // Initialiser les compteurs cumulatifs
+    let cumulMembres = 0;
+    let cumulNonMembres = 0;
+    let cumulVip = 0;
+    let cumulSpeakers = 0;
+
+    // Grouper les participants par période de 5 jours
+    for (const participant of sortedParticipants) {
+      const participantDate = new Date(participant.dateInscription || (participant as any).created_at);
+      participantDate.setHours(0, 0, 0, 0);
+      
+      // Calculer le nombre de jours depuis le début
+      const daysDiff = Math.floor((participantDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Grouper par période de 5 jours
+      const periodDays = Math.floor(daysDiff / 5) * 5;
+      const periodDate = new Date(startDate);
+      periodDate.setDate(periodDate.getDate() + periodDays);
+      
+      const dateKey = formatDate(periodDate);
+      
+      // Initialiser si nécessaire
+      if (!evolutionDataMap.has(dateKey)) {
+        evolutionDataMap.set(dateKey, {
+          date: dateKey,
+          membres: cumulMembres,
+          nonMembres: cumulNonMembres,
+          vip: cumulVip,
+          speakers: cumulSpeakers,
+          total: cumulMembres + cumulNonMembres + cumulVip + cumulSpeakers
+        });
+      }
+
+      // Incrémenter les compteurs selon le statut
+      const statut = (participant.statut || '').toLowerCase();
+      if (statut === 'membre' || statut === 'member') {
+        cumulMembres++;
+      } else if (statut === 'non-membre' || statut === 'not_member' || statut === 'non membre') {
+        cumulNonMembres++;
+      } else if (statut === 'vip') {
+        cumulVip++;
+      } else if (statut === 'speaker') {
+        cumulSpeakers++;
+      }
+
+      // Mettre à jour les valeurs cumulatives pour cette période
+      const data = evolutionDataMap.get(dateKey)!;
+      data.membres = cumulMembres;
+      data.nonMembres = cumulNonMembres;
+      data.vip = cumulVip;
+      data.speakers = cumulSpeakers;
+      data.total = cumulMembres + cumulNonMembres + cumulVip + cumulSpeakers;
+    }
+
+    // Convertir en tableau et trier par date
+    const evolutionDataArray = Array.from(evolutionDataMap.values()).sort((a, b) => {
+      // Parser les dates pour comparer
+      const parseDate = (dateStr: string) => {
+        const parts = dateStr.split(' ');
+        const months: Record<string, number> = {
+          'jan': 0, 'fév': 1, 'mar': 2, 'avr': 3, 'mai': 4, 'jun': 5,
+          'jul': 6, 'aoû': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'déc': 11
+        };
+        return new Date(today.getFullYear(), months[parts[1].toLowerCase()] || 0, parseInt(parts[0]));
+      };
+      return parseDate(a.date).getTime() - parseDate(b.date).getTime();
+    });
+
+    // Remplir les périodes manquantes avec les dernières valeurs
+    const filledEvolutionData: typeof evolutionDataArray = [];
+    let lastValues = { membres: 0, nonMembres: 0, vip: 0, speakers: 0, total: 0 };
+    
+    // Créer des points tous les 5 jours depuis le début jusqu'à aujourd'hui
+    const currentDate = new Date(startDate);
+    while (currentDate <= today) {
+      const dateKey = formatDate(currentDate);
+      const existing = evolutionDataArray.find(d => d.date === dateKey);
+      
+      if (existing) {
+        lastValues = existing;
+        filledEvolutionData.push(existing);
+      } else {
+        filledEvolutionData.push({
+          date: dateKey,
+          ...lastValues,
+          total: lastValues.membres + lastValues.nonMembres + lastValues.vip + lastValues.speakers
+        });
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 5);
+    }
+
+    // Calculer les données hebdomadaires
+    const weeklyMap = new Map<number, { semaine: string; total: number; membres: number; nonMembres: number }>();
+    
+    // Grouper par semaine
+    for (const participant of sortedParticipants) {
+      const participantDate = new Date(participant.dateInscription || (participant as any).created_at);
+      const weekNum = getWeekNumber(participantDate, firstDate);
+      const weekKey = `Sem ${weekNum}`;
+      
+      if (!weeklyMap.has(weekNum)) {
+        weeklyMap.set(weekNum, { semaine: weekKey, total: 0, membres: 0, nonMembres: 0 });
+      }
+      
+      const weekData = weeklyMap.get(weekNum)!;
+      weekData.total++;
+      
+      const statut = (participant.statut || '').toLowerCase();
+      if (statut === 'membre' || statut === 'member') {
+        weekData.membres++;
+      } else if (statut === 'non-membre' || statut === 'not_member' || statut === 'non membre') {
+        weekData.nonMembres++;
+      }
+    }
+
+    const weeklyDataArray = Array.from(weeklyMap.values()).sort((a, b) => {
+      const weekNumA = parseInt(a.semaine.replace('Sem ', ''));
+      const weekNumB = parseInt(b.semaine.replace('Sem ', ''));
+      return weekNumA - weekNumB;
+    });
+
+    // Calculer les statistiques
+    const totalDays = Math.max(1, Math.ceil((today.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const avgPerDay = sortedParticipants.length / totalDays;
+    
+    // Calculer le taux de croissance (comparer les 2 dernières semaines)
+    let growthRate = 0;
+    if (weeklyDataArray.length >= 2) {
+      const lastWeek = weeklyDataArray[weeklyDataArray.length - 1];
+      const prevWeek = weeklyDataArray[weeklyDataArray.length - 2];
+      if (prevWeek.total > 0) {
+        growthRate = ((lastWeek.total - prevWeek.total) / prevWeek.total) * 100;
+      }
+    }
+
+    // Trouver la semaine record
+    const recordWeek = weeklyDataArray.reduce((max, week) => 
+      week.total > max.count ? { week: parseInt(week.semaine.replace('Sem ', '')), count: week.total } : max,
+      { week: 0, count: 0 }
+    );
+
+    return {
+      evolutionData: filledEvolutionData.slice(-7), // Garder les 7 derniers points
+      weeklyData: weeklyDataArray.slice(-5), // Garder les 5 dernières semaines
+      stats: {
+        growthRate: Math.round(growthRate * 10) / 10,
+        avgPerDay: Math.round(avgPerDay * 10) / 10,
+        recordWeek
+      }
+    };
+  }, [participants]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-white" />
+              </div>
+              <span>Chargement des données...</span>
+            </CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Statistiques clés */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-700">Taux d'inscriptions</p>
+                <p className="text-2xl text-green-900 mt-1">
+                  {stats.growthRate > 0 ? '+' : ''}{stats.growthRate}%
+                </p>
+                <p className="text-xs text-green-600 mt-1">par semaine</p>
+              </div>
+              <TrendingUp className="w-10 h-10 text-green-600 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700">Moyenne par jour</p>
+                <p className="text-2xl text-blue-900 mt-1">{stats.avgPerDay}</p>
+                <p className="text-xs text-blue-600 mt-1">inscriptions</p>
+              </div>
+              <Calendar className="w-10 h-10 text-blue-600 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-orange-700">Semaine record</p>
+                <p className="text-2xl text-orange-900 mt-1">{stats.recordWeek.count}</p>
+                <p className="text-xs text-orange-600 mt-1">
+                  {stats.recordWeek.week > 0 ? `Semaine ${stats.recordWeek.week}` : 'N/A'}
+                </p>
+              </div>
+              <TrendingUp className="w-10 h-10 text-orange-600 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       {/* Graphique d'évolution cumulée avec Area Chart amélioré */}
       <Card className="shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-orange-100 overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600" />
@@ -234,47 +504,7 @@ export function InscriptionsEvolutionChart() {
         </CardContent>
       </Card>
 
-      {/* Statistiques clés */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700">Taux de croissance</p>
-                <p className="text-2xl text-green-900 mt-1">+12.5%</p>
-                <p className="text-xs text-green-600 mt-1">par semaine</p>
-              </div>
-              <TrendingUp className="w-10 h-10 text-green-600 opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-700">Moyenne par jour</p>
-                <p className="text-2xl text-blue-900 mt-1">3.3</p>
-                <p className="text-xs text-blue-600 mt-1">inscriptions</p>
-              </div>
-              <Calendar className="w-10 h-10 text-blue-600 opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-orange-700">Semaine record</p>
-                <p className="text-2xl text-orange-900 mt-1">30</p>
-                <p className="text-xs text-orange-600 mt-1">Semaine 5</p>
-              </div>
-              <TrendingUp className="w-10 h-10 text-orange-600 opacity-50" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      
     </div>
   );
 }
