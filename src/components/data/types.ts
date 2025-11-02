@@ -100,6 +100,7 @@ export interface MembreComite {
   telephone: string;
   profil: ProfilMembre;
   dateCreation: string;
+  badge_url?: string;
 }
 
 export type TypeNotification = 'inscription' | 'rendez-vous' | 'vol' | 'alerte';

@@ -28,7 +28,7 @@ export function middleware(request: NextRequest) {
     if (d2) return d2;
 
     // Admin ASACI
-    const d3 = deny(pathname.startsWith('/dashboard/admin-asaci') && role !== 'admin_platform');
+    const d3 = deny(pathname.startsWith('/dashboard/admin-asaci') && role !== 'admin_asaci');
     if (d3) return d3;
 
     // Agent inscription (FANAF)

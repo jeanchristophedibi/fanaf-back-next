@@ -74,6 +74,9 @@ function mapApiUserToMembreComite(apiData: any, defaultProfil?: ProfilMembre): M
     telephone: apiData.phone || apiData.telephone || apiData.contact || '',
     profil,
     dateCreation: apiData.created_at || apiData.date_creation || apiData.dateCreation || new Date().toISOString(),
+    // badge_url est mappé depuis les deux sources: getScanAgents() et getStaff()
+    // Supporte différents formats: badge_url (snake_case) ou badgeUrl (camelCase)
+    badge_url: apiData.badge_url || apiData.badgeUrl || undefined,
   };
 }
 
@@ -193,8 +196,19 @@ export function ComiteOrganisationPage() {
   };
 
   const handleDownloadBadge = (membre: MembreComite) => {
-    console.log('Téléchargement badge rouge pour:', membre);
-    // Ici vous ajouteriez la logique pour générer et télécharger le badge rouge
+    if (!membre.badge_url) {
+      console.warn('Aucune URL de badge disponible pour ce membre:', membre);
+      return;
+    }
+
+    // Créer un lien temporaire pour télécharger le badge
+    const link = document.createElement('a');
+    link.href = membre.badge_url;
+    link.download = `badge_${membre.prenom}_${membre.nom}.pdf`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleExport = () => {
@@ -382,11 +396,12 @@ export function ComiteOrganisationPage() {
 
                               <div className="border-t pt-4">
                                 <Button 
-                                  className="w-full bg-red-600 hover:bg-red-700 text-white"
+                                  className="w-full bg-red-600 hover:bg-red-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
                                   onClick={() => handleDownloadBadge(membre)}
+                                  disabled={!membre.badge_url}
                                 >
                                   <Download className="w-4 h-4 mr-2" />
-                                  Télécharger le badge
+                                  {membre.badge_url ? 'Télécharger le badge' : 'Badge non disponible'}
                                 </Button>
                               </div>
                             </div>

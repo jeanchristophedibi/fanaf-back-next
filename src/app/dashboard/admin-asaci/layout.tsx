@@ -2,24 +2,27 @@
 
 import React from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
-import { AuthGuard } from '../../../components/auth/AuthGuard';
 import { usePathname, useRouter } from 'next/navigation';
 
 export type NavItem =
   | 'home'
-  | 'inscriptions'
   | 'paiements-attente'
   | 'paiements';
 
-export default function AdminAsaciLayout({ children }: { children: React.ReactNode }) {
+export default function OperateurCaisseLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
   // Déterminer l'élément actif basé sur l'URL
   const getActiveNav = (): NavItem => {
-    if (pathname?.includes('/inscriptions')) return 'inscriptions';
-    if (pathname?.includes('/paiements/attente')) return 'paiements-attente';
-    if (pathname?.includes('/paiements/liste')) return 'paiements';
+    // Vérifier les chemins les plus spécifiques en premier
+    if (pathname?.includes('/paiements/attente') || pathname?.includes('/paiements/en-attente')) {
+      return 'paiements-attente';
+    }
+    if (pathname?.includes('/paiements/liste')) {
+      return 'paiements';
+    }
+    // Par défaut, retourner home
     return 'home';
   };
 
@@ -28,31 +31,26 @@ export default function AdminAsaciLayout({ children }: { children: React.ReactNo
   const handleNavChange = (nav: string) => {
     switch (nav) {
       case 'home':
-        router.push('/dashboard/admin-asaci');
-        break;
-      case 'inscriptions':
-        router.push('/dashboard/admin-asaci/inscriptions');
+        router.push('/dashboard/operateur-caisse');
         break;
       case 'paiements-attente':
-        router.push('/dashboard/admin-asaci/paiements/attente');
+        router.push('/dashboard/operateur-caisse/paiements/attente');
         break;
       case 'paiements':
-        router.push('/dashboard/admin-asaci/paiements/liste');
+        router.push('/dashboard/operateur-caisse/paiements/liste');
         break;
     }
   };
 
   return (
-    <AuthGuard>
-      <UnifiedLayout
-        activeNav={activeNav}
-        onNavChange={handleNavChange}
-        userProfile="admin-asaci"
-        onSwitchProfile={() => {}}
-      >
-        {children}
-      </UnifiedLayout>
-    </AuthGuard>
+    <UnifiedLayout
+      activeNav={activeNav}
+      onNavChange={handleNavChange}
+      userProfile="operateur-caisse"
+      onSwitchProfile={() => {}}
+    >
+      {children}
+    </UnifiedLayout>
   );
 }
 
