@@ -59,11 +59,13 @@ export function DocumentsParticipantsPage() {
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     participantId: string;
+    registrationId: string;
     type: 'badge' | 'kit';
     participantName: string;
   }>({
     open: false,
     participantId: '',
+    registrationId: '',
     type: 'badge',
     participantName: '',
   });
@@ -305,25 +307,24 @@ export function DocumentsParticipantsPage() {
   };
 
   // Ouvrir la boîte de dialogue de confirmation
-  const openConfirmDialog = (participantId: string, type: 'badge' | 'kit') => {
-    const participant = participants.find(p => p.id === participantId);
+  const openConfirmDialog = (registrationId: string, type: 'badge' | 'kit') => {
+    const participant = participants.find(p => p.registration.id === registrationId);
     if (!participant) return;
 
     setConfirmDialog({
       open: true,
-      participantId,
+      participantId: participant.id,
+      registrationId: participant.registration.id,
       type,
       participantName: `${participant.prenom} ${participant.nom}`,
     });
   };
 
   // Confirmer la remise du document
-  const confirmRemiseDocument = async () => {
+  const confirmRemiseBadge = async (registrationId: string) => {
     setIsLoading(true);
-    const { participantId, type, participantName } = confirmDialog;
-
     try {
-      const response = await participantService.confirmRemise(participantId);
+      const response = await participantService.confirmRemiseBadge(registrationId);
       if (response.success === true) {
         toast.success('Remise confirmée avec succès');
       } else if (response.success === false) {
@@ -334,6 +335,29 @@ export function DocumentsParticipantsPage() {
     } catch (error) {
       toast.error('Une erreur est survenue lors de la confirmation de remise');
     } finally {
+      fetchParticipants();
+      setIsLoading(false);
+    }
+  };
+
+  // Confirmer la remise du document
+  const confirmRemiseKit = async () => {
+    setIsLoading(true);
+    const { participantId, registrationId, type, participantName } = confirmDialog;
+
+    try {
+      const response = await participantService.confirmRemiseKit(registrationId);
+      if (response.success === true) {
+        toast.success('Remise confirmée avec succès');
+      } else if (response.success === false) {
+        toast.error(response.message);
+      } else {
+        toast.error('Une erreur est survenue lors de la confirmation de remise');
+      }
+    } catch (error) {
+      toast.error('Une erreur est survenue lors de la confirmation de remise');
+    } finally {
+      fetchParticipants();
       setIsLoading(false);
     }
   };
@@ -971,11 +995,21 @@ export function DocumentsParticipantsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => openConfirmDialog(participant.id, 'badge')}
+                            onClick={() => openConfirmDialog(participant.registration.id, 'badge')}
                             className="gap-2 border-purple-200 text-purple-700 hover:bg-purple-50"
                           >
                             <QrCode className="w-4 h-4" />
-                            ({remisesCount.badge}) Remise de kit
+                            ({participant.registration?.badge_given_count}) Remise de badge
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openConfirmDialog(participant.registration.id, 'kit')}
+                            className="gap-2 border-purple-200 text-purple-700 hover:bg-purple-50"
+                          >
+                            <QrCode className="w-4 h-4" />
+                            ({participant.registration?.kit_given_count}) Remise de kit
                           </Button>
                         </div>
                         </div>
@@ -989,16 +1023,13 @@ export function DocumentsParticipantsPage() {
         </Tabs>
       </Card>
 
-      {/* AlertDialog pour confirmation de remise */}
-      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+      {/* AlertDialog pour confirmation de remise du badge */}
+      <AlertDialog open={confirmDialog.open && confirmDialog.type === 'badge'} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmation de remise</AlertDialogTitle>
+            <AlertDialogTitle>Confirmation de remise du badge</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmDialog.type === 'badge' 
-                ? `Confirmez-vous la remise du badge pour ${confirmDialog.participantName} ?`
-                : `Confirmez-vous la remise du kit pour ${confirmDialog.participantName} ?`
-              }
+              Confirmez-vous la remise du badge pour {confirmDialog.participantName} ?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1006,8 +1037,31 @@ export function DocumentsParticipantsPage() {
               Annuler
             </AlertDialogCancel>
             <AlertDialogAction 
-              onClick={confirmRemiseDocument}
-              className="bg-orange-600 hover:bg-orange-700"
+              onClick={() => confirmRemiseBadge(confirmDialog.registrationId)}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              Confirmer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog pour confirmation de remise du kit */}
+      <AlertDialog open={confirmDialog.open && confirmDialog.type === 'kit'} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmation de remise du kit</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirmez-vous la remise du kit pour {confirmDialog.participantName} ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>
+              Annuler
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmRemiseKit}
+              className="bg-purple-600 hover:bg-purple-700"
             >
               Confirmer
             </AlertDialogAction>
