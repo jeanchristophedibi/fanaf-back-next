@@ -86,7 +86,7 @@ export function InscriptionsEvolutionChart() {
         evolutionData: [],
         weeklyData: [],
         stats: {
-          growthRate: 0,
+          growthRate: null,
           avgPerDay: 0,
           recordWeek: { week: 0, count: 0 }
         }
@@ -105,7 +105,7 @@ export function InscriptionsEvolutionChart() {
         evolutionData: [],
         weeklyData: [],
         stats: {
-          growthRate: 0,
+          growthRate: null,
           avgPerDay: 0,
           recordWeek: { week: 0, count: 0 }
         }
@@ -250,12 +250,17 @@ export function InscriptionsEvolutionChart() {
     const avgPerDay = sortedParticipants.length / totalDays;
     
     // Calculer le taux de croissance (comparer les 2 dernières semaines)
-    let growthRate = 0;
+    let growthRate: number | null = null; // null = pas de données, 0 = croissance nulle
     if (weeklyDataArray.length >= 2) {
       const lastWeek = weeklyDataArray[weeklyDataArray.length - 1];
       const prevWeek = weeklyDataArray[weeklyDataArray.length - 2];
       if (prevWeek.total > 0) {
         growthRate = ((lastWeek.total - prevWeek.total) / prevWeek.total) * 100;
+      } else if (lastWeek.total > 0) {
+        // Si la semaine précédente était à 0 et la dernière > 0, croissance infinie (ou très élevée)
+        growthRate = 100; // Limiter à 100% pour l'affichage
+      } else {
+        growthRate = 0; // Les deux semaines à 0 = croissance nulle
       }
     }
 
@@ -269,7 +274,7 @@ export function InscriptionsEvolutionChart() {
       evolutionData: filledEvolutionData.slice(-7), // Garder les 7 derniers points
       weeklyData: weeklyDataArray.slice(-5), // Garder les 5 dernières semaines
       stats: {
-        growthRate: Math.round(growthRate * 10) / 10,
+        growthRate: growthRate !== null ? Math.round(growthRate * 10) / 10 : null,
         avgPerDay: Math.round(avgPerDay * 10) / 10,
         recordWeek
       }
@@ -300,13 +305,30 @@ export function InscriptionsEvolutionChart() {
         <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700">Taux d'inscriptions</p>
-                <p className="text-2xl text-green-900 mt-1">
-                  {stats.growthRate > 0 ? '+' : ''}{stats.growthRate}%
-                </p>
-                <p className="text-xs text-green-600 mt-1">par semaine</p>
-              </div>
+               <div>
+                 <p className="text-sm text-green-700">Taux de croissance</p>
+                 {stats.growthRate !== null ? (
+                   <>
+                     <p className="text-2xl text-green-900 mt-1">
+                       {stats.growthRate > 0 ? '+' : ''}{stats.growthRate}%
+                     </p>
+                     <p className="text-xs text-green-600 mt-1">
+                       vs semaine précédente
+                     </p>
+                   </>
+                 ) : (
+                   <>
+                     <p className="text-2xl text-green-900 mt-1">—</p>
+                     <p className="text-xs text-green-600 mt-1">
+                       {weeklyData.length === 0 
+                         ? 'Aucune donnée disponible' 
+                         : weeklyData.length === 1 
+                         ? 'Données insuffisantes (2 semaines min.)' 
+                         : 'Calcul en cours...'}
+                     </p>
+                   </>
+                 )}
+               </div>
               <TrendingUp className="w-10 h-10 text-green-600 opacity-50" />
             </div>
           </CardContent>
