@@ -3,7 +3,6 @@
 import React from 'react';
 import { UnifiedLayout } from '../../../components/dashboard/UnifiedLayout';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Building2, Users, FileText, CreditCard, Wallet, UserCog, Settings, BarChart3, Shield } from 'lucide-react';
 
 export type NavItem =
   | 'home'
@@ -23,7 +22,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
 
   // Déterminer l'élément actif basé sur l'URL
-  const getActiveNav = (): NavItem => {
+  const getActiveNav = (): NavItem | string => {
+    // Organisations doit être détecté avant les autres pour éviter les conflits
+    if (pathname?.includes('/organisations')) {
+      if (pathname?.includes('/organisations/membre')) return 'organisations-membre';
+      if (pathname?.includes('/organisations/non-membre')) return 'organisations-non-membre';
+      if (pathname?.includes('/organisations/sponsor')) return 'organisations-sponsor';
+      return 'organisations-liste';
+    }
     if (pathname?.includes('/users') || pathname?.includes('/comite')) {
       return 'users';
     }
@@ -31,6 +37,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return 'companies';
     }
     if (pathname?.includes('/inscriptions')) {
+      if (pathname?.includes('/inscriptions/membre')) return 'inscriptions-membre';
+      if (pathname?.includes('/inscriptions/non-membre')) return 'inscriptions-non-membre';
+      if (pathname?.includes('/inscriptions/vip')) return 'inscriptions-vip';
+      if (pathname?.includes('/inscriptions/speaker')) return 'inscriptions-speaker';
+      if (pathname?.includes('/inscriptions/planvol')) return 'inscriptions-planvol';
+      if (pathname?.includes('/inscriptions/liste')) return 'inscriptions-liste';
       return 'inscriptions';
     }
     if (pathname?.includes('/paiements')) {
@@ -46,6 +58,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return 'sponsors';
     }
     if (pathname?.includes('/networking')) {
+      if (pathname?.includes('/networking/participant')) return 'networking-participant';
+      if (pathname?.includes('/networking/sponsor')) return 'networking-sponsor';
+      if (pathname?.includes('/networking/historique')) return 'networking-historique';
+      if (pathname === '/dashboard/admin/networking' || pathname === '/dashboard/admin/networking/') {
+        return 'networking-liste';
+      }
       return 'networking';
     }
     if (pathname?.includes('/statistiques') || pathname?.includes('/analytics')) {
@@ -73,7 +91,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.push('/dashboard/admin/companies');
         break;
       case 'inscriptions':
-        router.push('/dashboard/admin/inscriptions/liste');
+        router.push('/dashboard/admin/inscriptions');
         break;
       case 'inscriptions-liste':
         router.push('/dashboard/admin/inscriptions/liste');

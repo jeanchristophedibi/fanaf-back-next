@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake, UserPlus, Loader2, BarChart3, Settings, Shield } from 'lucide-react';
+import { Home, FileText, CreditCard, Users, Building2, Calendar, ChevronDown, RefreshCw, ScanLine, UserCog, Coins, Handshake, UserPlus, Loader2, BarChart3, Settings, Shield, Award } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Button } from '../ui/button';
@@ -96,13 +96,16 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
             { id: 'home', label: 'Accueil', icon: Home },
             { id: 'users', label: 'Utilisateurs', icon: UserCog },
             { id: 'companies', label: 'Compagnies', icon: Building2 },
+            { id: 'badges', label: 'Badges', icon: Award },
+            { id: 'sponsors', label: 'Sponsors', icon: Shield },
             { id: 'statistiques', label: 'Statistiques', icon: BarChart3 },
+            { id: 'parametres', label: 'Paramètres', icon: Settings },
           ],
           showInscriptions: true,
           showOrganisations: true,
           showNetworking: true,
-          showPaiements: true,
-          showTresorerie: true,
+          showPaiements: false,
+          showTresorerie: false,
           title: 'Administration globale',
         };
 
@@ -216,7 +219,10 @@ export function UnifiedSidebar({ activeNav, onNavChange, userProfile, onSwitchPr
   const isOrganisationsActive = activeNav.startsWith('organisations');
   const isNetworkingActive = activeNav.startsWith('networking');
   const isPaiementsActive = activeNav.startsWith('paiements');
-  const isTresorerieActive = activeNav.startsWith('finance');
+  const isTresorerieActive = activeNav.startsWith('finance') || activeNav.startsWith('tresorerie');
+  const isBadgesActive = activeNav === 'badges' || activeNav.startsWith('badges');
+  const isSponsorsActive = activeNav === 'sponsors' || activeNav.startsWith('sponsors');
+  const isParametresActive = activeNav === 'parametres' || activeNav.startsWith('parametres') || activeNav.startsWith('settings');
 
   // Éviter l'hydratation SSR: rendre côté client uniquement
   if (!isMounted) {

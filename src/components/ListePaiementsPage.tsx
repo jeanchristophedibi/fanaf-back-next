@@ -29,7 +29,7 @@ import { getOrganisationById } from './data/helpers';
 
 
 export function ListePaiementsPage() {
-  const { participants } = useDynamicInscriptions();
+  const { participants = [] } = useDynamicInscriptions();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<'all' | 'payé' | 'non-payé'>('all');
@@ -43,36 +43,50 @@ export function ListePaiementsPage() {
   const paiementsQuery = useQuery({
     queryKey: ['listePaiementsPage', 'paiements', participants],
     queryFn: () => {
+      if (!participants || participants.length === 0) {
+        return [];
+      }
+      
       return participants
-        .filter(p => p.statutInscription === 'finalisée')
+        .filter(p => p && p.statutInscription === 'finalisée')
         .map(p => {
-          const organisation = getOrganisationById(p.organisationId);
-          
-          // Calcul du tarif selon le statut
-          let tarif = 0;
-          if (p.statut === 'non-membre') {
-            tarif = 400000;
-          } else if (p.statut === 'membre') {
-            tarif = 350000;
-          }
-          // VIP et speakers sont exonérés (0 FCFA)
+          try {
+            const organisation = p.organisationId ? getOrganisationById(p.organisationId) : undefined;
+            
+            // Calcul du tarif selon le statut
+            let tarif = 0;
+            if (p.statut === 'non-membre') {
+              tarif = 400000;
+            } else if (p.statut === 'membre') {
+              tarif = 350000;
+            }
+            // VIP et speakers sont exonérés (0 FCFA)
 
-          return {
-            id: p.id,
-            reference: p.reference,
-            participantNom: `${p.prenom} ${p.nom}`,
-            participantEmail: p.email,
-            organisationNom: organisation?.nom || 'N/A',
-            statut: p.statut,
-            montant: tarif,
-            modePaiement: p.modePaiement || 'espèce',
-            canalEncaissement: p.canalEncaissement || 'externe',
-            dateInscription: p.dateInscription,
-            datePaiement: p.datePaiement || p.dateInscription, // Utilise dateInscription si datePaiement n'existe pas
-            administrateurEncaissement: p.caissier || 'N/A',
-            pays: p.pays,
-          };
-        });
+            // Gestion des dates en toute sécurité
+            const dateInscription = p.dateInscription || new Date().toISOString();
+            const datePaiement = p.datePaiement || dateInscription;
+
+            return {
+              id: p.id || '',
+              reference: p.reference || '',
+              participantNom: `${p.prenom || ''} ${p.nom || ''}`.trim() || 'N/A',
+              participantEmail: p.email || 'N/A',
+              organisationNom: organisation?.nom || 'N/A',
+              statut: p.statut || 'non-membre',
+              montant: tarif,
+              modePaiement: p.modePaiement || 'espèce',
+              canalEncaissement: p.canalEncaissement || 'externe',
+              dateInscription,
+              datePaiement,
+              administrateurEncaissement: p.caissier || 'N/A',
+              pays: p.pays || 'N/A',
+            };
+          } catch (error) {
+            console.error('Erreur lors du traitement d\'un paiement:', error, p);
+            return null;
+          }
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null);
     },
     enabled: true,
     staleTime: 0,
@@ -221,8 +235,8 @@ export function ListePaiementsPage() {
       p.montant.toString(),
       p.modePaiement,
       p.canalEncaissement,
-      new Date(p.dateInscription).toLocaleDateString('fr-FR'),
-      new Date(p.datePaiement).toLocaleDateString('fr-FR'),
+      p.dateInscription ? new Date(p.dateInscription).toLocaleDateString('fr-FR') : 'N/A',
+      p.datePaiement ? new Date(p.datePaiement).toLocaleDateString('fr-FR') : 'N/A',
       p.administrateurEncaissement,
       p.pays,
     ]);
@@ -494,7 +508,7 @@ export function ListePaiementsPage() {
                             <div className="flex flex-col">
                               <p className="text-xs text-gray-500">Date:</p>
                               <p className="text-sm text-green-700">
-                                {new Date(paiement.datePaiement).toLocaleDateString('fr-FR')}
+                                {paiement.datePaiement ? new Date(paiement.datePaiement).toLocaleDateString('fr-FR') : 'N/A'}
                               </p>
                             </div>
                           </div>
