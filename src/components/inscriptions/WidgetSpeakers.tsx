@@ -30,9 +30,19 @@ export function WidgetSpeakers() {
         const speakers = loaded
           .filter((p) => {
             if (!p) return false;
-            // Accepter plusieurs formats de statut
-            const statut = p.statut || (p as any).status || (p as any).type;
-            const isSpeaker = statut === 'speaker' || statut === 'Speaker' || statut === 'SPEAKER';
+            // Filtrer sur registration_fee au lieu de statut
+            // L'API renvoie "SPEAKER" en majuscules avec diverses variations
+            const registrationFee = p.registrationFee || (p as any).registration_fee || '';
+            const feeUpper = registrationFee ? String(registrationFee).toUpperCase().trim() : '';
+            const isSpeaker = feeUpper === 'SPEAKER' || feeUpper === 'SPEAKER_TYPE';
+            
+            // Fallback sur statut si registration_fee n'est pas disponible
+            if (!registrationFee) {
+              const statut: any = p.statut || (p as any).status || (p as any).type;
+              const statutUpper = statut ? String(statut).toUpperCase().trim() : '';
+              return statutUpper === 'SPEAKER';
+            }
+            
             return isSpeaker;
           })
           .filter((p): p is NonNullable<typeof p> => p !== null && p !== undefined);
@@ -53,7 +63,12 @@ export function WidgetSpeakers() {
   const safeAllParticipants = Array.isArray(allParticipants) ? allParticipants : [];
   const participants = apiParticipants.length > 0 
     ? apiParticipants 
-    : safeAllParticipants.filter(p => p && p.statut === 'speaker');
+    : safeAllParticipants.filter(p => {
+        if (!p) return false;
+        const statut: any = p.statut || (p as any).status || (p as any).type;
+        const statutUpper = statut ? String(statut).toUpperCase().trim() : '';
+        return statutUpper === 'SPEAKER';
+      });
 
   // Charger les paiements en attente depuis l'API
   const { data: pendingPaymentsResponse, isLoading: isLoadingPending } = useQuery({
@@ -82,7 +97,21 @@ export function WidgetSpeakers() {
           return { total: 0, finalises: 0, enAttente: 0 };
         }
 
-        const speakers = participants.filter(p => p && p.statut === 'speaker');
+        // Filtrer les speakers en utilisant la même logique que dans la requête principale
+        const speakers = participants.filter(p => {
+          if (!p) return false;
+          const registrationFee = p.registrationFee || (p as any).registration_fee || '';
+          const feeUpper = registrationFee ? String(registrationFee).toUpperCase().trim() : '';
+          const isSpeaker = feeUpper === 'SPEAKER' || feeUpper === 'SPEAKER_TYPE';
+          
+          if (!registrationFee) {
+            const statut: any = p.statut || (p as any).status || (p as any).type;
+            const statutUpper = statut ? String(statut).toUpperCase().trim() : '';
+            return statutUpper === 'SPEAKER';
+          }
+          
+          return isSpeaker;
+        });
         const finalises = speakers.filter(p => p && p.statutInscription === 'finalisée').length;
         
         // Compter les paiements en attente depuis l'API pour les speakers uniquement
@@ -90,8 +119,9 @@ export function WidgetSpeakers() {
         const enAttenteFromAPI = (pendingPayments || []).filter((item: any) => {
           try {
             if (!item) return false;
-            const registrationFee = item.user?.registration_fee || '';
-            const isSpeaker = registrationFee === 'speaker' || item.registration?.type === 'speaker';
+            const registrationFee = item.user?.registration_fee || item.registration?.type || '';
+            const feeUpper = registrationFee ? String(registrationFee).toUpperCase().trim() : '';
+            const isSpeaker = feeUpper === 'SPEAKER' || feeUpper === 'SPEAKER_TYPE';
             return isSpeaker;
           } catch (error) {
             console.error('Erreur lors du filtrage des paiements:', error);
