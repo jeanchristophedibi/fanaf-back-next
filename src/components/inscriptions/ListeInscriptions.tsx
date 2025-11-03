@@ -259,8 +259,15 @@ export function ListeInscriptions({
     const badgesGenerables = filteredParticipants.filter(p => p.statutInscription === 'finalisée').length;
 
     const getBadgeUrlFor = (p: Participant): string | undefined => {
+        // Priorité 1: badgeUrl stocké directement dans le participant (depuis documents.badge)
+        if (p.badgeUrl) {
+            return p.badgeUrl;
+        }
+        // Priorité 2: badgeUrl depuis le map badgeByEmail (depuis documentsDataService)
         const emailKey = p.email?.toLowerCase();
-        if (emailKey && badgeByEmail[emailKey]) return badgeByEmail[emailKey];
+        if (emailKey && badgeByEmail[emailKey]) {
+            return badgeByEmail[emailKey];
+        }
         return undefined;
     };
 

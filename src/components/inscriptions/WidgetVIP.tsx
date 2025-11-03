@@ -8,17 +8,38 @@ import { inscriptionsDataService } from "../data/inscriptionsData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
+import paymentService from '@/services/paymentService';
 
 export function WidgetVIP() {
   const { participants: allParticipants } = useDynamicInscriptions();
 
   // Charger les participants VIP avec React Query
+  // Charger toutes les catégories pour être sûr d'avoir tous les VIP
   const { data: apiParticipants = [], isLoading } = useQuery({
     queryKey: ['widgetVIP'],
     queryFn: async () => {
       try {
-        const loaded = await inscriptionsDataService.loadParticipants(['vip']);
-        return loaded.filter((p) => p.statut === 'vip');
+        // Charger toutes les catégories pour avoir toutes les données, puis filtrer localement
+        const loaded = await inscriptionsDataService.loadParticipants(undefined);
+        console.log('[WidgetVIP] Participants chargés:', loaded?.length || 0);
+        
+        if (!loaded || !Array.isArray(loaded)) {
+          console.warn('[WidgetVIP] Données invalides ou vides');
+          return [];
+        }
+        
+        const vip = loaded
+          .filter((p) => {
+            if (!p) return false;
+            // Accepter plusieurs formats de statut
+            const statut = p.statut || (p as any).status || (p as any).type;
+            const isVIP = statut === 'vip' || statut === 'VIP' || statut === 'Vip';
+            return isVIP;
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null && p !== undefined);
+        
+        console.log('[WidgetVIP] VIP filtrés:', vip.length);
+        return vip;
       } catch (e) {
         console.error('Erreur chargement VIP:', e);
         return [];
@@ -30,15 +51,65 @@ export function WidgetVIP() {
     refetchOnReconnect: false,
   });
 
-  const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'vip');
+  const safeAllParticipants = Array.isArray(allParticipants) ? allParticipants : [];
+  const participants = apiParticipants.length > 0 
+    ? apiParticipants 
+    : safeAllParticipants.filter(p => p && p.statut === 'vip');
+
+  // Charger les paiements en attente depuis l'API
+  const { data: pendingPaymentsResponse, isLoading: isLoadingPending } = useQuery({
+    queryKey: ['pendingPayments', 'widgetVIP'],
+    queryFn: async () => {
+      try {
+        const response = await paymentService.getAllEnAttente();
+        return response?.data?.data || [];
+      } catch (error) {
+        console.error('[WidgetVIP] Erreur lors du chargement des paiements en attente:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000, // 30 secondes
+    gcTime: 2 * 60 * 1000, // 2 minutes en cache
+    refetchOnWindowFocus: false,
+  });
+
+  const pendingPayments = pendingPaymentsResponse || [];
 
   const statsQuery = useQuery({
-    queryKey: ['widgetVIP', 'stats', participants],
+    queryKey: ['widgetVIP', 'stats', participants, pendingPayments],
     queryFn: () => {
-      const vip = participants.filter(p => p.statut === 'vip');
-      const finalises = vip.filter(p => p.statutInscription === 'finalisée').length;
-      const enAttente = vip.filter(p => p.statutInscription === 'non-finalisée').length;
-      return { total: vip.length, finalises, enAttente };
+      try {
+        if (!participants || participants.length === 0) {
+          return { total: 0, finalises: 0, enAttente: 0 };
+        }
+
+        const vip = participants.filter(p => p && p.statut === 'vip');
+        const finalises = vip.filter(p => p && p.statutInscription === 'finalisée').length;
+        
+        // Compter les paiements en attente depuis l'API pour les VIP uniquement
+        // Note: Les VIP sont généralement exonérés, donc ce sera probablement 0
+        const enAttenteFromAPI = (pendingPayments || []).filter((item: any) => {
+          try {
+            if (!item) return false;
+            const registrationFee = item.user?.registration_fee || '';
+            const isVIP = registrationFee === 'vip' || item.registration?.type === 'vip';
+            return isVIP;
+          } catch (error) {
+            console.error('Erreur lors du filtrage des paiements:', error);
+            return false;
+          }
+        }).length;
+        
+        // Utiliser le compte depuis l'API si disponible, sinon fallback sur le calcul local
+        const enAttente = enAttenteFromAPI > 0 
+          ? enAttenteFromAPI 
+          : vip.filter(p => p && p.statutInscription === 'non-finalisée').length;
+        
+        return { total: vip.length, finalises, enAttente };
+      } catch (error) {
+        console.error('Erreur lors du calcul des statistiques VIP:', error);
+        return { total: 0, finalises: 0, enAttente: 0 };
+      }
     },
     enabled: true,
     staleTime: 0,
@@ -46,7 +117,7 @@ export function WidgetVIP() {
 
   const stats = statsQuery.data ?? { total: 0, finalises: 0, enAttente: 0 };
 
-  if (isLoading) {
+  if (isLoading || isLoadingPending) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card className="border-t-4 border-t-cyan-500">

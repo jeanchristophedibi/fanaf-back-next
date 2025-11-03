@@ -8,6 +8,7 @@ import { inscriptionsDataService } from "../data/inscriptionsData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
+import paymentService from '@/services/paymentService';
 
 export function WidgetSpeakers() {
   const { participants: allParticipants } = useDynamicInscriptions();
@@ -19,7 +20,25 @@ export function WidgetSpeakers() {
       try {
         // Charger toutes les inscriptions puis filtrer les speakers
         const loaded = await inscriptionsDataService.loadParticipants(undefined);
-        return loaded.filter((p) => p.statut === 'speaker');
+        console.log('[WidgetSpeakers] Participants chargés:', loaded?.length || 0);
+        
+        if (!loaded || !Array.isArray(loaded)) {
+          console.warn('[WidgetSpeakers] Données invalides ou vides');
+          return [];
+        }
+        
+        const speakers = loaded
+          .filter((p) => {
+            if (!p) return false;
+            // Accepter plusieurs formats de statut
+            const statut = p.statut || (p as any).status || (p as any).type;
+            const isSpeaker = statut === 'speaker' || statut === 'Speaker' || statut === 'SPEAKER';
+            return isSpeaker;
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null && p !== undefined);
+        
+        console.log('[WidgetSpeakers] Speakers filtrés:', speakers.length);
+        return speakers;
       } catch (e) {
         console.error('Erreur chargement Speakers:', e);
         return [];
@@ -31,15 +50,65 @@ export function WidgetSpeakers() {
     refetchOnReconnect: false,
   });
 
-  const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'speaker');
+  const safeAllParticipants = Array.isArray(allParticipants) ? allParticipants : [];
+  const participants = apiParticipants.length > 0 
+    ? apiParticipants 
+    : safeAllParticipants.filter(p => p && p.statut === 'speaker');
+
+  // Charger les paiements en attente depuis l'API
+  const { data: pendingPaymentsResponse, isLoading: isLoadingPending } = useQuery({
+    queryKey: ['pendingPayments', 'widgetSpeakers'],
+    queryFn: async () => {
+      try {
+        const response = await paymentService.getAllEnAttente();
+        return response?.data?.data || [];
+      } catch (error) {
+        console.error('[WidgetSpeakers] Erreur lors du chargement des paiements en attente:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000, // 30 secondes
+    gcTime: 2 * 60 * 1000, // 2 minutes en cache
+    refetchOnWindowFocus: false,
+  });
+
+  const pendingPayments = pendingPaymentsResponse || [];
 
   const statsQuery = useQuery({
-    queryKey: ['widgetSpeakers', 'stats', participants],
+    queryKey: ['widgetSpeakers', 'stats', participants, pendingPayments],
     queryFn: () => {
-      const speakers = participants.filter(p => p.statut === 'speaker');
-      const finalises = speakers.filter(p => p.statutInscription === 'finalisée').length;
-      const enAttente = speakers.filter(p => p.statutInscription === 'non-finalisée').length;
-      return { total: speakers.length, finalises, enAttente };
+      try {
+        if (!participants || participants.length === 0) {
+          return { total: 0, finalises: 0, enAttente: 0 };
+        }
+
+        const speakers = participants.filter(p => p && p.statut === 'speaker');
+        const finalises = speakers.filter(p => p && p.statutInscription === 'finalisée').length;
+        
+        // Compter les paiements en attente depuis l'API pour les speakers uniquement
+        // Note: Les speakers sont généralement exonérés, donc ce sera probablement 0
+        const enAttenteFromAPI = (pendingPayments || []).filter((item: any) => {
+          try {
+            if (!item) return false;
+            const registrationFee = item.user?.registration_fee || '';
+            const isSpeaker = registrationFee === 'speaker' || item.registration?.type === 'speaker';
+            return isSpeaker;
+          } catch (error) {
+            console.error('Erreur lors du filtrage des paiements:', error);
+            return false;
+          }
+        }).length;
+        
+        // Utiliser le compte depuis l'API si disponible, sinon fallback sur le calcul local
+        const enAttente = enAttenteFromAPI > 0 
+          ? enAttenteFromAPI 
+          : speakers.filter(p => p && p.statutInscription === 'non-finalisée').length;
+        
+        return { total: speakers.length, finalises, enAttente };
+      } catch (error) {
+        console.error('Erreur lors du calcul des statistiques speakers:', error);
+        return { total: 0, finalises: 0, enAttente: 0 };
+      }
     },
     enabled: true,
     staleTime: 0,
@@ -47,7 +116,7 @@ export function WidgetSpeakers() {
 
   const stats = statsQuery.data ?? { total: 0, finalises: 0, enAttente: 0 };
 
-  if (isLoading) {
+  if (isLoading || isLoadingPending) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card className="border-t-4 border-t-yellow-500">

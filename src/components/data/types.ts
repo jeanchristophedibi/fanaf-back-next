@@ -25,10 +25,12 @@ export interface Participant {
   canalEncaissement?: CanalEncaissement;
   caissier?: string;
   badgeGenere?: boolean;
+  badgeUrl?: string; // URL du badge depuis documents.badge
   checkIn?: boolean;
   checkInDate?: string;
   groupeId?: string;
   nomGroupe?: string;
+  registrationFee?: string; // registration_fee depuis l'API (ex: "MEMBRE", "NON MEMBRE", "VIP", etc.)
 }
 
 export interface Referent {

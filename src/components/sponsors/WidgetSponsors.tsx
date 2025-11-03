@@ -15,7 +15,12 @@ export function WidgetSponsors() {
     queryKey: ['widgetSponsors'],
     queryFn: async () => {
       try {
-        return await sponsorsDataService.loadSponsors();
+        const loaded = await sponsorsDataService.loadSponsors();
+        if (!loaded || !Array.isArray(loaded)) {
+          return [];
+        }
+        return loaded
+          .filter((s): s is NonNullable<typeof s> => s !== null && s !== undefined);
       } catch (error) {
         console.error('Erreur lors du chargement des sponsors:', error);
         return [];
@@ -31,16 +36,25 @@ export function WidgetSponsors() {
   const statsQuery = useQuery({
     queryKey: ['widgetSponsors', 'stats', sponsors],
     queryFn: () => {
-      const total = sponsors.length;
-      const argent = sponsors.filter(s => s.secteurActivite === 'ARGENT').length;
-      const gold = sponsors.filter(s => s.secteurActivite === 'GOLD').length;
-      const autres = sponsors.filter(s => 
-        s.secteurActivite && 
-        s.secteurActivite !== 'ARGENT' && 
-        s.secteurActivite !== 'GOLD'
-      ).length;
-      
-      return { total, argent, gold, autres };
+      try {
+        if (!sponsors || sponsors.length === 0) {
+          return { total: 0, argent: 0, gold: 0, autres: 0 };
+        }
+
+        const total = sponsors.length;
+        const argent = sponsors.filter(s => s && s.secteurActivite === 'ARGENT').length;
+        const gold = sponsors.filter(s => s && s.secteurActivite === 'GOLD').length;
+        const autres = sponsors.filter(s => 
+          s && s.secteurActivite && 
+          s.secteurActivite !== 'ARGENT' && 
+          s.secteurActivite !== 'GOLD'
+        ).length;
+        
+        return { total, argent, gold, autres };
+      } catch (error) {
+        console.error('Erreur lors du calcul des statistiques sponsors:', error);
+        return { total: 0, argent: 0, gold: 0, autres: 0 };
+      }
     },
     enabled: true,
     staleTime: 0,

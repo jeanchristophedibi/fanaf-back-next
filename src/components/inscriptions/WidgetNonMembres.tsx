@@ -8,17 +8,58 @@ import { inscriptionsDataService } from "../data/inscriptionsData";
 import { motion } from "motion/react";
 import { AnimatedStat } from "../AnimatedStat";
 import { Skeleton } from "../ui/skeleton";
+import paymentService from '@/services/paymentService';
 
 export function WidgetNonMembres() {
   const { participants: allParticipants } = useDynamicInscriptions();
 
   // Charger les participants non-membres avec React Query
+  // Charger toutes les catégories pour être sûr d'avoir tous les non-membres
   const { data: apiParticipants = [], isLoading } = useQuery({
     queryKey: ['widgetNonMembres'],
     queryFn: async () => {
       try {
-        const loadedParticipants = await inscriptionsDataService.loadParticipants(['not_member']);
-        return loadedParticipants.filter(p => p.statut === 'non-membre');
+        // Charger toutes les catégories pour avoir toutes les données, puis filtrer localement
+        const loadedParticipants = await inscriptionsDataService.loadParticipants(undefined);
+        console.log('[WidgetNonMembres] Participants chargés:', loadedParticipants?.length || 0);
+        
+        if (!loadedParticipants || !Array.isArray(loadedParticipants)) {
+          console.warn('[WidgetNonMembres] Données invalides ou vides');
+          return [];
+        }
+        
+        const nonMembres = loadedParticipants
+          .filter(p => {
+            if (!p) return false;
+            // Filtrer sur registration_fee au lieu de statut
+            // L'API renvoie "NON MEMBRE" en majuscules
+            const registrationFee = p.registrationFee || (p as any).registration_fee || '';
+            const feeUpper = registrationFee.toUpperCase().trim();
+            const isNotMember = feeUpper === 'NON MEMBRE' || feeUpper === 'NON MEMBER' || 
+                              feeUpper === 'NOT MEMBER' || feeUpper === 'NOT_MEMBER' ||
+                              feeUpper === 'NON-MEMBRE' || feeUpper === 'NOT-MEMBER';
+            
+            // Fallback sur statut si registration_fee n'est pas disponible
+            if (!registrationFee) {
+              const statut: any = p.statut || (p as any).status || (p as any).type;
+              return statut === 'non-membre' || statut === 'not_member' || statut === 'not-member' || statut === 'Not Member';
+            }
+            
+            return isNotMember;
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null && p !== undefined);
+        
+        console.log('[WidgetNonMembres] Non-membres filtrés:', nonMembres.length);
+        if (nonMembres.length > 0) {
+          console.log('[WidgetNonMembres] Exemple non-membre:', {
+            id: nonMembres[0].id,
+            nom: nonMembres[0].nom,
+            statut: nonMembres[0].statut,
+            registrationFee: nonMembres[0].registrationFee,
+            statutInscription: nonMembres[0].statutInscription
+          });
+        }
+        return nonMembres;
       } catch (err) {
         console.error('Erreur lors du chargement des non-membres:', err);
         return [];
@@ -30,20 +71,70 @@ export function WidgetNonMembres() {
     refetchOnReconnect: false,
   });
   
-  const participants = apiParticipants.length > 0 ? apiParticipants : allParticipants.filter(p => p.statut === 'non-membre');
+  const safeAllParticipants = Array.isArray(allParticipants) ? allParticipants : [];
+  const participants = apiParticipants.length > 0 
+    ? apiParticipants 
+    : safeAllParticipants.filter(p => p && p.statut === 'non-membre');
+
+  // Charger les paiements en attente depuis l'API
+  const { data: pendingPaymentsResponse, isLoading: isLoadingPending } = useQuery({
+    queryKey: ['pendingPayments', 'widgetNonMembres'],
+    queryFn: async () => {
+      try {
+        const response = await paymentService.getAllEnAttente();
+        return response?.data?.data || [];
+      } catch (error) {
+        console.error('[WidgetNonMembres] Erreur lors du chargement des paiements en attente:', error);
+        return [];
+      }
+    },
+    staleTime: 30 * 1000, // 30 secondes
+    gcTime: 2 * 60 * 1000, // 2 minutes en cache
+    refetchOnWindowFocus: false,
+  });
+
+  const pendingPayments = pendingPaymentsResponse || [];
 
   const statsQuery = useQuery({
-    queryKey: ['widgetNonMembres', 'stats', participants],
+    queryKey: ['widgetNonMembres', 'stats', participants, pendingPayments],
     queryFn: () => {
-      const nonMembres = participants.filter(p => p.statut === 'non-membre');
-      const finalises = nonMembres.filter(p => p.statutInscription === 'finalisée').length;
-      const enAttente = nonMembres.filter(p => p.statutInscription === 'non-finalisée').length;
-      
-      return {
-        total: nonMembres.length,
-        finalises,
-        enAttente
-      };
+      try {
+        if (!participants || participants.length === 0) {
+          return { total: 0, finalises: 0, enAttente: 0 };
+        }
+
+        const nonMembres = participants.filter(p => p && p.statut === 'non-membre');
+        const finalises = nonMembres.filter(p => p && p.statutInscription === 'finalisée').length;
+        
+        // Compter les paiements en attente depuis l'API pour les non-membres uniquement
+        const enAttenteFromAPI = (pendingPayments || []).filter((item: any) => {
+          try {
+            if (!item) return false;
+            const registrationFee = item.user?.registration_fee || '';
+            const isNotMember = registrationFee === 'not_member' || registrationFee === 'non-membre' || 
+                               registrationFee === 'non_membre' ||
+                               item.registration?.type === 'not_member' || item.registration?.type === 'non-membre';
+            return isNotMember;
+          } catch (error) {
+            console.error('Erreur lors du filtrage des paiements:', error);
+            return false;
+          }
+        }).length;
+        
+        // Utiliser le compte depuis l'API si disponible, sinon fallback sur le calcul local
+        const enAttente = enAttenteFromAPI > 0 
+          ? enAttenteFromAPI 
+          : nonMembres.filter(p => p && p.statutInscription === 'non-finalisée').length;
+        
+        return {
+          total: nonMembres.length,
+          finalises,
+          enAttente
+        };
+      } catch (error) {
+        console.error('Erreur lors du calcul des statistiques non-membres:', error);
+        return { total: 0, finalises: 0, enAttente: 0 };
+      }
     },
     enabled: true,
     staleTime: 0,
@@ -51,7 +142,7 @@ export function WidgetNonMembres() {
 
   const stats = statsQuery.data ?? { total: 0, finalises: 0, enAttente: 0 };
 
-  if (isLoading) {
+  if (isLoading || isLoadingPending) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card className="border-t-4 border-t-amber-500">
