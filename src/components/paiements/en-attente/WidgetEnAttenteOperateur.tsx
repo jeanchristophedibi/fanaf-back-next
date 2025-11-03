@@ -133,7 +133,7 @@ export function WidgetEnAttenteOperateur() {
             <Smartphone className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">AsaPay</p>
+            <p className="text-sm text-gray-600">{statsData?.asapay?.label || "Chèque"}</p>
             <p className="text-2xl text-gray-900">
               <AnimatedStat value={statsData?.asapay?.count || 0} />
             </p>
