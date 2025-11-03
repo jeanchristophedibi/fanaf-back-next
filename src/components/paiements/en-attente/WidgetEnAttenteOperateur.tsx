@@ -130,12 +130,12 @@ export function WidgetEnAttenteOperateur() {
       <Card className="p-6 border-gray-200">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center">
-            <CreditCard className="w-6 h-6 text-white" />
+            <Smartphone className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">{statsData?.card?.label || "Carte bancaire"}</p>
+            <p className="text-sm text-gray-600">AsaPay</p>
             <p className="text-2xl text-gray-900">
-              <AnimatedStat value={statsData?.card?.count || 0} />
+              <AnimatedStat value={statsData?.asapay?.count || 0} />
             </p>
           </div>
         </div>
