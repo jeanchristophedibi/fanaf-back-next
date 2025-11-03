@@ -9,17 +9,35 @@ import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import paymentService from "@/services/paymentService";
 
+type PaymentMethodStats = {
+  payment_method: string;
+  label: string;
+  payment_provider_system: string;
+  count: number;
+  total_amount: number;
+  total_fees: number;
+  mobile_money_provider?: string;
+};
+
+type PaymentStats = {
+  totals: {
+    count: number;
+    amount: number;
+    fees: number;
+  };
+  asapay: PaymentMethodStats;
+  bank_transfer: PaymentMethodStats;
+  check: PaymentMethodStats;
+  cash: PaymentMethodStats;
+  card: PaymentMethodStats;
+  mobile_money_moov: PaymentMethodStats;
+  mobile_money_wave: PaymentMethodStats;
+  mobile_money_mtn: PaymentMethodStats;
+  mobile_money_orange: PaymentMethodStats;
+};
 
 export function WidgetEnAttenteOperateur() {
-  type PaymentMethod = {
-    payment_method: string;
-    label: string;
-    count: number;
-    total_amount: number;
-    total_fees: number;
-  };
-
-  const [statsData, setStatsData] = useState<any>(null);
+  const [statsData, setStatsData] = useState<PaymentStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -55,7 +73,7 @@ export function WidgetEnAttenteOperateur() {
             <Banknote className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">Espèce</p>
+            <p className="text-sm text-gray-600">{statsData?.cash?.label || "Espèces"}</p>
             <p className="text-2xl text-gray-900">
               <AnimatedStat value={statsData?.cash?.count || 0} />
             </p>
@@ -72,12 +90,12 @@ export function WidgetEnAttenteOperateur() {
       <Card className="p-6 border-gray-200">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Banknote className="w-6 h-6 text-white" />
+            <Building2 className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">Virement</p>
+            <p className="text-sm text-gray-600">{statsData?.bank_transfer?.label || "Virement bancaire"}</p>
             <p className="text-2xl text-gray-900">
-              <AnimatedStat value={statsData?.virement?.count || 0} />
+              <AnimatedStat value={statsData?.bank_transfer?.count || 0} />
             </p>
           </div>
         </div>
@@ -92,12 +110,12 @@ export function WidgetEnAttenteOperateur() {
       <Card className="p-6 border-gray-200">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
-            <Banknote className="w-6 h-6 text-white" />
+            <FileText className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">Chèque</p>
+            <p className="text-sm text-gray-600">{statsData?.check?.label || "Chèque"}</p>
             <p className="text-2xl text-gray-900">
-              <AnimatedStat value={statsData?.cheque?.count || 0} />
+              <AnimatedStat value={statsData?.check?.count || 0} />
             </p>
           </div>
         </div>
@@ -115,7 +133,7 @@ export function WidgetEnAttenteOperateur() {
             <Smartphone className="w-6 h-6 text-white" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">AsaPay</p>
+            <p className="text-sm text-gray-600">{statsData?.asapay?.label || "Chèque"}</p>
             <p className="text-2xl text-gray-900">
               <AnimatedStat value={statsData?.asapay?.count || 0} />
             </p>
