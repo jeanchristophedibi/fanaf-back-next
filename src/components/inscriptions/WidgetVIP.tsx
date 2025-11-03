@@ -31,9 +31,19 @@ export function WidgetVIP() {
         const vip = loaded
           .filter((p) => {
             if (!p) return false;
-            // Accepter plusieurs formats de statut
-            const statut = p.statut || (p as any).status || (p as any).type;
-            const isVIP = statut === 'vip' || statut === 'VIP' || statut === 'Vip';
+            // Filtrer sur registration_fee au lieu de statut
+            // L'API renvoie "VIP" en majuscules avec diverses variations
+            const registrationFee = p.registrationFee || (p as any).registration_fee || '';
+            const feeUpper = registrationFee ? String(registrationFee).toUpperCase().trim() : '';
+            const isVIP = feeUpper === 'VIP' || feeUpper === 'VIP_TYPE';
+            
+            // Fallback sur statut si registration_fee n'est pas disponible
+            if (!registrationFee) {
+              const statut: any = p.statut || (p as any).status || (p as any).type;
+              const statutUpper = statut ? String(statut).toUpperCase().trim() : '';
+              return statutUpper === 'VIP';
+            }
+            
             return isVIP;
           })
           .filter((p): p is NonNullable<typeof p> => p !== null && p !== undefined);
@@ -54,7 +64,12 @@ export function WidgetVIP() {
   const safeAllParticipants = Array.isArray(allParticipants) ? allParticipants : [];
   const participants = apiParticipants.length > 0 
     ? apiParticipants 
-    : safeAllParticipants.filter(p => p && p.statut === 'vip');
+    : safeAllParticipants.filter(p => {
+        if (!p) return false;
+        const statut: any = p.statut || (p as any).status || (p as any).type;
+        const statutUpper = statut ? String(statut).toUpperCase().trim() : '';
+        return statutUpper === 'VIP';
+      });
 
   // Charger les paiements en attente depuis l'API
   const { data: pendingPaymentsResponse, isLoading: isLoadingPending } = useQuery({
@@ -83,7 +98,21 @@ export function WidgetVIP() {
           return { total: 0, finalises: 0, enAttente: 0 };
         }
 
-        const vip = participants.filter(p => p && p.statut === 'vip');
+        // Filtrer les VIP en utilisant la même logique que dans la requête principale
+        const vip = participants.filter(p => {
+          if (!p) return false;
+          const registrationFee = p.registrationFee || (p as any).registration_fee || '';
+          const feeUpper = registrationFee ? String(registrationFee).toUpperCase().trim() : '';
+          const isVIP = feeUpper === 'VIP' || feeUpper === 'VIP_TYPE';
+          
+          if (!registrationFee) {
+            const statut: any = p.statut || (p as any).status || (p as any).type;
+            const statutUpper = statut ? String(statut).toUpperCase().trim() : '';
+            return statutUpper === 'VIP';
+          }
+          
+          return isVIP;
+        });
         const finalises = vip.filter(p => p && p.statutInscription === 'finalisée').length;
         
         // Compter les paiements en attente depuis l'API pour les VIP uniquement
@@ -91,8 +120,9 @@ export function WidgetVIP() {
         const enAttenteFromAPI = (pendingPayments || []).filter((item: any) => {
           try {
             if (!item) return false;
-            const registrationFee = item.user?.registration_fee || '';
-            const isVIP = registrationFee === 'vip' || item.registration?.type === 'vip';
+            const registrationFee = item.user?.registration_fee || item.registration?.type || '';
+            const feeUpper = registrationFee ? String(registrationFee).toUpperCase().trim() : '';
+            const isVIP = feeUpper === 'VIP' || feeUpper === 'VIP_TYPE';
             return isVIP;
           } catch (error) {
             console.error('Erreur lors du filtrage des paiements:', error);
