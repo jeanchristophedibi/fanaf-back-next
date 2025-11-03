@@ -18,15 +18,14 @@ export function AnimatedStat({ value, className = '' }: AnimatedStatProps) {
   }, [value, prevValue]);
 
   return (
-    <motion.span
+    <motion.div
       className={className}
       key={value}
       initial={{ scale: 1.3, color: '#ea580c' }}
       animate={{ scale: 1, color: 'inherit' }}
       transition={{ duration: 0.5, type: 'spring' }}
-      style={{ display: 'inline-block' }}
     >
-      {value}
-    </motion.span>
+      {value.toLocaleString('fr-FR')}
+    </motion.div>
   );
 }

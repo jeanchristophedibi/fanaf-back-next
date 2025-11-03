@@ -26,7 +26,8 @@ export function StatsPaiementsOperateur() {
         setStatsData(response?.data || response);
       } catch (error) {
         console.error('Erreur récupération stats:', error);
-        toast?.error('Impossible de récupérer les statistiques');
+        const errorMsg = (error as any)?.message || 'Impossible de récupérer les statistiques';
+        toast.error(errorMsg, { duration: 5000 });
         setStatsData(null);
       } finally {
         setIsLoading(false);

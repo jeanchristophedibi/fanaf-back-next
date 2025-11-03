@@ -5,10 +5,14 @@ export interface PaymentFilters {
   search?: string
   page?: number
   per_page?: number
-  assignment_id?: string
   payment_method?: string
   payment_provider?: string
   state?: string
+  start?: string
+  end?: string
+  organisation?: string
+  caissier?: string
+  category?: string
 }
 
 class PaymentService {
@@ -31,9 +35,7 @@ class PaymentService {
     if (filters?.per_page) {
       params.append('per_page', filters.per_page.toString())
     }
-    if (filters?.assignment_id) {
-      params.append('assignment_id', filters.assignment_id)
-    }
+  
     if (filters?.payment_method) {
       params.append('payment_method', filters.payment_method)
     }
@@ -42,6 +44,21 @@ class PaymentService {
     }
     if (filters?.state) {
       params.append('state', filters.state)
+    }
+    if (filters?.start) {
+      params.append('start', filters.start)
+    }
+    if (filters?.end) {
+      params.append('end', filters.end)
+    }
+    if (filters?.organisation) {
+      params.append('organisation', filters.organisation)
+    }
+    if (filters?.caissier) {
+      params.append('caissier', filters.caissier)
+    }
+    if (filters?.category) {
+      params.append('participant', filters.category)
     }
 
     const response = await axiosInstance.get<any>(
@@ -65,9 +82,6 @@ class PaymentService {
     if (filters?.per_page) {
       params.append('per_page', filters.per_page.toString())
     }
-    if (filters?.assignment_id) {
-      params.append('assignment_id', filters.assignment_id)
-    }
 
     const response = await axiosInstance.get<any>(
       `${this.baseUrl}/summary?${params.toString()}`
@@ -89,9 +103,6 @@ class PaymentService {
     }
     if (filters?.per_page) {
       params.append('per_page', filters.per_page.toString())
-    }
-    if (filters?.assignment_id) {
-      params.append('assignment_id', filters.assignment_id)
     }
 
     const response = await axiosInstance.get<any>(
@@ -115,16 +126,10 @@ class PaymentService {
     if (filters?.per_page) {
       params.append('per_page', filters.per_page.toString())
     }
-    if (filters?.assignment_id) {
-      params.append('assignment_id', filters.assignment_id)
-    }
 
-    const queryString = params.toString()
-    const url = queryString 
-      ? `${this.baseUrl}/stats?${queryString}`
-      : `${this.baseUrl}/stats`
-
-    const response = await axiosInstance.get<any>(url)
+    const response = await axiosInstance.get<any>(
+      `${this.baseUrl}/stats?${params.toString()}`
+    )
     return response.data
   }
 
@@ -142,9 +147,6 @@ class PaymentService {
     }
     if (filters?.per_page) {
       params.append('per_page', filters.per_page.toString())
-    }
-    if (filters?.assignment_id) {
-      params.append('assignment_id', filters.assignment_id)
     }
 
     const response = await axiosInstance.get<any>(
@@ -176,9 +178,32 @@ class PaymentService {
       params.append('per_page', filters.per_page.toString())
     }
 
+    if (filters?.start) {
+      params.append('start', filters.start)
+    }
+    if (filters?.end) {
+      params.append('end', filters.end)
+    }
+
     const response = await axiosInstance.get<any>(
       `${this.baseUrlCaisse}/stats?${params.toString()}`
     )
+    return response.data
+  }
+
+  /**
+   * Récupérer la liste des organisations
+   */
+  async getOrganisations(): Promise<any> {
+    const response = await axiosInstance.get<any>('/admin/companies')
+    return response.data
+  }
+
+  /**
+   * Récupérer la liste des caissiers
+   */
+  async getCashiers(): Promise<any> {
+    const response = await axiosInstance.get<any>('/admin/users?role=operateur-caisse')
     return response.data
   }
 

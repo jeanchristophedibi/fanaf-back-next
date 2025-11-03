@@ -103,7 +103,7 @@ export default function OperateurCaisseDashboard() {
                     <ExternalLink className="w-4 h-4 text-gray-400" />
                   </div>
                   <p className="text-2xl text-green-600 mb-1">
-                    <AnimatedStat value={stats?.collected || 0} /> FCFA
+                    <AnimatedStat value={stats?.collected || 0 } /> FCFA
                   </p>
                 </CardContent>
               </Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from "motion/react";
 import { Card } from "../../ui/card";
@@ -13,21 +13,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "../../ui/dialog";
 import { CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, Mail, Phone, Globe, Building, Calendar, FileText } from "lucide-react";
 import { Checkbox } from "../../ui/checkbox";
-import { fanafApi } from "../../../services/fanafApi";
 import { useDynamicInscriptions } from "../../hooks/useDynamicInscriptions";
 import { type ModePaiement } from '../../data/types';
 import { getOrganisationById } from '../../data/helpers';
 import { toast } from "sonner";
 import { Skeleton } from "../../ui/skeleton";
+import { paymentService } from "@/services/paymentService";
 
 // Mapper le mode de paiement de l'API vers le format local
 const mapPaymentMethod = (apiMethod: string): ModePaiement => {
   const mapping: Record<string, ModePaiement> = {
     'cash': 'espèce',
     'card': 'carte bancaire',
+    'mobile_money': 'orange money',
     'orange_money': 'orange money',
     'wave': 'wave',
     'bank_transfer': 'virement',
+    'check': 'chèque',
     'cheque': 'chèque',
   };
   return mapping[apiMethod] || 'espèce';
@@ -35,12 +37,12 @@ const mapPaymentMethod = (apiMethod: string): ModePaiement => {
 
 // Mapper le canal de paiement
 const mapPaymentProvider = (provider: string): 'externe' | 'asapay' => {
-  return provider === 'asapay' ? 'asapay' : 'externe';
+  return provider?.toLowerCase() === 'asapay' ? 'asapay' : 'externe';
 };
 
 // Déterminer si le paiement est complété
 const isPaymentCompleted = (state: string): boolean => {
-  return state?.includes('Completed') || false;
+  return state === 'completed';
 };
 
 // Type pour les paiements
@@ -69,15 +71,15 @@ const mapApiPaymentToLocal = (apiPayment: any): Paiement => {
     reference: apiPayment.reference,
     participantNom: apiPayment.user?.full_name || 'N/A',
     participantEmail: apiPayment.user?.email || 'N/A',
-    organisationNom: 'N/A', // L'API ne fournit pas cette info directement
-    statut: 'membre', // Par défaut, à déterminer depuis d'autres sources si nécessaire
+    organisationNom: apiPayment.user?.organization?.name || 'N/A',
+    statut: apiPayment.user?.is_member === true ? 'Membre' : 'Non-membre', // TODO: Déterminer le statut depuis une autre source
     montant: apiPayment.amount || 0,
     modePaiement: mapPaymentMethod(apiPayment.payment_method || 'cash'),
-    canalEncaissement: mapPaymentProvider(apiPayment.payment_provider || 'asapay'),
+    canalEncaissement: mapPaymentProvider(apiPayment.payment_provider || 'externe'),
     dateInscription: apiPayment.initiated_at || new Date().toISOString(),
     datePaiement: apiPayment.completed_at || apiPayment.initiated_at || new Date().toISOString(),
     administrateurEncaissement: 'N/A', // L'API ne fournit pas cette info
-    pays: 'N/A', // L'API ne fournit pas cette info directement
+    pays: apiPayment.user?.country?.name || 'N/A',
     state: apiPayment.state,
     isCompleted: isPaymentCompleted(apiPayment.state || ''),
   };
@@ -101,7 +103,6 @@ export function ListePaiementsOperateur() {
   const [filterDateDebut, setFilterDateDebut] = useState<string>('');
   const [filterDateFin, setFilterDateFin] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20; // Correspond au per_page de l'API
   
   // État pour le tri
@@ -110,28 +111,124 @@ export function ListePaiementsOperateur() {
   // État pour la sélection en masse
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
 
+  // États pour les listes dynamiques
+  const [organisations, setOrganisations] = useState<any[]>([]);
+  const [caissiers, setCaissiers] = useState<any[]>([]);
+
+  // Charger les organisations
+  useEffect(() => {
+    const fetchOrganisations = async () => {
+      try {
+        const response = await paymentService.getOrganisations();
+        // La réponse de getCompanies est de type PaginatedResponse avec data: { data: [...] }
+        const data = response?.data?.data || response?.data || [];
+        setOrganisations(Array.isArray(data) ? data : []);
+        console.log('Organisations chargées:', data.length);
+      } catch (error) {
+        console.error('Erreur chargement organisations:', error);
+        setOrganisations([]);
+      }
+    };
+    fetchOrganisations();
+  }, []);
+
+  // Charger les caissiers
+  useEffect(() => {
+    const fetchCaissiers = async () => {
+      try {
+        const response = await paymentService.getCashiers();
+        // La réponse peut avoir différentes structures
+        const data = response?.data?.data || response?.data || response || [];
+        setCaissiers(Array.isArray(data) ? data : []);
+        console.log('Caissiers chargés:', data.length);
+      } catch (error) {
+        console.error('Erreur chargement caissiers:', error);
+        setCaissiers([]);
+      }
+    };
+    fetchCaissiers();
+  }, []);
+
+  // Réinitialiser la page à 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentApiPage(1);
+  }, [
+    searchTerm,
+    filterStatut,
+    filterMode,
+    filterCanal,
+    filterOrganisation,
+    filterStatutParticipant,
+    filterStatutPaiement,
+    filterCaissier,
+    filterDateDebut,
+    filterDateFin,
+  ]);
+
   // Charger les paiements depuis l'API avec React Query
   const { data: paymentsQueryData, isLoading, error: paymentsQueryError } = useQuery({
-    queryKey: ['listePaiements', currentApiPage, itemsPerPage],
+    queryKey: [
+      'listePaiements',
+      currentApiPage,
+      itemsPerPage,
+      searchTerm,
+      filterMode !== 'all' ? filterMode : null,
+      filterCanal !== 'all' ? filterCanal : null,
+      filterOrganisation !== 'all' ? filterOrganisation : null,
+      filterStatutParticipant !== 'all' ? filterStatutParticipant : null,
+      filterStatutPaiement !== 'all' ? filterStatutPaiement : null,
+      filterCaissier !== 'all' ? filterCaissier : null,
+      filterDateDebut,
+      filterDateFin,
+    ],
     queryFn: async () => {
       try {
-        const response = await fanafApi.getPayments({
+        const filters = {
           page: currentApiPage,
           per_page: itemsPerPage,
-        });
+          ...(searchTerm && { search: searchTerm }),
+          ...(filterDateDebut && { start: filterDateDebut }),
+          ...(filterDateFin && { end: filterDateFin }),
+          ...(filterMode !== 'all' && { payment_method: filterMode }),
+          ...(filterCanal !== 'all' && { payment_provider: filterCanal }),
+          ...(filterStatutPaiement !== 'all' && { state: filterStatutPaiement }),
+          ...(filterOrganisation !== 'all' && { organisation: filterOrganisation }),
+          ...(filterStatutParticipant !== 'all' && { category: filterStatutParticipant }),
+          ...(filterCaissier !== 'all' && { caissier: filterCaissier }),
+        };
         
-        // L'API retourne { data: { data: [...], current_page, last_page, ... }, meta: {...} }
-        const paymentsData = response?.data?.data || response?.data || [];
-        const pagination = response?.data || response?.meta || {};
+        console.log('Filtres actifs envoyés à l\'API:', filters);
+        
+        const response = await paymentService.getAll(filters);
+        
+        // L'API retourne { current_page, data: [...], last_page, total, per_page, from, to, ... }
+        const apiData = response?.data || response;
+        const paymentsData = apiData?.data || [];
+        
+        console.log('Pagination info:', {
+          current_page: apiData?.current_page,
+          last_page: apiData?.last_page,
+          total: apiData?.total,
+          per_page: apiData?.per_page,
+          from: apiData?.from,
+          to: apiData?.to,
+        });
         
         return {
           paiements: paymentsData.map(mapApiPaymentToLocal),
-          totalPages: pagination.last_page || pagination.meta?.last_page || 1,
+          currentPage: apiData?.current_page || 1,
+          totalPages: apiData?.last_page || 1,
+          total: apiData?.total || 0,
+          from: apiData?.from || 0,
+          to: apiData?.to || 0,
         };
       } catch (err: any) {
         console.error('Erreur lors du chargement des paiements:', err);
-        const errorMessage = err.message || 'Erreur lors du chargement des paiements';
-        toast.error(errorMessage);
+        const errorMessage = err?.message || 'Erreur lors du chargement des paiements';
+        toast.error(errorMessage, {
+          duration: 5000,
+          description: 'Veuillez rafraîchir la page ou contacter le support'
+        });
         throw new Error(errorMessage);
       }
     },
@@ -143,6 +240,9 @@ export function ListePaiementsOperateur() {
 
   const apiPaiements = paymentsQueryData?.paiements || [];
   const totalApiPages = paymentsQueryData?.totalPages || 1;
+  const totalCount = paymentsQueryData?.total || 0;
+  const fromCount = paymentsQueryData?.from || 0;
+  const toCount = paymentsQueryData?.to || 0;
   const apiError = paymentsQueryError ? (paymentsQueryError as Error).message : null;
 
   // Query pour transformer les paiements API en format attendu
@@ -192,119 +292,37 @@ export function ListePaiementsOperateur() {
 
   const paiements = paiementsQuery.data ?? [];
 
-  // Query pour filtrer les paiements
-  const filteredPaiementsQuery = useQuery({
-    queryKey: ['listePaiements', 'filtered', paiements, searchTerm, filterStatut, filterMode, filterCanal, filterOrganisation, filterStatutParticipant, filterStatutPaiement, filterCaissier, filterDateDebut, filterDateFin, sortConfig],
-    queryFn: () => {
-      let filtered = [...paiements];
-
-      // Recherche
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        filtered = filtered.filter(
-          p =>
-            p.reference.toLowerCase().includes(term) ||
-            p.participantNom.toLowerCase().includes(term) ||
-            p.participantEmail.toLowerCase().includes(term) ||
-            p.organisationNom.toLowerCase().includes(term)
-        );
-      }
-
-      // Filtre par organisation
-      if (filterOrganisation !== 'all') {
-        filtered = filtered.filter(p => p.organisationNom === filterOrganisation);
-      }
-
-      // Filtre par statut participant
-      if (filterStatutParticipant !== 'all') {
-        filtered = filtered.filter(p => p.statut === filterStatutParticipant);
-      }
-
-      // Filtre par statut de paiement (ancien)
-      if (filterStatut !== 'all') {
-        if (filterStatut === 'payé') {
-          filtered = filtered.filter(p => p.isCompleted !== false);
+  // Les filtres sont maintenant gérés côté serveur via React Query
+  // Seul le tri côté client est conservé pour une meilleure UX
+  const filteredPaiements = useMemo(() => {
+    let sorted = [...paiements];
+    
+    // Tri côté client
+    if (sortConfig) {
+      sorted.sort((a, b) => {
+        let aValue = a[sortConfig.key as keyof typeof a];
+        let bValue = b[sortConfig.key as keyof typeof b];
+        
+        // Gérer les dates et nombres
+        if (sortConfig.key === 'dateInscription' || sortConfig.key === 'datePaiement') {
+          aValue = new Date(aValue as any).getTime();
+          bValue = new Date(bValue as any).getTime();
+        } else if (sortConfig.key === 'montant') {
+          aValue = aValue as number;
+          bValue = bValue as number;
         } else {
-          filtered = filtered.filter(p => p.isCompleted === false);
+          aValue = String(aValue).toLowerCase();
+          bValue = String(bValue).toLowerCase();
         }
-      }
-
-      // Filtre par statut de paiement (nouveau)
-      if (filterStatutPaiement !== 'all') {
-        if (filterStatutPaiement === 'completed') {
-          filtered = filtered.filter(p => p.isCompleted !== false);
-        } else if (filterStatutPaiement === 'pending') {
-          filtered = filtered.filter(p => p.isCompleted === false);
-        } else if (filterStatutPaiement === 'failed') {
-          filtered = filtered.filter(p => p.state?.includes('Failed'));
-        }
-      }
-
-      // Filtre par mode de paiement
-      if (filterMode !== 'all') {
-        filtered = filtered.filter(p => p.modePaiement === filterMode);
-      }
-
-      // Filtre par canal
-      if (filterCanal !== 'all') {
-        filtered = filtered.filter(p => p.canalEncaissement === filterCanal);
-      }
-
-      // Filtre par caissier
-      if (filterCaissier !== 'all') {
-        filtered = filtered.filter(p => p.administrateurEncaissement === filterCaissier);
-      }
-
-      // Filtre par date de début
-      if (filterDateDebut) {
-        const dateDebut = new Date(filterDateDebut);
-        filtered = filtered.filter(p => {
-          const datePaiement = new Date(p.datePaiement);
-          return datePaiement >= dateDebut;
-        });
-      }
-
-      // Filtre par date de fin
-      if (filterDateFin) {
-        const dateFin = new Date(filterDateFin);
-        dateFin.setHours(23, 59, 59, 999); // Inclure toute la journée
-        filtered = filtered.filter(p => {
-          const datePaiement = new Date(p.datePaiement);
-          return datePaiement <= dateFin;
-        });
-      }
-
-      // Tri
-      if (sortConfig) {
-        filtered.sort((a, b) => {
-          let aValue = a[sortConfig.key as keyof typeof a];
-          let bValue = b[sortConfig.key as keyof typeof b];
-          
-          // Gérer les dates et nombres
-          if (sortConfig.key === 'dateInscription' || sortConfig.key === 'datePaiement') {
-            aValue = new Date(aValue as any).getTime();
-            bValue = new Date(bValue as any).getTime();
-          } else if (sortConfig.key === 'montant') {
-            aValue = aValue as number;
-            bValue = bValue as number;
-          } else {
-            aValue = String(aValue).toLowerCase();
-            bValue = String(bValue).toLowerCase();
-          }
-          
-          if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-          if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-          return 0;
-        });
-      }
-
-      return filtered;
-    },
-    enabled: true,
-    staleTime: 0,
-  });
-
-  const filteredPaiements = filteredPaiementsQuery.data ?? [];
+        
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    
+    return sorted;
+  }, [paiements, sortConfig]);
   
   // Fonction de tri
   const handleSort = (key: string) => {
@@ -313,32 +331,17 @@ export function ListePaiementsOperateur() {
       direction = 'desc';
     }
     setSortConfig({ key, direction });
-    setCurrentPage(1); // Réinitialiser à la page 1 lors du tri
+    setCurrentApiPage(1); // Réinitialiser à la page 1 lors du tri
   };
 
-  // Pagination locale (pour les résultats filtrés)
-  const totalPages = Math.ceil(filteredPaiements.length / itemsPerPage);
-  
-  // Query pour paginer les paiements
-  const paginatedPaiementsQuery = useQuery({
-    queryKey: ['listePaiements', 'paginated', filteredPaiements, currentPage, itemsPerPage],
-    queryFn: () => {
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      return filteredPaiements.slice(startIndex, endIndex);
-    },
-    enabled: true,
-    staleTime: 0,
-  });
-
-  const paginatedPaiements = paginatedPaiementsQuery.data ?? [];
+  // Utiliser directement les paiements de l'API (déjà paginés côté serveur)
+  const paginatedPaiements = filteredPaiements;
 
   // Query pour réinitialiser la page quand les filtres changent
   useQuery({
     queryKey: ['listePaiements', 'resetPage', searchTerm, filterStatut, filterMode, filterCanal],
     queryFn: () => {
-      queryClient.setQueryData(['listePaiements', 'currentPage'], 1);
-      setCurrentPage(1);
+      setCurrentApiPage(1);
       // Réinitialiser la sélection quand les filtres changent
       setSelectedIds(new Set());
       return true;
@@ -453,7 +456,7 @@ export function ListePaiementsOperateur() {
       'Participant',
       'Email',
       'Organisation',
-      'Statut',
+      'Type',
       'Montant (FCFA)',
       'Mode de paiement',
       'Canal',
@@ -582,7 +585,7 @@ export function ListePaiementsOperateur() {
             {/* Informations de paiement */}
             <div className="space-y-3">
               <div>
-                <Label className="text-xs text-gray-500">Statut Participant</Label>
+                <Label className="text-xs text-gray-500">Type Participant</Label>
                 <div className="mt-1">
                   <Badge className="text-xs">
                     {paiement.statut}
@@ -633,12 +636,12 @@ export function ListePaiementsOperateur() {
                   })}
                 </p>
               </div>
-              <div>
+              {/* <div>
                 <Label className="text-xs text-gray-500">Validé par</Label>
                 <p className="text-sm mt-1">
                   {paiement.administrateurEncaissement}
                 </p>
-              </div>
+              </div> */}
             </div>
           </div>
         </DialogContent>
@@ -720,7 +723,11 @@ export function ListePaiementsOperateur() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Toutes les organisations</SelectItem>
-                    {/* TODO: Ajouter la liste dynamique des organisations */}
+                    {organisations.map((org: any) => (
+                      <SelectItem key={org.id} value={org.id}>
+                        {org.name || org.nom}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -734,29 +741,25 @@ export function ListePaiementsOperateur() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tous les modes</SelectItem>
-                    <SelectItem value="chèque">Chèque</SelectItem>
-                    <SelectItem value="espèce">Espèce</SelectItem>
-                    <SelectItem value="carte bancaire">Carte bancaire</SelectItem>
-                    <SelectItem value="orange money">Orange Money</SelectItem>
-                    <SelectItem value="wave">Wave</SelectItem>
-                    <SelectItem value="virement">Virement</SelectItem>
+                    <SelectItem value="cash">Espèce</SelectItem>
+                    <SelectItem value="bank_transfer">Virement</SelectItem>
+                    <SelectItem value="check">Chèque</SelectItem>
+                    <SelectItem value="mobile_money">AsaPay</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Statut */}
+              {/* Type participant */}
               <div className="space-y-2">
-                <Label className="text-sm text-gray-600">Statut</Label>
+                <Label className="text-sm text-gray-600">Type</Label>
                 <Select value={filterStatutParticipant} onValueChange={setFilterStatutParticipant} disabled={isLoading}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Tous les statuts" />
+                    <SelectValue placeholder="Tous les types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les statuts</SelectItem>
-                    <SelectItem value="membre">Membre</SelectItem>
-                    <SelectItem value="non-membre">Non-membre</SelectItem>
-                    <SelectItem value="vip">VIP</SelectItem>
-                    <SelectItem value="speaker">Speaker</SelectItem>
+                    <SelectItem value="all">Tous les types</SelectItem>
+                    <SelectItem value="member">Membre</SelectItem>
+                    <SelectItem value="not_member">Non-membre</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -769,10 +772,13 @@ export function ListePaiementsOperateur() {
                     <SelectValue placeholder="Tous les paiements" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les paiements</SelectItem>
-                    <SelectItem value="completed">Complété</SelectItem>
+                    <SelectItem value="all">Tous les statuts</SelectItem>
                     <SelectItem value="pending">En attente</SelectItem>
+                    <SelectItem value="processing">En cours</SelectItem>
+                    <SelectItem value="completed">Complété</SelectItem>
                     <SelectItem value="failed">Échoué</SelectItem>
+                    <SelectItem value="cancelled">Annulé</SelectItem>
+                    <SelectItem value="confirmed">Confirmé</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -786,7 +792,11 @@ export function ListePaiementsOperateur() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tous les caissiers</SelectItem>
-                    {/* TODO: Ajouter la liste dynamique des caissiers */}
+                    {caissiers.map((caissier: any) => (
+                      <SelectItem key={caissier.id} value={caissier.id}>
+                        {caissier.full_name || caissier.name || caissier.email}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -851,7 +861,7 @@ export function ListePaiementsOperateur() {
                   Chargement...
                 </span>
               ) : (
-                `${filteredPaiements.length} paiement${filteredPaiements.length > 1 ? 's' : ''} trouvé${filteredPaiements.length > 1 ? 's' : ''}`
+                `${totalCount} paiement${totalCount > 1 ? 's' : ''} trouvé${totalCount > 1 ? 's' : ''}`
               )}
             </p>
           </div>
@@ -937,7 +947,7 @@ export function ListePaiementsOperateur() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
                   <button onClick={() => handleSort('statut')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
-                    Statut
+                    Type
                     {sortConfig?.key === 'statut' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
@@ -1007,10 +1017,10 @@ export function ListePaiementsOperateur() {
                       <td className="px-6 py-4 text-sm text-gray-700">{paiement.organisationNom}</td>
                       <td className="px-6 py-4">
                         <Badge 
-                          variant={paiement.statut === 'membre' ? 'default' : 'secondary'}
-                          className={paiement.statut === 'membre' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}
+                          variant={paiement.statut === 'Membre' ? 'default' : 'secondary'}
+                          className={paiement.statut === 'Membre' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}
                         >
-                          {paiement.statut === 'membre' ? 'Membre' : 'Non-Membre'}
+                          {paiement.statut}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
@@ -1043,40 +1053,40 @@ export function ListePaiementsOperateur() {
         </div>
 
         {/* Pagination */}
-        {!isLoading && filteredPaiements.length > 0 && totalPages > 1 && (
+        {!isLoading && totalApiPages > 1 && (
           <div className="p-4 border-t">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-600">
-                Page {currentPage} sur {totalPages} ({filteredPaiements.length} résultat{filteredPaiements.length > 1 ? 's' : ''})
+                Affichage de {fromCount} à {toCount} sur {totalCount} résultat{totalCount > 1 ? 's' : ''}
               </p>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => setCurrentApiPage(p => Math.max(1, p - 1))}
+                  disabled={currentApiPage === 1}
                 >
                   Précédent
                 </Button>
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  {Array.from({ length: Math.min(5, totalApiPages) }, (_, i) => {
                     let pageNum;
-                    if (totalPages <= 5) {
+                    if (totalApiPages <= 5) {
                       pageNum = i + 1;
-                    } else if (currentPage <= 3) {
+                    } else if (currentApiPage <= 3) {
                       pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
+                    } else if (currentApiPage >= totalApiPages - 2) {
+                      pageNum = totalApiPages - 4 + i;
                     } else {
-                      pageNum = currentPage - 2 + i;
+                      pageNum = currentApiPage - 2 + i;
                     }
                     return (
                       <Button
                         key={pageNum}
-                        variant={currentPage === pageNum ? "default" : "outline"}
+                        variant={currentApiPage === pageNum ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={currentPage === pageNum ? "bg-orange-600 hover:bg-orange-700" : ""}
+                        onClick={() => setCurrentApiPage(pageNum)}
+                        className={currentApiPage === pageNum ? "bg-orange-600 hover:bg-orange-700" : ""}
                       >
                         {pageNum}
                       </Button>
@@ -1086,8 +1096,8 @@ export function ListePaiementsOperateur() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentApiPage(p => Math.min(totalApiPages, p + 1))}
+                  disabled={currentApiPage === totalApiPages}
                 >
                   Suivant
                 </Button>

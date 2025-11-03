@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
@@ -11,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { 
   Search, 
   FileText, 
@@ -27,7 +29,9 @@ import {
   X,
   FileDown,
   PackageOpen,
-  RefreshCcw
+  RefreshCcw,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDynamicInscriptions } from './hooks/useDynamicInscriptions';
@@ -37,6 +41,8 @@ import JSZip from 'jszip';
 import html2canvas from 'html2canvas';
 import QRCodeReact from 'react-qr-code';
 import participantService from '@/services/participantService';
+import { paymentService } from '@/services/paymentService';
+import { DocumentViewer } from './DocumentViewer';
 
 export function DocumentsParticipantsPage() {
   // const { participants } = useDynamicInscriptions();
@@ -46,7 +52,21 @@ export function DocumentsParticipantsPage() {
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isDownloadingBadges, setIsDownloadingBadges] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshingBadgeId, setRefreshingBadgeId] = useState<string | null>(null);
   const badgesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // État pour le visualiseur de documents
+  const [documentViewer, setDocumentViewer] = useState<{
+    open: boolean;
+    url: string;
+    title: string;
+    type: 'badge' | 'recu' | 'lettre' | 'facture';
+  }>({
+    open: false,
+    url: '',
+    title: '',
+    type: 'badge',
+  });
   
   // Filtres
   const [filtreModePaiement, setFiltreModePaiement] = useState<string>('all');
@@ -54,6 +74,7 @@ export function DocumentsParticipantsPage() {
   const [filtrePeriode, setFiltrePeriode] = useState<string>('all');
   const [dateDebut, setDateDebut] = useState<string>('');
   const [dateFin, setDateFin] = useState<string>('');
+  const [organisations, setOrganisations] = useState<any[]>([]);
 
   // État pour la confirmation de remise
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -171,102 +192,120 @@ export function DocumentsParticipantsPage() {
   
   // Récupérer les participants par API
   // Filtrer les participants avec paiement finalisé (statut_inscription ou localStorage)
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
+  const [currentApiPage, setCurrentApiPage] = useState(1);
+  const [paginationInfo, setPaginationInfo] = useState({
+    currentPage: 1,
+    lastPage: 1,
+    total: 0,
+    from: 0,
+    to: 0,
+    perPage: 20,
+  });
 
-  // Fonction pour charger les participants avec recherche et filtres
-  const fetchParticipants = async () => {
-    setIsLoadingParticipants(true);
-    try {
-      // Préparer les filtres API
-      const filters: any = {};
-      
-      // Mode de paiement
-      if (filtreModePaiement !== 'all') {
-        filters.payment_method = filtreModePaiement;
-      }
-      
-      // Organisation (filtrer côté client car l'API n'a peut-être pas ce filtre)
-      // La propriété est organisation_id dans les données
-      // if (filtreOrganisation !== 'all') {
-      //   filters.organization_id = filtreOrganisation;
-      // }
-
-      const response = searchTerm
-        ? await participantService.search(searchTerm, filters)
-        : await participantService.getAll(filters);
-      
-      setParticipants(response.data || []);
-    } catch (error) {
-      toast?.error('Impossible de récupérer les participants');
-      setParticipants([]);
-    } finally {
-      setIsLoadingParticipants(false);
-    }
-  };
-
-  // Effectuer la recherche côté serveur avec debounce
+  // Charger les organisations depuis l'API
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchParticipants();
-    }, 500); // Délai de 500ms après la dernière frappe
-
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Recharger quand les filtres changent (organisation filtrée côté client)
-  useEffect(() => {
-    fetchParticipants();
-  }, [filtreModePaiement]);
-  
-  const participantsFinalisés = useMemo(() => {
-    let filtered = participants.filter(p => 
-      p.statut_inscription === 'finalisée' || finalisedParticipantsIds.has(p.id)
-    );
-
-    // Filtre par organisation (côté client)
-    if (filtreOrganisation !== 'all') {
-      filtered = filtered.filter(p => p.organisation_id === filtreOrganisation);
-    }
-
-    // Filtre par période de paiement (local uniquement car complexe)
-    if (filtrePeriode !== 'all') {
-      const now = new Date();
-      filtered = filtered.filter(p => {
-        const paymentInfo = getPaymentInfo(p);
-        const datePaiement = paymentInfo.datePaiement ? new Date(paymentInfo.datePaiement) : null;
-        if (!datePaiement) return false;
-        
-        if (filtrePeriode === 'custom') {
-          // Intervalle personnalisé
-          if (!dateDebut && !dateFin) return true;
-          
-          const paiementTime = datePaiement.getTime();
-          const debutTime = dateDebut ? new Date(dateDebut).getTime() : -Infinity;
-          const finTime = dateFin ? new Date(dateFin + 'T23:59:59').getTime() : Infinity;
-          
-          return paiementTime >= debutTime && paiementTime <= finTime;
-        } else {
-          // Périodes prédéfinies
-          const diffTime = now.getTime() - datePaiement.getTime();
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
-          switch (filtrePeriode) {
-            case '7days':
-              return diffDays <= 7;
-            case '30days':
-              return diffDays <= 30;
-            case '90days':
-              return diffDays <= 90;
-            default:
-              return true;
-          }
+    const fetchOrganisations = async () => {
+      try {
+        const response = await paymentService.getOrganisations();
+        console.log('Réponse API organisations:', response);
+        const data = response?.data?.data || response?.data || [];
+        console.log('Organisations extraites:', data);
+        setOrganisations(Array.isArray(data) ? data : []);
+        console.log('Organisations chargées:', data.length);
+        if (data.length > 0) {
+          console.log('Exemple organisation:', data[0]);
         }
-      });
-    }
+      } catch (error) {
+        console.error('Erreur chargement organisations:', error);
+        setOrganisations([]);
+      }
+    };
+    fetchOrganisations();
+  }, []);
 
-    return filtered;
-  }, [participants, searchTerm, filtreModePaiement, filtreOrganisation, filtrePeriode, dateDebut, dateFin, finalisedParticipantsIds]);
+  // Réinitialiser la page quand les filtres changent
+  useEffect(() => {
+    setCurrentApiPage(1);
+  }, [searchTerm, filtreModePaiement, filtreOrganisation, filtrePeriode, dateDebut, dateFin]);
+
+  // Charger les participants avec React Query
+  const { data: participantsData, isLoading: isLoadingParticipants, refetch: refetchParticipants } = useQuery({
+    queryKey: [
+      'documentsParticipants',
+      currentApiPage,
+      searchTerm,
+      filtreModePaiement !== 'all' ? filtreModePaiement : null,
+      filtreOrganisation !== 'all' ? filtreOrganisation : null,
+      filtrePeriode !== 'all' ? filtrePeriode : null,
+      dateDebut,
+      dateFin,
+    ],
+    queryFn: async () => {
+      try {
+        // Préparer les filtres API
+        const filters: any = {
+          page: currentApiPage,
+          per_page: 20,
+        };
+        
+        // Mode de paiement
+        if (filtreModePaiement !== 'all') {
+          filters.payment_method = filtreModePaiement;
+        }
+
+        // Organisation
+        if (filtreOrganisation !== 'all') {
+          filters.company_id = filtreOrganisation;
+        }
+
+        // Dates pour filtrePeriode custom
+        if (filtrePeriode === 'custom') {
+          if (dateDebut) filters.start_date = dateDebut;
+          if (dateFin) filters.end_date = dateFin;
+        }
+
+        console.log('Filtres documents envoyés à l\'API:', filters);
+
+        const response = searchTerm
+          ? await participantService.search(searchTerm, filters)
+          : await participantService.getAll(filters);
+        
+        // Extraire les données et la pagination
+        const apiData = response?.data || response;
+        const participantsList = Array.isArray(apiData?.data) ? apiData.data : (apiData || []);
+        
+        // Mettre à jour les infos de pagination
+        if (apiData?.current_page) {
+          setPaginationInfo({
+            currentPage: apiData?.current_page || 1,
+            lastPage: apiData?.last_page || 1,
+            total: apiData?.total || 0,
+            from: apiData?.from || 0,
+            to: apiData?.to || 0,
+            perPage: apiData?.per_page || 20,
+          });
+        }
+
+        return participantsList;
+      } catch (error: any) {
+        console.error('Erreur chargement participants:', error);
+        const errorMsg = error?.message || 'Impossible de récupérer les participants';
+        toast.error(errorMsg, {
+          duration: 5000
+        });
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const participants = participantsData || [];
+
+  // Fonction pour recharger les participants (utilisée après confirmation de remise)
+  const fetchParticipants = async () => {
+    await refetchParticipants();
+  };
 
   const handleDownloadDocument = (participant: any, type: 'badge' | 'recu' | 'lettre' | 'facture') => {
     const docNames = {
@@ -293,28 +332,35 @@ export function DocumentsParticipantsPage() {
       documentUrl = invoice?.invoice_path || null;
     }
 
+    console.log('URL du document extraite:', documentUrl);
+
     if (documentUrl) {
-      // Ouvrir le document dans un nouvel onglet
-      window.open(documentUrl, '_blank');
-      toast.success(`${docNames[type]} ouvert(e)`, {
-        description: `${participant.prenom} ${participant.nom}`,
+      // Ouvrir le document dans le visualiseur
+      setDocumentViewer({
+        open: true,
+        url: documentUrl,
+        title: docNames[type],
+        type: type,
       });
+      setSelectedParticipant(participant);
     } else {
+      console.error('Document non trouvé dans participant.documents');
       toast.error(`${docNames[type]} non disponible`, {
-        description: `${participant.prenom} ${participant.nom}`,
+        description: `Aucune URL trouvée pour ${participant.prenom} ${participant.nom}`,
+        duration: 5000
       });
     }
   };
 
   // Ouvrir la boîte de dialogue de confirmation
   const openConfirmDialog = (registrationId: string, type: 'badge' | 'kit') => {
-    const participant = participants.find(p => p.registration.id === registrationId);
+    const participant = participants.find((p: any) => p.registration?.id === registrationId);
     if (!participant) return;
 
     setConfirmDialog({
       open: true,
       participantId: participant.id,
-      registrationId: participant.registration.id,
+      registrationId: participant.registration?.id,
       type,
       participantName: `${participant.prenom} ${participant.nom}`,
     });
@@ -325,17 +371,35 @@ export function DocumentsParticipantsPage() {
     setIsLoading(true);
     try {
       const response = await participantService.confirmRemiseBadge(registrationId);
-      if (response.success === true) {
-        toast.success('Remise confirmée avec succès');
-      } else if (response.success === false) {
-        toast.error(response.message);
+      if (response.status === 200 || response.status === 201 || response.status === 'success') {
+        toast.success('Remise de badge confirmée avec succès', {
+          duration: 4000
+        });
+        
+        // Recharger les participants AVANT de fermer le dialog
+        await fetchParticipants();
+        
+        // Fermer le dialog après le rechargement
+        setConfirmDialog({ ...confirmDialog, open: false });
+      } else if (response.status === 400 || response.status === 401 || response.status === 'error') {
+        toast.error(response.message || 'Erreur lors de la confirmation de remise', {
+          duration: 5000
+        });
+        // Ne pas fermer le dialog en cas d'erreur
       } else {
-        toast.error('Une erreur est survenue lors de la confirmation de remise');
+        toast.error('Une erreur est survenue lors de la confirmation de remise', {
+          duration: 5000
+        });
+        // Ne pas fermer le dialog en cas d'erreur
       }
-    } catch (error) {
-      toast.error('Une erreur est survenue lors de la confirmation de remise');
+    } catch (error: any) {
+      console.error('Erreur confirmation remise badge:', error);
+      const errorMsg = error?.message || 'Une erreur est survenue lors de la confirmation de remise';
+      toast.error(errorMsg, {
+        duration: 5000
+      });
+      // Ne pas fermer le dialog en cas d'erreur
     } finally {
-      fetchParticipants();
       setIsLoading(false);
     }
   };
@@ -347,27 +411,62 @@ export function DocumentsParticipantsPage() {
 
     try {
       const response = await participantService.confirmRemiseKit(registrationId);
-      if (response.success === true) {
-        toast.success('Remise confirmée avec succès');
-      } else if (response.success === false) {
-        toast.error(response.message);
+      if (response.status === 200 || response.status === 201 || response.status === 'success') {
+        toast.success('Remise de kit confirmée avec succès', {
+          duration: 4000
+        });
+        
+        // Recharger les participants AVANT de fermer le dialog
+        await fetchParticipants();
+        
+        // Fermer le dialog après le rechargement
+        setConfirmDialog({ ...confirmDialog, open: false });
+      } else if (response.status === 400 || response.status === 401 || response.status === 'error') {
+        toast.error(response.message || 'Erreur lors de la confirmation de remise', {
+          duration: 5000
+        });
+        // Ne pas fermer le dialog en cas d'erreur
       } else {
-        toast.error('Une erreur est survenue lors de la confirmation de remise');
+        toast.error('Une erreur est survenue lors de la confirmation de remise', {
+          duration: 5000
+        });
+        // Ne pas fermer le dialog en cas d'erreur
       }
-    } catch (error) {
-      toast.error('Une erreur est survenue lors de la confirmation de remise');
+    } catch (error: any) {
+      console.error('Erreur confirmation remise kit:', error);
+      const errorMsg = error?.message || 'Une erreur est survenue lors de la confirmation de remise';
+      toast.error(errorMsg, {
+        duration: 5000
+      });
+      // Ne pas fermer le dialog en cas d'erreur
     } finally {
-      fetchParticipants();
       setIsLoading(false);
     }
   };
 
   const refreshBadge = async (participantId: string) => {
-    const response = await participantService.refreshDocument(participantId);
-    if (response.success === true) {
-      toast.success('Document régénéré avec succès');
-    } else {
-      toast.error(response.message);
+    setRefreshingBadgeId(participantId);
+    try {
+      const response = await participantService.refreshDocument(participantId);
+      if (response.status === 200 || response.status === 201 || response.status === 'success') {
+        toast.success('Document régénéré avec succès', {
+          duration: 4000
+        });
+        // Recharger les participants pour obtenir le badge mis à jour
+        await fetchParticipants();
+      } else {
+        toast.error(response.message || 'Erreur lors de la régénération', {
+          duration: 5000
+        });
+      }
+    } catch (error: any) {
+      console.error('Erreur rafraîchissement badge:', error);
+      const errorMsg = error?.message || 'Erreur lors de la régénération du document';
+      toast.error(errorMsg, {
+        duration: 5000
+      });
+    } finally {
+      setRefreshingBadgeId(null);
     }
   };
 
@@ -378,6 +477,7 @@ export function DocumentsParticipantsPage() {
     setDateDebut('');
     setDateFin('');
     setSearchTerm('');
+    setCurrentApiPage(1);
   };
 
   const hasActiveFilters = filtreModePaiement !== 'all' || filtreOrganisation !== 'all' || filtrePeriode !== 'all' || searchTerm !== '' || dateDebut !== '' || dateFin !== '';
@@ -386,7 +486,7 @@ export function DocumentsParticipantsPage() {
     const headers = ['Référence', 'Nom', 'Prénom', 'Email', 'Organisation', 'Statut', 'Date Paiement', 'Mode Paiement', 'Nombre de remises de badge', 'Nombre de remises de kit'];
     const csvContent = [
       headers.join(','),
-      ...participantsFinalisés.map(p => {
+      ...participants.filter((p: any) => p.statut_inscription === 'finalisée').map((p: any) => {
         const org = p.organisation;
         const paymentInfo = getPaymentInfo(p);
         const remisesCount = getParticipantRemisesCount(p.id);
@@ -414,14 +514,14 @@ export function DocumentsParticipantsPage() {
   };
 
   const downloadAllBadges = async () => {
-    if (participantsFinalisés.length === 0) {
+    if (participants.length === 0) {
       toast.error('Aucun participant finalisé');
       return;
     }
 
     setIsDownloadingBadges(true);
     toast.info('Génération des badges en cours...', {
-      description: `${participantsFinalisés.length} badge(s) à générer`,
+      description: `${participants.length} badge(s) à générer`,
     });
 
     try {
@@ -435,8 +535,8 @@ export function DocumentsParticipantsPage() {
       document.body.appendChild(tempContainer);
 
       // Générer chaque badge
-      for (let i = 0; i < participantsFinalisés.length; i++) {
-        const participant = participantsFinalisés[i];
+      for (let i = 0; i < participants.length; i++) {
+        const participant = participants[i];
         const organisation = participant.organisation;
         
         // Créer le badge HTML
@@ -500,7 +600,7 @@ export function DocumentsParticipantsPage() {
       link.click();
 
       toast.success('Badges téléchargés avec succès', {
-        description: `${participantsFinalisés.length} badge(s) dans le fichier ZIP`,
+        description: `${participants.length} badge(s) dans le fichier ZIP`,
       });
     } catch (error) {
       console.error('Erreur lors de la génération des badges:', error);
@@ -631,7 +731,7 @@ export function DocumentsParticipantsPage() {
               </div>
               <div>
                 <p className="text-sm text-green-700">Documents disponibles</p>
-                <p className="text-3xl text-green-900">{participantsFinalisés.length}</p>
+                <p className="text-3xl text-green-900">{paginationInfo.total || participants.filter((p: any) => p.statut_inscription === 'finalisée').length}</p>
               </div>
             </div>
           </Card>
@@ -649,7 +749,7 @@ export function DocumentsParticipantsPage() {
               </div>
               <div>
                 <p className="text-sm text-purple-700">Badges générables</p>
-                <p className="text-3xl text-purple-900">{participantsFinalisés.length}</p>
+                <p className="text-3xl text-purple-900">{paginationInfo.total || participants.length}</p>
               </div>
             </div>
           </Card>
@@ -667,7 +767,7 @@ export function DocumentsParticipantsPage() {
               </div>
               <div>
                 <p className="text-sm text-blue-700">Invitations</p>
-                <p className="text-3xl text-blue-900">{participantsFinalisés.length}</p>
+                <p className="text-3xl text-blue-900">{paginationInfo.total || participants.length}</p>
               </div>
             </div>
           </Card>
@@ -686,7 +786,7 @@ export function DocumentsParticipantsPage() {
               <div>
                 <p className="text-sm text-orange-700">Reçus</p>
                 <p className="text-3xl text-orange-900">
-                  {participantsFinalisés.filter(p => p.statut === 'membre' || p.statut === 'non-membre').length}
+                  {paginationInfo.total || participants.filter((p: any) => p.statut === 'membre' || p.statut === 'non-membre').length}
                 </p>
               </div>
             </div>
@@ -715,7 +815,7 @@ export function DocumentsParticipantsPage() {
             )}
             <Button 
               onClick={downloadAllBadges}
-              disabled={participantsFinalisés.length === 0 || isDownloadingBadges}
+              disabled={participants.length === 0 || isDownloadingBadges}
               className="bg-orange-600 hover:bg-orange-700 text-white"
             >
               {isDownloadingBadges ? (
@@ -733,7 +833,7 @@ export function DocumentsParticipantsPage() {
             <Button 
               onClick={exportToCSV} 
               variant="outline"
-              disabled={participantsFinalisés.length === 0}
+              disabled={participants.length === 0}
             >
               <Download className="w-4 h-4 mr-2" />
               Exporter CSV
@@ -762,12 +862,10 @@ export function DocumentsParticipantsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tous les modes</SelectItem>
-                <SelectItem value="espèce">Espèce</SelectItem>
-                <SelectItem value="carte bancaire">Carte bancaire</SelectItem>
-                <SelectItem value="orange money">Orange Money</SelectItem>
-                <SelectItem value="wave">Wave</SelectItem>
-                <SelectItem value="virement">Virement</SelectItem>
-                <SelectItem value="chèque">Chèque</SelectItem>
+                <SelectItem value="cash">Espèce</SelectItem>
+                <SelectItem value="bank_transfer">Virement</SelectItem>
+                <SelectItem value="check">Chèque</SelectItem>
+                <SelectItem value="mobile_money">AsaPay</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -780,14 +878,9 @@ export function DocumentsParticipantsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes les organisations</SelectItem>
-                {/* Extraire les organisations uniques depuis les participants */}
-                {Array.from(new Map(
-                  participants
-                    .filter(p => p.organisation?.id)
-                    .map(p => [p.organisation.id, p.organisation])
-                ).values()).map((org: any) => (
+                {organisations.map((org: any) => (
                   <SelectItem key={org.id} value={org.id}>
-                    {org.name}
+                    {org.name || org.nom || 'Sans nom'}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -843,19 +936,19 @@ export function DocumentsParticipantsPage() {
         <Tabs defaultValue="all" className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="all">
-              Tous ({participantsFinalisés.length})
+              Tous ({paginationInfo.total || participants.length})
             </TabsTrigger>
             <TabsTrigger value="membre">
-              Membres ({participantsFinalisés.filter(p => p.statut === 'membre').length})
+              Membres ({participants.filter((p: any) => p.statut === 'membre').length})
             </TabsTrigger>
             <TabsTrigger value="non-membre">
-              Non-membres ({participantsFinalisés.filter(p => p.statut === 'non-membre').length})
+              Non-membres ({participants.filter((p: any) => p.statut === 'non-membre').length})
             </TabsTrigger>
             <TabsTrigger value="vip">
-              VIP ({participantsFinalisés.filter(p => p.statut === 'vip').length})
+              VIP ({participants.filter((p: any) => p.statut === 'vip').length})
             </TabsTrigger>
             <TabsTrigger value="speaker">
-              Speakers ({participantsFinalisés.filter(p => p.statut === 'speaker').length})
+              Speakers ({participants.filter((p: any) => p.statut === 'speaker').length})
             </TabsTrigger>
           </TabsList>
 
@@ -863,8 +956,8 @@ export function DocumentsParticipantsPage() {
             <TabsContent key={tab} value={tab} className="space-y-3">
               {(() => {
                 const filtered = tab === 'all' 
-                  ? participantsFinalisés 
-                  : participantsFinalisés.filter(p => p.statut === tab);
+                  ? participants 
+                  : participants.filter((p: any) => p.statut === tab);
 
                 if (filtered.length === 0) {
                   return (
@@ -875,7 +968,7 @@ export function DocumentsParticipantsPage() {
                   );
                 }
 
-                return filtered.map((participant, index) => {
+                return filtered.map((participant: any, index: number) => {
                   const organisation = participant.organisation;
                   // Vérifier la disponibilité des documents depuis l'API
                   const hasBadge = participant.documents?.has_badge || participant.documents?.badge;
@@ -944,14 +1037,22 @@ export function DocumentsParticipantsPage() {
 
                           {/* Actions */}
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => refreshBadge(participant.id)}
-                            className="gap-2 border-teal-200 text-teal-700 hover:bg-teal-50"
-                          >
-                            <RefreshCcw className="w-4 h-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => refreshBadge(participant.id)}
+                                disabled={refreshingBadgeId === participant.id}
+                                className="gap-2 border-teal-200 text-teal-700 hover:bg-teal-50 disabled:opacity-50"
+                              >
+                                <RefreshCcw className={`w-4 h-4 ${refreshingBadgeId === participant.id ? 'animate-spin' : ''}`} />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Regénérer les documents</p>
+                            </TooltipContent>
+                          </Tooltip>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -1021,50 +1122,166 @@ export function DocumentsParticipantsPage() {
             </TabsContent>
           ))}
         </Tabs>
+
+        {/* Pagination */}
+        {!isLoadingParticipants && paginationInfo.lastPage > 1 && (
+          <div className="p-4 border-t mt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Affichage de {paginationInfo.from} à {paginationInfo.to} sur {paginationInfo.total} résultat{paginationInfo.total > 1 ? 's' : ''}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentApiPage(p => Math.max(1, p - 1))}
+                  disabled={currentApiPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Précédent
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, paginationInfo.lastPage) }, (_, i) => {
+                    let pageNum;
+                    if (paginationInfo.lastPage <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentApiPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentApiPage >= paginationInfo.lastPage - 2) {
+                      pageNum = paginationInfo.lastPage - 4 + i;
+                    } else {
+                      pageNum = currentApiPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentApiPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentApiPage(pageNum)}
+                        className={currentApiPage === pageNum ? "bg-orange-600 hover:bg-orange-700" : ""}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentApiPage(p => Math.min(paginationInfo.lastPage, p + 1))}
+                  disabled={currentApiPage === paginationInfo.lastPage}
+                >
+                  Suivant
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* AlertDialog pour confirmation de remise du badge */}
-      <AlertDialog open={confirmDialog.open && confirmDialog.type === 'badge'} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+      <AlertDialog 
+        open={confirmDialog.open && confirmDialog.type === 'badge'} 
+        onOpenChange={(open) => {
+          // Empêcher la fermeture si une requête est en cours
+          if (!open && isLoading) {
+            toast.warning('Veuillez attendre la fin du traitement');
+            return;
+          }
+          setConfirmDialog({ ...confirmDialog, open });
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmation de remise du badge</AlertDialogTitle>
             <AlertDialogDescription>
               Confirmez-vous la remise du badge pour {confirmDialog.participantName} ?
+              {isLoading && (
+                <div className="flex items-center gap-2 mt-3 text-sm text-blue-600 bg-blue-50 p-3 rounded border border-blue-200">
+                  <RefreshCcw className="w-4 h-4 animate-spin" />
+                  <span>Traitement en cours...</span>
+                </div>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>
+            <AlertDialogCancel 
+              disabled={isLoading}
+              onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}
+            >
               Annuler
             </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => confirmRemiseBadge(confirmDialog.registrationId)}
-              className="bg-purple-600 hover:bg-purple-700"
+            <Button
+              onClick={(e) => {
+                e.preventDefault();
+                confirmRemiseBadge(confirmDialog.registrationId);
+              }}
+              disabled={isLoading}
+              className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
             >
-              Confirmer
-            </AlertDialogAction>
+              {isLoading ? (
+                <>
+                  <RefreshCcw className="w-4 h-4 mr-2 animate-spin" />
+                  Confirmation...
+                </>
+              ) : (
+                'Confirmer'
+              )}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* AlertDialog pour confirmation de remise du kit */}
-      <AlertDialog open={confirmDialog.open && confirmDialog.type === 'kit'} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+      <AlertDialog 
+        open={confirmDialog.open && confirmDialog.type === 'kit'} 
+        onOpenChange={(open) => {
+          // Empêcher la fermeture si une requête est en cours
+          if (!open && isLoading) {
+            toast.warning('Veuillez attendre la fin du traitement');
+            return;
+          }
+          setConfirmDialog({ ...confirmDialog, open });
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmation de remise du kit</AlertDialogTitle>
             <AlertDialogDescription>
               Confirmez-vous la remise du kit pour {confirmDialog.participantName} ?
+              {isLoading && (
+                <div className="flex items-center gap-2 mt-3 text-sm text-blue-600 bg-blue-50 p-3 rounded border border-blue-200">
+                  <RefreshCcw className="w-4 h-4 animate-spin" />
+                  <span>Traitement en cours...</span>
+                </div>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>
+            <AlertDialogCancel 
+              disabled={isLoading}
+              onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}
+            >
               Annuler
             </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmRemiseKit}
-              className="bg-purple-600 hover:bg-purple-700"
+            <Button
+              onClick={(e) => {
+                e.preventDefault();
+                confirmRemiseKit();
+              }}
+              disabled={isLoading}
+              className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
             >
-              Confirmer
-            </AlertDialogAction>
+              {isLoading ? (
+                <>
+                  <RefreshCcw className="w-4 h-4 mr-2 animate-spin" />
+                  Confirmation...
+                </>
+              ) : (
+                'Confirmer'
+              )}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1106,6 +1323,16 @@ export function DocumentsParticipantsPage() {
           </Dialog>
         </>
       )}
+
+      {/* Visualiseur de documents */}
+      <DocumentViewer
+        open={documentViewer.open}
+        onOpenChange={(open) => setDocumentViewer({ ...documentViewer, open })}
+        documentUrl={documentViewer.url}
+        documentTitle={documentViewer.title}
+        participantName={selectedParticipant ? `${selectedParticipant.prenom} ${selectedParticipant.nom}` : ''}
+        documentType={documentViewer.type}
+      />
     </div>
   );
 }

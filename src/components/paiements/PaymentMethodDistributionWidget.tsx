@@ -76,7 +76,8 @@ export function PaymentMethodDistributionWidget() {
         setPaymentMethodsData(response?.data || response);
       } catch (error) {
         console.error('Erreur récupération stats paiements par mode de paiement:', error);
-        toast?.error('Impossible de récupérer les stats paiements par mode de paiement');
+        const errorMsg = (error as any)?.message || 'Impossible de récupérer les stats paiements par mode de paiement';
+        toast.error(errorMsg, { duration: 5000 });
       } finally {
         setIsLoading(false);
       }
