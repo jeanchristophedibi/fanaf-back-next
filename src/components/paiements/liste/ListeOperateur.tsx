@@ -66,20 +66,36 @@ type Paiement = {
 
 // Mapper les données API vers le format local
 const mapApiPaymentToLocal = (apiPayment: any): Paiement => {
+  // Gérer le cas où organization peut être un objet ou une chaîne
+  const getOrganisationNom = () => {
+    const org = apiPayment.user?.organization;
+    if (!org) return 'N/A';
+    if (typeof org === 'string') return org;
+    return org?.name || 'N/A';
+  };
+
+  // Gérer le cas où country peut être un objet ou une chaîne
+  const getPaysNom = () => {
+    const country = apiPayment.user?.country;
+    if (!country) return 'N/A';
+    if (typeof country === 'string') return country;
+    return country?.name || 'N/A';
+  };
+
   return {
     id: apiPayment.id,
     reference: apiPayment.reference,
     participantNom: apiPayment.user?.full_name || 'N/A',
     participantEmail: apiPayment.user?.email || 'N/A',
-    organisationNom: apiPayment.user?.organization?.name || 'N/A',
+    organisationNom: getOrganisationNom(),
     statut: apiPayment.user?.is_member === true ? 'Membre' : 'Non-membre', // TODO: Déterminer le statut depuis une autre source
     montant: apiPayment.amount || 0,
     modePaiement: mapPaymentMethod(apiPayment.payment_method || 'cash'),
-    canalEncaissement: mapPaymentProvider(apiPayment.payment_provider || 'externe'),
+    canalEncaissement: mapPaymentProvider(apiPayment.payment_provider_system || apiPayment.payment_provider || 'externe'),
     dateInscription: apiPayment.initiated_at || new Date().toISOString(),
     datePaiement: apiPayment.completed_at || apiPayment.initiated_at || new Date().toISOString(),
     administrateurEncaissement: 'N/A', // L'API ne fournit pas cette info
-    pays: apiPayment.user?.country?.name || 'N/A',
+    pays: getPaysNom(),
     state: apiPayment.state,
     isCompleted: isPaymentCompleted(apiPayment.state || ''),
   };
@@ -544,7 +560,7 @@ export function ListePaiementsOperateur() {
               Détails du Paiement
             </DialogTitle>
             <DialogDescription>
-              Informations complètes pour {paiement.participantNom俣}
+              Informations complètes pour {paiement.participantNom}
             </DialogDescription>
           </DialogHeader>
           
@@ -666,7 +682,7 @@ export function ListePaiementsOperateur() {
       {/* Barre de recherche et filtres */}
       <Card className="p-6 rounded-b-none border-b-0">
         <div className="space-y-4">
-          <div className="flex flex-col라는 lg:flex-row gap-4">
+          <div className="flex flex-col lg:flex-row gap-4">
             {/* Recherche */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -933,7 +949,7 @@ export function ListePaiementsOperateur() {
                     {sortConfig?.key === 'reference' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
-                <th className=" této py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
                   <button onClick={() => handleSort('participantNom')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Participant
                     {sortConfig?.key === 'participantNom' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
@@ -954,7 +970,7 @@ export function ListePaiementsOperateur() {
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
                   <button onClick={() => handleSort('modePaiement')} className="flex items-center gap-1 hover:text-gray-700" disabled={isLoading}>
                     Mode Paiement
-                    {sortConfig?.key === 'modePaiement' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-West" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+                    {sortConfig?.key === 'modePaiement' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
