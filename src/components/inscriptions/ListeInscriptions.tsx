@@ -20,6 +20,7 @@ import { documentsDataService } from '../data/documentsData';
 import { toast } from 'sonner';
 import { List, type Column, type ListAction } from '../list/List';
 import { WidgetStatsInscriptions } from './WidgetStatsInscriptions';
+import JSZip from 'jszip';
 
 interface ListeInscriptionsProps {
     readOnly?: boolean;
@@ -271,17 +272,51 @@ export function ListeInscriptions({
         return undefined;
     };
 
-    const downloadFile = (url: string, filename?: string) => {
+    // Fonction améliorée pour télécharger un fichier depuis une URL distante
+    const downloadFile = async (url: string, filename: string): Promise<void> => {
         try {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename || '';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            // Vérifier si c'est une URL absolue (distante) ou locale
+            const isRemoteUrl = url.startsWith('http://') || url.startsWith('https://');
+            
+            if (isRemoteUrl) {
+                // Pour les URLs distantes, utiliser fetch pour éviter les problèmes CORS
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/pdf, image/*, */*',
+                    },
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+                }
+                
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = filename || 'badge.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                // Libérer l'URL du blob après un délai
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+            } else {
+                // Pour les URLs locales (data: ou blob:), utiliser directement
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename || 'badge.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
         } catch (e) {
             console.error('Download error:', e);
-            toast.error('Impossible de télécharger le fichier');
+            const errorMessage = e instanceof Error ? e.message : 'Erreur inconnue';
+            toast.error(`Impossible de télécharger le fichier: ${errorMessage}`);
+            throw e;
         }
     };
     
@@ -499,21 +534,25 @@ export function ListeInscriptions({
                                         variant="ghost"
                                         size="sm"
                                         className="h-6 w-6 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                                        onClick={() => {
+                                        onClick={async () => {
                                             const url = getBadgeUrlFor(p) as string;
                                             try {
-                                                window.open(url, '_blank', 'noopener');
+                                                const filename = p.reference 
+                                                    ? `badge-${p.reference}.pdf` 
+                                                    : `badge-${p.nom}-${p.prenom}.pdf`;
+                                                await downloadFile(url, filename);
                                             } catch (e) {
-                                                console.error('open error:', e);
+                                                console.error('Erreur téléchargement badge:', e);
+                                                toast.error('Impossible de télécharger le badge');
                                             }
                                         }}
-                                        aria-label="Ouvrir le badge dans un nouvel onglet"
+                                        aria-label="Télécharger le badge"
                                     >
                                         <Download className="w-4 h-4" />
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                    Ouvrir le badge dans un nouvel onglet
+                                    Télécharger le badge
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
@@ -746,23 +785,127 @@ export function ListeInscriptions({
                 const withBadges = items
                   .map(p => ({ p, url: getBadgeUrlFor(p) }))
                   .filter(x => !!x.url) as Array<{ p: Participant; url: string }>;
+                
                 if (withBadges.length === 0) {
                     toast.error('Aucun badge disponible pour la sélection');
                     return;
                 }
+                
                 setIsDownloadingBadges(true);
-                toast.info(`Téléchargement de ${withBadges.length} badge(s)...`);
+                
                 try {
-                    withBadges.forEach(({ p, url }) => {
-                        const filename = p.reference ? `badge-${p.reference}.pdf` : undefined;
-                        downloadFile(url, url);
+                    // Si un seul badge, télécharger directement
+                    if (withBadges.length === 1) {
+                        const { p, url } = withBadges[0];
+                        const filename = p.reference ? `badge-${p.reference}.pdf` : `badge-${p.nom}-${p.prenom}.pdf`;
+                        await downloadFile(url, filename);
+                        toast.success('Badge téléchargé avec succès');
+                    } else {
+                        // Si plusieurs badges, créer un ZIP
+                        toast.info(`Téléchargement de ${withBadges.length} badge(s)...`, {
+                            description: 'Création d\'un fichier ZIP en cours',
+                        });
+                        
+                        const zip = new JSZip();
+                        let successCount = 0;
+                        let errorCount = 0;
+                        
+                        // Télécharger chaque badge et l'ajouter au ZIP
+                        for (let i = 0; i < withBadges.length; i++) {
+                            const { p, url } = withBadges[i];
+                            
+                            try {
+                                // Vérifier si c'est une URL distante
+                                const isRemoteUrl = url.startsWith('http://') || url.startsWith('https://');
+                                
+                                let blob: Blob;
+                                
+                                if (isRemoteUrl) {
+                                    const response = await fetch(url, {
+                                        method: 'GET',
+                                        headers: {
+                                            'Accept': 'application/pdf, image/*, */*',
+                                        },
+                                    });
+                                    
+                                    if (!response.ok) {
+                                        throw new Error(`Erreur HTTP: ${response.status}`);
+                                    }
+                                    
+                                    blob = await response.blob();
+                                } else {
+                                    // Pour les URLs locales (data: ou blob:), convertir en blob
+                                    const response = await fetch(url);
+                                    blob = await response.blob();
+                                }
+                                
+                                // Déterminer l'extension du fichier
+                                const contentType = blob.type || '';
+                                let extension = '.pdf';
+                                if (contentType.includes('image/png')) extension = '.png';
+                                else if (contentType.includes('image/jpeg') || contentType.includes('image/jpg')) extension = '.jpg';
+                                else if (contentType.includes('image/gif')) extension = '.gif';
+                                
+                                const filename = p.reference 
+                                    ? `badge-${p.reference}${extension}` 
+                                    : `badge-${p.nom}-${p.prenom}${extension}`;
+                                
+                                zip.file(filename, blob);
+                                successCount++;
+                                
+                                // Mettre à jour la progression
+                                if ((i + 1) % 5 === 0 || i === withBadges.length - 1) {
+                                    toast.info(`Progression: ${i + 1}/${withBadges.length} badges téléchargés`);
+                                }
+                            } catch (error) {
+                                console.error(`Erreur lors du téléchargement du badge pour ${p.nom} ${p.prenom}:`, error);
+                                errorCount++;
+                            }
+                        }
+                        
+                        if (successCount > 0) {
+                            // Générer et télécharger le ZIP
+                            const zipBlob = await zip.generateAsync({ type: 'blob' });
+                            const zipUrl = URL.createObjectURL(zipBlob);
+                            const link = document.createElement('a');
+                            link.href = zipUrl;
+                            link.download = `badges-fanaf-${new Date().toISOString().split('T')[0]}.zip`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            
+                            // Libérer l'URL après un délai
+                            setTimeout(() => URL.revokeObjectURL(zipUrl), 100);
+                            
+                            if (errorCount > 0) {
+                                toast.success(`${successCount} badge(s) téléchargé(s)`, {
+                                    description: `${errorCount} erreur(s) lors du téléchargement`,
+                                });
+                            } else {
+                                toast.success(`${successCount} badge(s) téléchargé(s) dans le fichier ZIP`);
+                            }
+                        } else {
+                            toast.error('Aucun badge n\'a pu être téléchargé');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Erreur lors du téléchargement des badges:', error);
+                    toast.error('Erreur lors du téléchargement des badges', {
+                        description: error instanceof Error ? error.message : 'Erreur inconnue',
                     });
-                    toast.success(`${withBadges.length} badge(s) téléchargé(s)`);
                 } finally {
                     setIsDownloadingBadges(false);
                 }
             },
-            disabled: (items) => items.every(p => !getBadgeUrlFor(p)) || readOnly,
+            // Désactiver seulement si aucun participant sélectionné n'a de badge OU si readOnly
+            // Mais toujours afficher l'action même si elle est désactivée
+            disabled: (items) => {
+                if (!items || items.length === 0) return true;
+                if (readOnly) return true;
+                // Vérifier si au moins un participant a un badge disponible
+                const hasAnyBadge = items.some(p => !!getBadgeUrlFor(p));
+                return !hasAnyBadge;
+            },
         }
     ];
 
