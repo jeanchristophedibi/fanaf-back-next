@@ -7,7 +7,7 @@ import { Input } from "../../ui/input";
 import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
 import { Label } from "../../ui/label";
-import { Search, Filter, Download, X } from "lucide-react";
+import { Search, Filter, Download, X, RefreshCcw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "../../ui/dialog";
@@ -47,17 +47,26 @@ export function ListeEnAttenteOperateur() {
   };
 
   const [transactions, setTransactions] = useState<RegistrationItem[]>([]);
+  const [paginationInfo, setPaginationInfo] = useState({
+    currentPage: 1,
+    lastPage: 1,
+    total: 0,
+    from: 0,
+    to: 0,
+    perPage: 20,
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [selectedModePaiement, setSelectedModePaiement] = useState<ModePaiement>('cash');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterStatut, setFilterStatut] = useState<'all' | 'payé' | 'non-payé'>('all');
   const [filterMode, setFilterMode] = useState<'all' | ModePaiement>('all');
   const [filterCanal, setFilterCanal] = useState<'all' | 'externe' | 'asapay'>('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentApiPage, setCurrentApiPage] = useState(1);
   const itemsPerPage = 20;
   
   // État pour le tri
@@ -68,7 +77,10 @@ export function ListeEnAttenteOperateur() {
     setIsLoading(true);
     try {
       // Préparer les filtres API (ne pas envoyer si "all")
-      const filters: any = {};
+      const filters: any = {
+        page: currentApiPage,
+        per_page: itemsPerPage,
+      };
       
       // Mode de paiement
       if (filterMode !== 'all') {
@@ -89,33 +101,54 @@ export function ListeEnAttenteOperateur() {
       }
 
       // Appeler l'API avec ou sans filtres
-      const hasFilters = Object.keys(filters).length > 0;
-      const response = searchTerm 
-        ? await paymentService.search(searchTerm, hasFilters ? filters : undefined)
-        : (hasFilters ? await paymentService.getAllEnAttente(filters) : await paymentService.getAllEnAttente());
+      const hasFilters = Object.keys(filters).length > 2; // > 2 car page et per_page sont toujours présents
+      const response = debouncedSearchTerm 
+        ? await paymentService.search(debouncedSearchTerm, hasFilters ? filters : { page: currentApiPage, per_page: itemsPerPage })
+        : (hasFilters ? await paymentService.getAllEnAttente(filters) : await paymentService.getAllEnAttente({ page: currentApiPage, per_page: itemsPerPage }));
       
-      setTransactions(Array.isArray(response?.data?.data) ? response.data.data : []);
-    } catch (error) {
-      toast?.error('Impossible de récupérer les paiements');
+      // Extraire les données et la pagination
+      const apiData = response?.data || response;
+      setTransactions(Array.isArray(apiData?.data) ? apiData.data : []);
+      
+      // Mettre à jour les infos de pagination
+      setPaginationInfo({
+        currentPage: apiData?.current_page || 1,
+        lastPage: apiData?.last_page || 1,
+        total: apiData?.total || 0,
+        from: apiData?.from || 0,
+        to: apiData?.to || 0,
+        perPage: apiData?.per_page || 20,
+      });
+    } catch (error: any) {
+      console.error('Erreur chargement transactions:', error);
+      const errorMsg = error?.message || 'Impossible de récupérer les paiements';
+      toast.error(errorMsg, {
+        duration: 5000
+      });
       setTransactions([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Effectuer la recherche côté serveur avec debounce
+  // Debounce pour la recherche (éviter trop d'appels API)
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchTransactions();
+      setDebouncedSearchTerm(searchTerm);
     }, 500); // Délai de 500ms après la dernière frappe
 
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Recharger quand les filtres changent (sans debounce)
+  // Réinitialiser la page quand les filtres ou la recherche changent
+  useEffect(() => {
+    setCurrentApiPage(1);
+  }, [debouncedSearchTerm, filterMode, filterCanal]);
+
+  // Recharger quand la page change ou quand les filtres/recherche changent
   useEffect(() => {
     fetchTransactions();
-  }, [filterMode, filterCanal]);
+  }, [currentApiPage, debouncedSearchTerm, filterMode, filterCanal]);
 
   // Transformer toutes les transactions en paiements
   const paiements = useMemo(() => {
@@ -141,45 +174,8 @@ export function ListeEnAttenteOperateur() {
       }));
   }, [transactions]);
 
-  // Filtrer les paiements (recherche, mode et canal déjà faits côté serveur, on applique le tri local)
-  const filteredPaiements = useMemo(() => {
-    let filtered = [...paiements];
-
-    // Filtre par statut de paiement (local uniquement car pas géré par l'API)
-    if (filterStatut !== 'all') {
-      if (filterStatut === 'payé') {
-        filtered = filtered.filter(p => p.modePaiement);
-      } else {
-        filtered = filtered.filter(p => !p.modePaiement);
-      }
-    }
-
-    // Tri local
-    if (sortConfig) {
-      filtered.sort((a, b) => {
-        let aValue = a[sortConfig.key as keyof typeof a];
-        let bValue = b[sortConfig.key as keyof typeof b];
-        
-        // Gérer les dates et nombres
-        if (sortConfig.key === 'dateInscription' || sortConfig.key === 'datePaiement') {
-          aValue = new Date(aValue as any).getTime();
-          bValue = new Date(bValue as any).getTime();
-        } else if (sortConfig.key === 'montant') {
-          aValue = aValue as number;
-          bValue = bValue as number;
-        } else {
-          aValue = String(aValue).toLowerCase();
-          bValue = String(bValue).toLowerCase();
-        }
-        
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-
-    return filtered;
-  }, [paiements, filterStatut, sortConfig]);
+  // Pas de pagination locale, les données viennent déjà paginées de l'API
+  const paginatedPaiements = paiements;
   
   // Fonction de tri
   const handleSort = (key: string) => {
@@ -188,21 +184,8 @@ export function ListeEnAttenteOperateur() {
       direction = 'desc';
     }
     setSortConfig({ key, direction });
-    setCurrentPage(1); // Réinitialiser à la page 1 lors du tri
+    setCurrentApiPage(1); // Réinitialiser à la page 1 lors du tri
   };
-
-  // Pagination
-  const totalPages = Math.ceil(filteredPaiements.length / itemsPerPage);
-  const paginatedPaiements = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredPaiements.slice(startIndex, endIndex);
-  }, [filteredPaiements, currentPage, itemsPerPage]);
-
-  // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filterStatut]);
 
   const activeFiltersCount =
     (filterStatut !== 'all' ? 1 : 0) +
@@ -214,6 +197,7 @@ export function ListeEnAttenteOperateur() {
     setFilterMode('all');
     setFilterCanal('all');
     setSearchTerm('');
+    setCurrentApiPage(1);
   };
 
   const handleConfirmPayment = (participant: any) => {
@@ -245,7 +229,10 @@ export function ListeEnAttenteOperateur() {
       console.log('Réponse API:', response);
       
       if (response.success === true || response.status === 'success' || response.message?.includes('success')) {
-        toast.success('Paiement validé avec succès');
+        toast.success('Paiement validé avec succès', {
+          duration: 4000,
+          description: 'Le participant a été déplacé vers la liste des paiements'
+        });
         
         // Recharger les transactions AVANT de fermer le dialog
         await fetchTransactions();
@@ -255,13 +242,16 @@ export function ListeEnAttenteOperateur() {
         setSelectedParticipant(null);
         setUploadedFile(null);
         setSelectedModePaiement('cash');
-        setIsLoading(false);
       } else if (response.success === false) {
-        toast.error(response.message || 'Erreur lors de la validation du paiement');
-        setIsLoading(false);
+        toast.error(response.message || 'Erreur lors de la validation du paiement', {
+          duration: 5000,
+          description: 'Veuillez vérifier les informations et réessayer'
+        });
         // Ne pas fermer le dialog en cas d'erreur pour que l'utilisateur puisse réessayer
       } else {
-        toast.success('Paiement traité');
+        toast.success('Paiement traité avec succès', {
+          duration: 4000
+        });
         
         // Recharger les transactions AVANT de fermer le dialog
         await fetchTransactions();
@@ -270,14 +260,19 @@ export function ListeEnAttenteOperateur() {
         setSelectedParticipant(null);
         setUploadedFile(null);
         setSelectedModePaiement('cash');
-        setIsLoading(false);
       }
     } catch (error: any) {
       console.error('Erreur validation:', error);
-      const errorMessage = error?.response?.data?.message || error?.message || 'Erreur lors de la validation du paiement';
-      toast.error(errorMessage);
-      setIsLoading(false);
+      // L'erreur peut être soit une Error simple, soit un objet avec response
+      const errorMessage = error?.message || error?.response?.data?.message || 'Erreur lors de la validation du paiement';
+      console.log('Message d\'erreur à afficher:', errorMessage);
+      toast.error(errorMessage, {
+        duration: 5000,
+        description: 'Veuillez vérifier les informations et réessayer'
+      });
       // Ne pas fermer le dialog en cas d'erreur pour que l'utilisateur puisse réessayer
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -308,7 +303,7 @@ export function ListeEnAttenteOperateur() {
       'Pays',
     ];
 
-    const rows = filteredPaiements.map(p => [
+    const rows = paiements.map((p: any) => [
       p.reference,
       p.participantNom,
       p.participantEmail,
@@ -471,7 +466,7 @@ export function ListeEnAttenteOperateur() {
           <div className="flex items-center justify-between">
             <h2 className="text-gray-900">Liste des paiements en attente</h2>
             <p className="text-sm text-gray-500">
-              {paiements.length} paiement{paiements.length > 1 ? 's' : ''} trouvé{paiements.length > 1 ? 's' : ''}
+              {paginationInfo.total} paiement{paginationInfo.total > 1 ? 's' : ''} trouvé{paginationInfo.total > 1 ? 's' : ''}
             </p>
           </div>
         </div>
@@ -500,7 +495,7 @@ export function ListeEnAttenteOperateur() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">
                   <button onClick={() => handleSort('statut')} className="flex items-center gap-1 hover:text-gray-700">
-                    Statut
+                    Type
                     {sortConfig?.key === 'statut' ? sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3 opacity-40" />}
                   </button>
                 </th>
@@ -547,10 +542,10 @@ export function ListeEnAttenteOperateur() {
                       <td className="px-6 py-4 text-sm text-gray-700">{paiement.organisationNom}</td>
                       <td className="px-6 py-4">
                         <Badge 
-                          variant={paiement.statut === 'membre' ? 'default' : 'secondary'}
-                          className={paiement.statut === 'membre' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}
+                          variant={paiement.statut === 'MEMBRE FANAF' ? 'default' : 'secondary'}
+                          className={paiement.statut === 'MEMBRE FANAF' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}
                         >
-                          {paiement.statut === 'membre' ? 'Membre' : 'Non-Membre'}
+                          {paiement.statut}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-gray-900">
@@ -560,6 +555,10 @@ export function ListeEnAttenteOperateur() {
                         {new Date(paiement.dateInscription).toLocaleDateString('fr-FR')}
                       </td>
                       <td className="px-6 py-4">
+                        <Button variant="outline" size="sm" onClick={() => handleConfirmPayment(paiement)} className="bg-green-600 hover:bg-green-700">
+                          <File className="w-4 h-4 mr-2" />
+                          Facture proformat
+                        </Button>
                         <Button onClick={() => handleConfirmPayment(paiement)} size="sm" className="bg-green-600 hover:bg-green-700">
                           <CheckCircle2 className="w-4 h-4 mr-2" />
                           Finaliser le paiement
@@ -572,10 +571,76 @@ export function ListeEnAttenteOperateur() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {!isLoading && paginationInfo.lastPage > 1 && (
+          <div className="p-4 border-t">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Affichage de {paginationInfo.from} à {paginationInfo.to} sur {paginationInfo.total} résultat{paginationInfo.total > 1 ? 's' : ''}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentApiPage(p => Math.max(1, p - 1))}
+                  disabled={currentApiPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Précédent
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, paginationInfo.lastPage) }, (_, i) => {
+                    let pageNum;
+                    if (paginationInfo.lastPage <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentApiPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentApiPage >= paginationInfo.lastPage - 2) {
+                      pageNum = paginationInfo.lastPage - 4 + i;
+                    } else {
+                      pageNum = currentApiPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentApiPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentApiPage(pageNum)}
+                        className={currentApiPage === pageNum ? "bg-green-600 hover:bg-green-700" : ""}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentApiPage(p => Math.min(paginationInfo.lastPage, p + 1))}
+                  disabled={currentApiPage === paginationInfo.lastPage}
+                >
+                  Suivant
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Dialog de confirmation */}
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+      <AlertDialog 
+        open={showConfirmDialog} 
+        onOpenChange={(open) => {
+          // Empêcher la fermeture du modal si une requête est en cours
+          if (!open && isLoading) {
+            toast.warning('Veuillez attendre la fin du traitement');
+            return;
+          }
+          setShowConfirmDialog(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -660,36 +725,95 @@ export function ListeEnAttenteOperateur() {
                         <span className="text-sm text-gray-700">Virement Bancaire</span>
                       </label>
                     </div>
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="preuvePaiement" className="text-sm text-gray-700 font-medium">Preuve de paiement (facultatif) :</Label>
-                      <input
-                        id="preuvePaiement"
-                        type="file"
-                        accept="image/*,application/pdf"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            setUploadedFile(e.target.files[0]);
-                          } else {
-                            setUploadedFile(null);
-                          }
-                        }}
-                        className="block w-full text-sm text-gray-700 file:mr-2 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
-                      />
-                      {uploadedFile && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <File className="w-4 h-4 text-gray-500" />
-                          <span className="text-xs text-gray-600">{uploadedFile.name}</span>
+                    <div className="flex flex-col space-y-3 mt-6 pt-4 border-t border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <Upload className="w-4 h-4 text-gray-600" />
+                        <Label htmlFor="preuvePaiement" className="text-sm text-gray-700 font-semibold">
+                          Preuve de paiement
+                        </Label>
+                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200">
+                          Facultatif
+                        </Badge>
+                      </div>
+                      
+                      {!uploadedFile ? (
+                        <div className="relative group">
+                          <label
+                            htmlFor="preuvePaiement"
+                            className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gradient-to-br from-gray-50 to-white hover:from-blue-50 hover:to-white hover:border-blue-400 transition-all duration-300 group-hover:shadow-md"
+                          >
+                            <div className="flex flex-col items-center justify-center space-y-3 py-6">
+                              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                <Upload className="w-7 h-7 text-white" />
+                              </div>
+                              <div className="text-center">
+                                <p className="mb-1 text-sm text-gray-600">
+                                  <span className="font-semibold text-blue-600">Cliquez pour uploader</span> ou glissez-déposez
+                                </p>
+                                <p className="text-xs text-gray-400">PNG, JPG, PDF (MAX. 10MB)</p>
+                              </div>
+                            </div>
+                          </label>
+                          <input
+                            id="preuvePaiement"
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                const file = e.target.files[0];
+                                // Vérifier la taille (10MB max)
+                                if (file.size > 10 * 1024 * 1024) {
+                                  toast.error('Le fichier est trop volumineux (10MB maximum)', {
+                                    duration: 5000
+                                  });
+                                  return;
+                                }
+                                setUploadedFile(file);
+                                toast.success('Fichier ajouté avec succès', {
+                                  duration: 3000
+                                });
+                              } else {
+                                setUploadedFile(null);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </div>
+                      ) : (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="flex items-center justify-between p-4 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl shadow-sm"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-md">
+                              <CheckCircle2 className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-semibold text-gray-900">{uploadedFile.name}</span>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge className="text-xs bg-green-600 text-white border-0">
+                                  {(uploadedFile.size / 1024).toFixed(2)} KB
+                                </Badge>
+                                <span className="text-xs text-green-700">Prêt à envoyer</span>
+                              </div>
+                            </div>
+                          </div>
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="sm"
                             type="button"
-                            onClick={() => setUploadedFile(null)}
-                            className="p-0 h-6 w-6"
-                            title="Supprimer le fichier"
+                            onClick={() => {
+                              setUploadedFile(null);
+                              toast.info('Fichier supprimé', {
+                                duration: 2000
+                              });
+                            }}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-100 rounded-lg"
                           >
-                            <X className="w-4 h-4 text-gray-400" />
+                            <X className="w-5 h-5" />
                           </Button>
-                        </div>
+                        </motion.div>
                       )}
                     </div>
                   </div>
@@ -698,13 +822,23 @@ export function ListeEnAttenteOperateur() {
                 <span className="block text-sm text-orange-600 bg-orange-50 p-3 rounded border border-orange-200">
                   ⚠️ Cette action marquera le paiement comme "Finalisé" et l'inscription sera validée. Le participant disparaîtra de cette liste et apparaîtra dans "Liste des paiements".
                 </span>
+                
+                {isLoading && (
+                  <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded border border-blue-200">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Traitement en cours, veuillez patienter...</span>
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isLoading}>Annuler</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => handleValidatePayment()}
+            <Button
+              onClick={(e) => {
+                e.preventDefault(); // Empêcher la fermeture automatique du dialog
+                handleValidatePayment();
+              }}
               disabled={isLoading}
               className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -716,7 +850,7 @@ export function ListeEnAttenteOperateur() {
               ) : (
                 'Oui, confirmer l\'encaissement'
               )}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

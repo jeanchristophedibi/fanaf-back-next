@@ -4,7 +4,6 @@
  */
 
 const API_BASE_URL = 'https://core-f26.asacitechnologies.com/api/v1';
-// const API_BASE_URL = 'https://cors.ddev.site/api/v1';
 
 interface AxiosRequestConfig {
   headers?: Record<string, string>;
@@ -145,40 +144,6 @@ class AxiosInstance {
         config: config || {},
       };
     } catch (error) {
-      // Améliorer la gestion des erreurs réseau
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        const errorDetails = {
-          url: fullURL,
-          method,
-          baseURL: this.baseURL,
-          originalUrl: url,
-          headers: Object.keys(headers),
-          possibleReasons: [
-            'Le serveur est inaccessible',
-            'Problème de CORS (Cross-Origin Resource Sharing)',
-            'Problème de connexion réseau',
-            'URL incorrecte ou endpoint inexistant',
-            'Serveur en maintenance'
-          ]
-        };
-        
-        console.error('Erreur réseau - Failed to fetch:', errorDetails);
-        console.error('URL complète:', fullURL);
-        console.error('Méthode:', method);
-        console.error('Headers envoyés:', headers);
-        
-        // Créer une erreur plus informative
-        const networkError = new Error(
-          `Erreur de connexion: Impossible de contacter le serveur. ` +
-          `URL: ${fullURL}. ` +
-          `Vérifiez votre connexion réseau et que le serveur est accessible.`
-        );
-        networkError.name = 'NetworkError';
-        // Ajouter les détails dans l'erreur pour faciliter le débogage
-        (networkError as any).details = errorDetails;
-        throw networkError;
-      }
-      
       if (error instanceof Error) {
         throw error;
       }

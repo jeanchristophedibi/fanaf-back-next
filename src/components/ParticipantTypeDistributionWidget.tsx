@@ -60,7 +60,8 @@ export function ParticipantTypeDistributionWidget() {
         setStats(response?.data || response);
       } catch (error) {
         console.error('Erreur récupération stats participants:', error);
-        toast?.error('Impossible de récupérer les statistiques des participants');
+        const errorMsg = (error as any)?.message || 'Impossible de récupérer les statistiques des participants';
+        toast.error(errorMsg, { duration: 5000 });
       } finally {
         setIsLoading(false);
       }

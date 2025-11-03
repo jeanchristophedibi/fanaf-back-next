@@ -4,9 +4,11 @@ export interface ParticipantFilters {
   search?: string
   page?: number
   per_page?: number
-  assignment_id?: string
   payment_method?: string
   organization_id?: string
+  company_id?: string
+  start_date?: string
+  end_date?: string
 }
 
 class ParticipantService {
@@ -30,14 +32,20 @@ class ParticipantService {
     if (filters?.per_page) {
       params.append('per_page', filters.per_page.toString())
     }
-    if (filters?.assignment_id) {
-      params.append('assignment_id', filters.assignment_id)
-    }
     if (filters?.payment_method) {
       params.append('payment_method', filters.payment_method)
     }
     if (filters?.organization_id) {
       params.append('organization_id', filters.organization_id)
+    }
+    if (filters?.company_id) {
+      params.append('company_id', filters.company_id)
+    }
+    if (filters?.start_date) {
+      params.append('start_date', filters.start_date)
+    }
+    if (filters?.end_date) {
+      params.append('end_date', filters.end_date)
     }
 
     const response = await axiosInstance.get<any>(

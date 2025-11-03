@@ -65,7 +65,8 @@ export function TopOrganisationsWidget() {
         setTopOrganisations(organisations);
       } catch (error) {
         console.error('Erreur récupération top organisations:', error);
-        toast?.error('Impossible de récupérer le classement des organisations');
+        const errorMsg = (error as any)?.message || 'Impossible de récupérer le classement des organisations';
+        toast.error(errorMsg, { duration: 5000 });
       } finally {
         setIsLoading(false);
       }
